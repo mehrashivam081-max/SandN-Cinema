@@ -1,0 +1,165 @@
+/* Full Page Centering Wrapper */
+.signup-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    background: transparent; /* Allows global theme background to show */
+}
+
+/* Glass Card */
+.signup-card-glass {
+    background: rgba(30, 0, 0, 0.85); /* Dark Red Tint */
+    backdrop-filter: blur(15px);
+    padding: 40px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+    animation: slideUp 0.5s ease-out;
+}
+
+.signup-title {
+    color: white;
+    margin-bottom: 30px;
+    font-weight: 800;
+    font-size: 1.8rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Tabs */
+.signup-tabs {
+    display: flex;
+    margin-bottom: 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.signup-tabs button {
+    flex: 1;
+    background: transparent;
+    color: #a0a0a0;
+    padding: 12px;
+    font-weight: 600;
+    border: none;
+    border-bottom: 3px solid transparent;
+    transition: 0.3s;
+    font-size: 1rem;
+}
+
+.signup-tabs button.active {
+    color: #e50914; /* Red Highlight */
+    border-bottom-color: #e50914;
+}
+
+/* Form Inputs */
+.signup-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.signup-body input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 1rem;
+    outline: none;
+    text-align: left;
+}
+
+.signup-body input:focus {
+    border-color: #e50914;
+    box-shadow: 0 0 8px rgba(229, 9, 20, 0.5);
+}
+
+/* Checkbox Alignment */
+.terms-check-aligned {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 10px 0 20px 0;
+    color: #b3b3b3;
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+.terms-check-aligned input {
+    width: auto;
+    margin: 0;
+}
+
+/* Register Button */
+.signup-btn-primary {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #e50914, #b20710);
+    color: white;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(229, 9, 20, 0.4);
+    transition: transform 0.2s;
+}
+
+.signup-btn-primary:active {
+    transform: scale(0.98);
+}
+
+.signup-footer {
+    margin-top: 25px;
+    font-size: 0.95rem;
+    color: #b3b3b3;
+}
+
+.text-link {
+    color: #e50914;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+/* ... (पुराना CSS रखें, बस नीचे वाला ऐड करें) ... */
+
+/* Password Wrapper for Eye Icon */
+.password-wrapper {
+    position: relative;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.password-wrapper input {
+    width: 100%;
+    margin-bottom: 0; /* Wrapper handles spacing */
+    padding-right: 40px; /* Space for icon */
+}
+
+.eye-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.6);
+    user-select: none;
+    z-index: 5;
+}
+
+.eye-icon:hover {
+    color: #e50914; /* Red Highlight on Hover */
+}
+
+/* Ensure global inputs behave correctly */
+.signup-body input {
+    margin-bottom: 20px;
+}

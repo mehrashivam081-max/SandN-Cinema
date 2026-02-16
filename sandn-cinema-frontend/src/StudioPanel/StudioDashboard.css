@@ -1,0 +1,55 @@
+.studio-container {
+    padding: 30px;
+    max-width: 1000px;
+    margin: 0 auto;
+    color: var(--text-main);
+}
+
+.studio-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 15px;
+}
+
+.logout-btn-studio {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 16px;
+    border-radius: 20px;
+}
+
+.studio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+}
+
+.studio-card {
+    background: var(--card-bg);
+    padding: 25px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-light);
+}
+
+.file-input { margin: 15px 0; padding: 10px; background: var(--glass-bg); }
+
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    font-weight: bold;
+    color: white;
+    margin-top: 15px;
+}
+
+.upload-btn { background: linear-gradient(135deg, #007bff, #0056b3); }
+.withdraw-btn { background: linear-gradient(135deg, #28a745, #218838); }
+
+.revenue-stats { display: flex; justify-content: space-between; margin: 20px 0; }
+.stat { text-align: center; background: var(--glass-bg); padding: 10px; width: 48%; border-radius: 8px; }
+.stat h4 { font-size: 1.5rem; color: #4ade80; margin-top: 5px; }

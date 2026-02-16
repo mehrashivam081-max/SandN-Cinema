@@ -1,0 +1,60 @@
+/* src/components/LoginPage.css */
+.auth-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 20px;
+}
+
+.auth-card {
+    background: var(--card-bg);
+    padding: 30px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--shadow-deep);
+    border: 1px solid var(--glass-border);
+    border-top: 1px solid var(--glass-highlight); /* 3D Lighting */
+    backdrop-filter: var(--backdrop-blur);
+    text-align: center;
+}
+
+.auth-title {
+    color: var(--text-main);
+    margin-bottom: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.auth-tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--glass-border); }
+.auth-tabs button { 
+    flex: 1; background: transparent; color: var(--text-muted); padding: 10px; 
+    font-weight: 600; border: none; border-bottom: 2px solid transparent; 
+    cursor: pointer; transition: all 0.3s ease; 
+}
+.auth-tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.auth-body input {
+    width: 100%; padding: 12px 15px; margin-bottom: 15px;
+    background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border);
+    color: var(--text-main); border-radius: 8px; outline: none; transition: 0.3s;
+}
+.auth-body input:focus { border-color: var(--primary); box-shadow: 0 0 10px var(--glow-color); }
+
+.password-wrapper { position: relative; width: 100%; display: flex; align-items: center; }
+.eye-icon { position: absolute; right: 15px; top: 35%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); }
+.eye-icon:hover { color: var(--primary); }
+
+.auth-btn {
+    width: 100%; padding: 12px; background: var(--gradient-main);
+    color: white; border-radius: 8px; font-weight: bold; border: none;
+    margin-top: 10px; cursor: pointer; box-shadow: 0 4px 15px var(--glow-color);
+    transition: transform 0.2s;
+}
+.auth-btn:hover { transform: translateY(-2px); }
+
+.error-text { color: #ff4d4d; margin-top: 10px; font-size: 0.9rem; }
+.auth-footer { margin-top: 20px; color: var(--text-muted); font-size: 0.9rem; }
+.auth-footer span { color: var(--primary); cursor: pointer; font-weight: bold; }

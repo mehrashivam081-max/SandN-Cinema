@@ -1,0 +1,94 @@
+/* Wrapper for Swipe Area */
+.main-content-wrapper {
+    min-height: calc(100vh - 70px); /* Adjust header height */
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* --- Search Flow UI --- */
+.search-flow-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 70vh;
+    padding: 20px;
+}
+
+.search-card-glass {
+    background: var(--card-bg);
+    backdrop-filter: blur(15px);
+    padding: 40px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-deep);
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    animation: fadeInUp 0.5s ease;
+}
+
+.search-card-glass h3 { color: var(--text-main); margin-bottom: 15px; }
+.search-card-glass p { color: var(--text-muted); margin-bottom: 25px; }
+.search-card-glass input { margin-bottom: 20px; text-align: center; font-size: 1.2rem; letter-spacing: 2px; }
+
+.action-btn {
+    width: 100%; padding: 15px; background: var(--gradient-main); color: white;
+    border-radius: var(--radius-sm); font-weight: bold; margin-bottom: 15px;
+    box-shadow: 0 5px 15px var(--glow-color);
+}
+.link-btn { background: transparent; color: var(--text-muted); text-decoration: underline; }
+.error-msg { color: #ff4d4d; margin-top: 10px; }
+
+/* --- 3D Dashboard UI (When Logged In) --- */
+.dashboard-3d {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: space-between; min-height: 75vh; padding: 20px; padding-bottom: 110px;
+}
+.info-panel-3d { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; z-index: 2; margin-top: 10px; }
+.arrow-wrapper { margin-bottom: 15px; filter: drop-shadow(0 5px 10px rgba(0,0,0,0.5)); }
+.arrow-3d { width: 50px; animation: bounce 2s infinite ease-in-out; }
+.search-card-3d {
+    background: var(--gradient-main); width: 100%; padding: 25px; border-radius: 20px;
+    box-shadow: 0 15px 35px var(--glow-color); border: 1px solid rgba(255,255,255,0.2);
+    text-align: center; color: white; transform: perspective(1000px) rotateX(5deg);
+}
+.search-bar-fake { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 12px; display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+.visual-panel-3d { flex-grow: 1; display: flex; justify-content: center; align-items: center; width: 100%; }
+.magnet-3d { width: 280px; filter: drop-shadow(0 30px 50px rgba(0,0,0,0.6)); animation: float 4s ease-in-out infinite; }
+
+/* --- Bottom Nav Dock --- */
+.nav-dock-3d {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 20px;
+    background: rgba(20, 20, 20, 0.9); backdrop-filter: blur(20px);
+    padding: 15px 30px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5); z-index: 50;
+}
+.nav-tab {
+    background: transparent; color: var(--text-muted); padding: 10px 20px;
+    font-weight: bold; transition: 0.3s;
+}
+.nav-tab.active { color: var(--text-main); text-shadow: 0 0 10px var(--glow-color); }
+.book-btn-wrapper { position: relative; top: -35px; }
+.book-now-3d {
+    width: 90px; height: 90px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ffffff, #dcdcdc);
+    color: var(--primary); font-weight: 900; font-size: 1rem; line-height: 1.2;
+    box-shadow: 0 10px 25px var(--glow-color), 0 0 0 4px var(--primary);
+    animation: pulse 2s infinite;
+}
+
+/* Animations */
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--glow-color); } 70% { box-shadow: 0 0 0 15px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Desktop View */
+@media (min-width: 1024px) {
+    .dashboard-3d { flex-direction: row; justify-content: center; max-width: 1200px; margin: 0 auto; gap: 50px; }
+    .info-panel-3d { align-items: flex-end; padding-right: 20px; flex: 1; }
+    .arrow-wrapper { transform: rotate(-90deg); margin-right: -30px; }
+    .visual-panel-3d { justify-content: flex-start; padding-left: 20px; flex: 1; }
+    .magnet-3d { width: 400px; }
+}

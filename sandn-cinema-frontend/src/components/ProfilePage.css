@@ -1,0 +1,208 @@
+/* --- SIDEBAR CONTAINER --- */
+.profile-sidebar-container {
+    position: fixed;
+    top: 0;
+    left: 0; /* Left side menu as per standard, or right if you prefer */
+    width: 30%;
+    height: 100%;
+    background: #1a1a1a; /* Dark Theme Background */
+    color: #fff;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    /* --- YE DO LINES ADD KAREIN --- */
+    overflow-y: auto; /* Vertical Scroll enable karega */
+    overscroll-behavior: contain; /* Scroll ko sidebar tak seemit rakhega */
+}
+
+/* Scrollbar ko sundar (hidden/thin) banane ke liye ye bhi add kar sakte hain */
+.profile-sidebar-container::-webkit-scrollbar {
+    width: 5px;
+}
+
+.profile-sidebar-container::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 10px;
+}
+
+
+.profile-sidebar-container.slide-in {
+    transform: translateX(0);
+    position: scroll;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 1999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+}
+
+.sidebar-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* --- HEADER SECTION --- */
+.sidebar-header-row {
+    padding: 15px;
+    text-align: right;
+}
+
+.sidebar-close-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.dp-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.profile-img-container {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #e50914; /* Netflix Red styling */
+    cursor: pointer;
+}
+
+.profile-dp {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-header-text {
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.header-underline {
+    width: 40px;
+    height: 3px;
+    background: #e50914;
+    margin: 5px auto 0;
+}
+
+/* --- MENU LIST --- */
+.profile-menu-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+.profile-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #333;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.profile-menu-item:hover {
+    background: #333;
+}
+
+.menu-left-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.menu-icon {
+    font-size: 1.2rem;
+}
+
+.menu-label {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.menu-arrow {
+    color: #777;
+}
+
+/* --- POPUPS & MODALS --- */
+.popup-overlay-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.custom-popup-box {
+    background: #222;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    border: 1px solid #444;
+}
+
+.popup-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #333;
+    border-bottom: 1px solid #444;
+}
+
+.popup-title-badge {
+    font-weight: bold;
+    color: #fff;
+}
+
+.popup-close-x {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.popup-inner-box {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+    color: #ddd;
+}
+
+/* --- SPECIFIC POPUP STYLES --- */
+.about-logo { width: 50px; margin-bottom: 10px; }
+.contact-item { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
+.green-btn { width: 100%; padding: 10px; background: #25D366; border: none; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
+.usp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+.usp-card { background: #333; padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; }
+.stars-container { font-size: 2rem; color: gold; cursor: pointer; text-align: center; margin: 10px 0; }
+.social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.social-card { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid; border-radius: 8px; text-decoration: none; font-size: 0.9rem; }

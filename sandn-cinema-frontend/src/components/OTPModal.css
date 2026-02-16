@@ -1,0 +1,64 @@
+/* src/components/OTPModal.css */
+
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* पीछे का धुंधलापन */
+    display: flex; justify-content: center; align-items: center;
+    z-index: 10000;
+}
+
+.verification-modal {
+    background: white;
+    padding: 30px;
+    width: 320px;
+    text-align: center;
+    position: relative;
+    border-radius: 10px;
+    
+    /* फोटो जैसा रेडिएंट बॉर्डर */
+    border: 2px solid transparent;
+    background-image: linear-gradient(white, white), 
+                      linear-gradient(to right, #e34c58, #38b056);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.modal-title { font-size: 1.2rem; margin: 0; color: #000; font-weight: 500; }
+.modal-subtitle { font-size: 1rem; margin: 5px 0 15px; color: #000; font-weight: 400; }
+
+.otp-message {
+    color: #38b056; /* हरा टेक्स्ट */
+    font-size: 0.85rem;
+    margin-bottom: 25px;
+    line-height: 1.4;
+}
+
+.input-section label { display: block; font-size: 0.9rem; margin-bottom: 8px; color: #333; }
+
+.otp-input {
+    width: 70%;
+    padding: 8px;
+    font-size: 1.2rem;
+    text-align: center;
+    border: 1px solid #999;
+    outline: none;
+    margin-bottom: 15px;
+}
+
+.verify-btn {
+    background: white;
+    color: #38b056;
+    border: 1px solid #38b056;
+    padding: 5px 30px;
+    font-size: 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.verify-btn:hover { background-color: #f0fff4; }
+.verify-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.error-text { color: red; font-size: 0.8rem; margin-bottom: 10px; }
+.close-btn { position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 1.5rem; cursor: pointer; }

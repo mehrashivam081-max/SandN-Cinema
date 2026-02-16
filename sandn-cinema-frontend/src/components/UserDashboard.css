@@ -1,0 +1,193 @@
+/* src/components/UserDashboard.css */
+.ud-container {
+    width: 100%;
+    min-height: 100vh;
+    background-color: #f4f4f4; /* Light gray background */
+    padding: 15px;
+    padding-bottom: 80px; /* Footer ke liye jagah */
+    font-family: 'Poppins', sans-serif;
+    color: #333;
+}
+
+/* --- HEADER SECTION --- */
+.ud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.ud-menu-btn {
+    font-size: 28px;
+    cursor: pointer;
+    color: #333;
+    position: relative;
+}
+
+/* Dropdown Menu */
+.ud-menu-dropdown {
+    position: absolute;
+    top: 40px;
+    left: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    width: 150px;
+    z-index: 100;
+    overflow: hidden;
+}
+.ud-menu-item {
+    padding: 12px 15px;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+.ud-menu-item:hover { background: #f9f9f9; }
+.ud-menu-item.logout { color: #e50914; font-weight: bold; }
+
+/* Search Bar */
+.ud-search-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.ud-search-input {
+    width: 100%;
+    padding: 10px 15px;
+    padding-right: 35px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    outline: none;
+    font-size: 14px;
+    background: white;
+    color: #333;
+}
+.ud-search-icon {
+    position: absolute;
+    right: 10px;
+    color: #888;
+}
+
+/* Coin Badge (MS Logo replacement) */
+.ud-coin-badge {
+    width: 40px;
+    height: 40px;
+    background: white;
+    border: 2px solid #333;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 10px;
+    color: #333;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.coin-val { font-size: 14px; color: #e50914; }
+
+/* --- SUGGESTION BANNER --- */
+.ud-banner-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    margin-bottom: 20px;
+}
+.ud-banner-card {
+    min-width: 280px;
+    height: 120px;
+    border-radius: 12px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 20px;
+}
+.banner-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to right, rgba(0,0,0,0.8), transparent);
+}
+.banner-text { position: relative; z-index: 1; }
+.banner-text h3 { margin: 0; font-size: 18px; }
+.banner-text p { margin: 5px 0 0; font-size: 12px; opacity: 0.9; }
+
+/* --- CONTROLS ROW --- */
+.ud-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.selection-info { font-size: 14px; color: #555; display: flex; align-items: center; gap: 5px; }
+
+.filter-group { display: flex; gap: 5px; }
+.filter-btn {
+    padding: 5px 12px;
+    border: 1px solid #ccc;
+    background: white;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #333;
+}
+.filter-btn.active {
+    background: #ddd;
+    font-weight: bold;
+    border-color: #999;
+}
+
+/* --- FOLDER GRID --- */
+.ud-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.ud-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    transition: transform 0.2s;
+}
+.ud-card.selected { border: 2px solid #e50914; background: #fff5f5; }
+
+.card-img-box {
+    height: 100px;
+    background: #e0e0e0;
+    margin: 10px;
+    border-radius: 4px;
+}
+.card-info { padding: 0 10px 15px; text-align: center; }
+.card-info h4 { margin: 0 0 5px; font-size: 14px; font-weight: 600; }
+
+.download-btn {
+    background: #1a3c6e;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+}
+
+.check-mark {
+    position: absolute; top: 10px; left: 10px;
+    background: #e50914; color: white;
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; justify-content: center; align-items: center;
+    font-size: 12px;
+}
+
+.no-data { grid-column: span 2; text-align: center; padding: 40px; color: #999; }
