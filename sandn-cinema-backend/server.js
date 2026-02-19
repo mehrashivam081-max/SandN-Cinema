@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
-const axios = require('axios');
+const axios = require('axios'); 
 
 // Models (Ensure models.js exists in the same folder)
 const { User, Studio, Admin } = require('./models');
@@ -11,13 +11,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
 
-// --- MIDDLEWARE (CORS FIXED) ---
-// Ab ye Localhost aur Live Website dono ko allow karega
+// --- MIDDLEWARE ---
 app.use(cors({
     origin: [
-        "http://localhost:5173",                  // Vite Localhost
-        "http://localhost:3000",                  // React Localhost
-        "https://mehrashivam081-max.github.io"    // Aapki Live Website
+        "http://localhost:5173",                  
+        "http://localhost:3000",                  
+        "https://mehrashivam081-max.github.io"    
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
@@ -30,7 +29,7 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ DB Error:", err));
 
-// Temporary OTP Storage (In production, use Redis or DB)
+// Temporary OTP Storage
 const otpStore = {}; 
 
 // --- HELPER FUNCTION ---
@@ -56,20 +55,22 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Not Registered" });
 
-        // ✅ 6-Digit ka Real Random OTP Generate karein
+        // ✅ 6-Digit Real Random OTP Generate
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // OTP ko verify karne ke liye memory me save karein
+        // Save OTP
         otpStore[mobile] = randomOTP;
         console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
 
-        // ✅ FAST2SMS API INTEGRATION
-        // Yahan 'YOUR_FAST2SMS_API_KEY' ki jagah apni copy ki hui API Key (Inverted commas ke andar hi) dalein
+        // Aapki Fast2SMS API Key
         const fast2smsKey = "A0XmxauiLVFdfrtsI4W1Mp6CYehJoPRjyUSkEb7O23lvQZHGBwsmCOWLr3MD1YPnUH2JVoc9uZX0ekqI"; 
         
+        // ✅ STRICT FAST2SMS API CALL
         const smsResponse = await axios.get('https://www.fast2sms.com/dev/bulkV2', {
+            headers: {
+                "authorization": fast2smsKey
+            },
             params: {
-                authorization: fast2smsKey,
                 variables_values: randomOTP,
                 route: 'otp',
                 numbers: mobile
@@ -80,33 +81,36 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         if (smsResponse.data.return === true) {
             res.json({ success: true, message: "OTP Sent via SMS" });
         } else {
-            res.json({ success: false, message: "SMS Gateway Error" });
+            console.error("❌ Fast2SMS Failed:", smsResponse.data);
+            res.json({ success: false, message: "SMS Gateway Error: " + smsResponse.data.message });
         }
 
     } catch (e) {
-        console.error("SMS Error:", e);
-        res.status(500).json({ error: "Failed to send SMS" });
+        const errorMessage = e.response ? e.response.data.message : e.message;
+        console.error("❌ SMS Request Error:", errorMessage);
+        res.status(500).json({ error: "Failed to send SMS", details: errorMessage });
     }
 });
 
-// 2. Verify Real OTP
+// 2. Verify Real OTP (Strict Check - No Dummy)
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     
-    // ✅ Ab 123456 wala dummy logic hat gaya hai. Sirf real OTP match hoga.
+    // ✅ ONLY Real OTP Check
     if (otpStore[mobile] === otp) {
-        delete otpStore[mobile]; // Use hone ke baad OTP delete kar dein (Security)
+        delete otpStore[mobile]; // Delete for security
         res.json({ success: true });
     } else {
         res.json({ success: false, message: "Invalid OTP" });
     }
 });
 
-// 3. Login via OTP (Yahan se bhi dummy hatana hai)
+// 3. Login via OTP (Strict Check - No Dummy)
 app.post('/api/auth/login-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     
-    if (otpStore[mobile] === otp) { // <-- Dummy hataya
+    // ✅ ONLY Real OTP Check
+    if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
         const account = await findAccount(mobile);
         if(account) {
