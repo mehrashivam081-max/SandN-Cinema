@@ -1,38 +1,39 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
-const API_BASE = 'http://localhost:5000/api/auth';
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-const LoginPage = ({ onBack, onForgotClick, onSignupClick, onLoginSuccess }) => {
+const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
+    const navigate = useNavigate();
+
     const [activeTab, setActiveTab] = useState('user');
     const [step, setStep] = useState(1); 
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, setInputValue] = useState(''); 
     const [otp, setOtp] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    
-    // ✅ Password Visibility
     const [showPass, setShowPass] = useState(false);
 
     const handleCheckUser = async () => {
-        if (!inputValue) return setError("Please enter Mobile Number");
-        // Admin Code Bypass
+        if (!inputValue) return setError("Please enter details");
+        
         if (activeTab === 'code' && inputValue === "0000000000CODEIS*@OWNER*") {
-            setStep(3); return;
+            setStep(3); setError(""); return;
         }
+
         setLoading(true); setError('');
         try {
             const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile: inputValue.trim() });
             if (res.data.success) {
-                alert("OTP Sent: Check Backend Console");
+                alert("OTP Sent! (Use '123456' if SMS fails)");
                 setStep(2);
-            } else { setError(res.data.message); }
+            } else setError(res.data.message); 
         } catch (e) {
-            // Simulation
-            if(inputValue.length === 10) { setStep(2); alert("Simulation: OTP Sent"); } 
-            else { setError("Connection Error"); }
+            if(inputValue.length === 10) { setStep(2); alert("Simulation: OTP Sent (123456)"); } 
+            else setError("Connection Error."); 
         } finally { setLoading(false); }
     };
 
@@ -40,7 +41,8 @@ const LoginPage = ({ onBack, onForgotClick, onSignupClick, onLoginSuccess }) => 
         setLoading(true); setError('');
         try {
             const res = await axios.post(`${API_BASE}/verify-otp`, { mobile: inputValue, otp });
-            if (res.data.success) setStep(3); else setError("Invalid OTP");
+            if (res.data.success) setStep(3); 
+            else setError("Invalid OTP"); 
         } catch (e) {
             if(otp === "123456") setStep(3); else setError("Verification Failed");
         } finally { setLoading(false); }
@@ -48,87 +50,84 @@ const LoginPage = ({ onBack, onForgotClick, onSignupClick, onLoginSuccess }) => 
 
     const handleLogin = async () => {
         setLoading(true); setError('');
-        const cleanPassword = password.trim(); // ✅ Remove spaces
+        const cleanPassword = password.trim();
 
         if (activeTab === 'code') {
             if (cleanPassword === "shivam@9111") {
-                onLoginSuccess({ name: "Owner", role: "ADMIN", status: "VIP" });
+                const adminData = { name: "Owner", role: "ADMIN", status: "VIP" };
+                localStorage.setItem('user', JSON.stringify(adminData));
+                if (onLoginSuccess) onLoginSuccess(adminData);
+                else navigate('/'); 
                 return;
             } else { setError("Invalid Admin Password"); setLoading(false); return; }
         }
 
         try {
             const res = await axios.post(`${API_BASE}/login`, { mobile: inputValue.trim(), password: cleanPassword });
-            if (res.data.success) onLoginSuccess(res.data.user);
-            else setError("Wrong Password");
-        } catch (e) { setError("Login Failed"); }
+            if (res.data.success) {
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                if (onLoginSuccess) onLoginSuccess(res.data.user);
+                else navigate('/'); 
+            } else setError("Wrong Password"); 
+        } catch (e) { setError("Login Failed. Try again."); } 
         finally { setLoading(false); }
     };
 
     return (
-        <div className="auth-wrapper">
-            <div className="auth-card">
-                <h2 className="auth-title">
-                    {activeTab === 'user' ? 'User Login' : activeTab === 'studio' ? 'Studio Login' : 'Admin Access'}
+        <div className="login-page">
+            <div className="login-container">
+                <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>
+                    {activeTab === 'code' ? 'Security Access' : 'SandN Cinema'}
                 </h2>
 
                 <div className="auth-tabs">
-                    <button className={activeTab === 'user' ? 'active' : ''} onClick={() => setActiveTab('user')}>User</button>
-                    <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => setActiveTab('studio')}>Studio</button>
-                    <button className={activeTab === 'code' ? 'active' : ''} onClick={() => setActiveTab('code')}>Code</button>
+                    <button className={activeTab === 'user' ? 'active' : ''} onClick={() => {setActiveTab('user'); setStep(1); setError('');}}>User</button>
+                    <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => {setActiveTab('studio'); setStep(1); setError('');}}>Studio</button>
+                    <button className={activeTab === 'code' ? 'active' : ''} onClick={() => {setActiveTab('code'); setStep(1); setError('');}}>Code</button>
                 </div>
 
-                <div className="auth-body">
-                    <input 
-                        type="number" 
-                        placeholder={activeTab === 'code' ? "Enter Secret Code" : "Mobile Number"}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        disabled={step > 1}
-                    />
-                    
-                    {step === 1 && (
-                        <button className="auth-btn" onClick={handleCheckUser} disabled={loading}>{loading?'Checking...':'GET OTP'}</button>
-                    )}
+                {error && <div className="error-msg">{error}</div>}
 
-                    {step === 2 && activeTab !== 'code' && (
-                        <div className="fade-in">
-                            <input type="number" placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
-                            <button className="auth-btn" onClick={handleVerifyOTP} disabled={loading}>VERIFY OTP</button>
+                {step === 1 && (
+                    <div className="fade-in">
+                        <div className="input-group">
+                            <label>{activeTab === 'code' ? "Enter Secret Code" : "Mobile Number"}</label>
+                            <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
                         </div>
-                    )}
+                        <button className="login-btn" onClick={handleCheckUser} disabled={loading}>{loading ? 'Checking...' : activeTab === 'code' ? 'Access' : 'GET OTP'}</button>
+                    </div>
+                )}
 
-                    {step === 3 && (
-                        <div className="fade-in">
-                            {/* ✅ Updated Password Input with Eye */}
-                            <div className="password-wrapper" style={{marginBottom: '10px'}}>
-                                <input 
-                                    type={showPass ? "text" : "password"} 
-                                    placeholder="Enter Password" 
-                                    value={password} 
-                                    onChange={(e) => setPassword(e.target.value)} 
-                                />
-                                <span 
-                                    className="eye-icon" 
-                                    onClick={() => setShowPass(!showPass)}
-                                    style={{color: 'grey'}} // Visible color fix for white card
-                                >
-                                    {showPass ? '🙈' : '👁️'}
-                                </span>
+                {step === 2 && activeTab !== 'code' && (
+                    <div className="fade-in">
+                        <div className="input-group">
+                            <label>Enter OTP</label>
+                            <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+                        </div>
+                        <button className="login-btn" onClick={handleVerifyOTP} disabled={loading}>VERIFY OTP</button>
+                        <p className="resend-text" onClick={() => setStep(1)}>Wrong Number? Edit</p>
+                    </div>
+                )}
+
+                {step === 3 && (
+                    <div className="fade-in">
+                        <div className="input-group">
+                            <label>Password</label>
+                            <div className="pass-wrapper">
+                                <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                                <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
-
-                            <button className="auth-btn glow-btn" onClick={handleLogin} disabled={loading}>LOGIN</button>
                         </div>
-                    )}
+                        <button className="login-btn" onClick={handleLogin} disabled={loading}>LOGIN NOW</button>
+                    </div>
+                )}
 
-                    {error && <p className="error-text">{error}</p>}
-                </div>
-
-                <div className="auth-footer">
-                    {activeTab !== 'code' && step === 1 && (
-                        <p onClick={onSignupClick}>New User? <span>Create Account</span></p>
+                <div className="toggle-text">
+                    {step === 1 && activeTab !== 'code' && (
+                        <>New here? <span onClick={onSignupClick || (() => navigate('/signup'))}>Create Account</span></>
                     )}
-                    <p onClick={onBack}>Back to Search</p>
+                    <br/>
+                    <span style={{ fontSize: '0.8rem', color: '#666', cursor: 'pointer' }} onClick={onBack || (() => navigate('/'))}>Back to Home</span>
                 </div>
             </div>
         </div>

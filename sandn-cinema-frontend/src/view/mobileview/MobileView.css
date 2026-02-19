@@ -94,3 +94,46 @@
   /* Agar video ka background transparent karna hai to: */
   mix-blend-mode: screen; 
 }
+
+/* =========================================
+   AUTO-ADJUST HEIGHT FIX (Dynamic Viewport)
+========================================= */
+
+/* Main container ko screen ke hisaab se auto-fit karna */
+.mobile-container {
+    overflow-x: hidden !important; 
+    position: relative;
+    width: 100%;
+    /* 100vh ki jagah 100dvh use karein, ye mobile ke URL bar ke hisaab se auto-adjust hota hai */
+    height: 100dvh; 
+    background-color: #111; 
+}
+
+/* Naya wrapper jo ungli ke sath slide hoga */
+.mobile-swipe-wrapper {
+    width: 100%;
+    height: 100dvh; /* Yahan bhi 100dvh */
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-shadow: 0px 0px 25px rgba(0, 0, 0, 0.7);
+    will-change: transform; 
+}
+
+/* Main content area jo bachi hui jagah ko auto-fill karega */
+.mobile-main-content {
+    flex: 1; /* Header aur Footer ke baad bachi hui saari jagah le lega */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Content ko perfectly upar aur niche distribute karega */
+    overflow-y: auto; /* Agar content zyada ho toh sirf beech wala hissa scroll hoga */
+}
+
+/* Taki jab piche ki feed open ho, to main content chup jaye */
+.mobile-swipe-wrapper.hide-behind {
+    opacity: 0;
+    pointer-events: none;
+}

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import './SignupPage.css';
 
-const API_BASE = 'http://localhost:5000/api/auth';
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
+    const navigate = useNavigate(); 
     const [activeTab, setActiveTab] = useState('user');
     const [formData, setFormData] = useState({
         name: '', mobile: '', password: '', confirm: '', 
@@ -13,14 +15,17 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
     const [terms, setTerms] = useState(false);
     const [loading, setLoading] = useState(false);
     
-    // ✅ NEW: Password Visibility States
     const [showPass, setShowPass] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
     const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
 
+    const goToLogin = () => {
+        if (onLoginClick) onLoginClick();
+        else navigate('/login'); 
+    };
+
     const handleRegister = async () => {
-        // ✅ FIX: Trim spaces to prevent "Wrong Password" errors
         const cleanPassword = formData.password.trim();
         const cleanConfirm = formData.confirm.trim();
         const cleanMobile = formData.mobile.trim();
@@ -31,44 +36,23 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
         if (cleanPassword.length < 4) return alert("Password too short (min 4 chars)");
 
         setLoading(true);
-        
-        // Prepare clean data
-        const payload = { 
-            type: activeTab, 
-            ...formData, 
-            mobile: cleanMobile, 
-            password: cleanPassword 
-        };
+        const payload = { type: activeTab, ...formData, mobile: cleanMobile, password: cleanPassword };
 
         try {
             const res = await axios.post(`${API_BASE}/signup`, payload);
             if (res.data.success) {
-                // Auto-login logic
                 try {
-                    const loginRes = await axios.post(`${API_BASE}/login`, { 
-                        mobile: cleanMobile, 
-                        password: cleanPassword 
-                    });
-                    
+                    const loginRes = await axios.post(`${API_BASE}/login`, { mobile: cleanMobile, password: cleanPassword });
                     if(loginRes.data.success) {
+                         alert("Account Created & Logged In!");
+                         localStorage.setItem('user', JSON.stringify(loginRes.data.user));
                          if (onSuccessLogin) onSuccessLogin(loginRes.data.user);
-                         else onLoginClick();
-                    } else {
-                         alert("Account Created! Please Login.");
-                         onLoginClick();
-                    }
-                } catch {
-                    alert("Account Created! Please Login.");
-                    onLoginClick();
-                }
-            } else {
-                alert(res.data.message);
-            }
-        } catch (e) {
-            alert("Registration Failed: Server Error");
-        } finally {
-            setLoading(false);
-        }
+                         else navigate('/'); // ✅ FIXED BLACK SCREEN
+                    } else { alert("Account Created! Please Login."); goToLogin(); }
+                } catch { alert("Account Created! Please Login."); goToLogin(); }
+            } else alert(res.data.message);
+        } catch (e) { alert("Registration Failed: Server Error"); } 
+        finally { setLoading(false); }
     };
 
     return (
@@ -83,7 +67,6 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
 
                 <div className="signup-body">
                     <input name="name" placeholder={activeTab === 'studio' ? "Owner Full Name" : "Full Name"} onChange={handleChange} />
-                    
                     {activeTab === 'studio' && (
                         <>
                             <input name="studioName" placeholder="Studio Name" onChange={handleChange} />
@@ -91,33 +74,16 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                             <input name="adhaar" placeholder="Aadhaar Number (12 Digit)" onChange={handleChange} />
                         </>
                     )}
-
                     <input name="mobile" type="number" placeholder="Mobile Number" onChange={handleChange} />
                     
-                    {/* ✅ PASSWORD FIELD with Eye Icon */}
                     <div className="password-wrapper">
-                        <input 
-                            name="password" 
-                            type={showPass ? "text" : "password"} 
-                            placeholder="Create Password" 
-                            onChange={handleChange} 
-                        />
-                        <span className="eye-icon" onClick={() => setShowPass(!showPass)}>
-                            {showPass ? '🙈' : '👁️'}
-                        </span>
+                        <input name="password" type={showPass ? "text" : "password"} placeholder="Create Password" onChange={handleChange} />
+                        <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                     </div>
 
-                    {/* ✅ CONFIRM PASSWORD FIELD with Eye Icon */}
                     <div className="password-wrapper">
-                        <input 
-                            name="confirm" 
-                            type={showConfirm ? "text" : "password"} 
-                            placeholder="Confirm Password" 
-                            onChange={handleChange} 
-                        />
-                        <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>
-                            {showConfirm ? '🙈' : '👁️'}
-                        </span>
+                        <input name="confirm" type={showConfirm ? "text" : "password"} placeholder="Confirm Password" onChange={handleChange} />
+                        <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</span>
                     </div>
 
                     <div className="terms-check-aligned">
@@ -131,7 +97,7 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                 </div>
 
                 <div className="signup-footer">
-                    <p>Already have an account? <span className="text-link" onClick={onLoginClick}>Login here</span></p>
+                    <p>Already have an account? <span className="text-link" onClick={goToLogin}>Login here</span></p>
                 </div>
             </div>
         </div>
