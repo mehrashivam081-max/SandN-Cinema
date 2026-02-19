@@ -48,7 +48,7 @@ const findAccount = async (mobile) => {
 
 // --- ROUTES ---
 
-// 1. Check & Send Real SMS OTP
+// 1. Check & Send WhatsApp OTP
 app.post('/api/auth/check-send-otp', async (req, res) => {
     const { mobile } = req.body;
     try {
@@ -60,39 +60,43 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         
         // Save OTP
         otpStore[mobile] = randomOTP;
-        console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
+        console.log(`🔐 Generated WhatsApp OTP for ${mobile}: ${randomOTP}`);
 
         // Aapki Fast2SMS API Key
         const fast2smsKey = "A0XmxauiLVFdfrtsI4W1Mp6CYehJoPRjyUSkEb7O23lvQZHGBwsmCOWLr3MD1YPnUH2JVoc9uZX0ekqI"; 
         
-        // ✅ STRICT FAST2SMS API CALL
-        const smsResponse = await axios.get('https://www.fast2sms.com/dev/bulkV2', {
-            headers: {
-                "authorization": fast2smsKey
-            },
-            params: {
+        // ✅ STRICT FAST2SMS WHATSAPP API CALL
+        const whatsappResponse = await axios.post('https://www.fast2sms.com/dev/bulkV2', 
+            {
+                route: "whatsapp",
+                message: "1", // Fast2SMS default WhatsApp OTP template
                 variables_values: randomOTP,
-                route: 'otp',
                 numbers: mobile
+            },
+            {
+                headers: {
+                    "authorization": fast2smsKey,
+                    "Content-Type": "application/json"
+                }
             }
-        });
+        );
 
-        // Agar SMS chala gaya to Success bhejenge
-        if (smsResponse.data.return === true) {
-            res.json({ success: true, message: "OTP Sent via SMS" });
+        // Agar WhatsApp message chala gaya to Success bhejenge
+        if (whatsappResponse.data.return === true) {
+            res.json({ success: true, message: "WhatsApp OTP Sent" });
         } else {
-            console.error("❌ Fast2SMS Failed:", smsResponse.data);
-            res.json({ success: false, message: "SMS Gateway Error: " + smsResponse.data.message });
+            console.error("❌ Fast2SMS WhatsApp Failed:", whatsappResponse.data);
+            res.json({ success: false, message: "WhatsApp Error: " + whatsappResponse.data.message });
         }
 
     } catch (e) {
         const errorMessage = e.response ? e.response.data.message : e.message;
-        console.error("❌ SMS Request Error:", errorMessage);
-        res.status(500).json({ error: "Failed to send SMS", details: errorMessage });
+        console.error("❌ WhatsApp Request Error:", errorMessage);
+        res.status(500).json({ error: "Failed to send WhatsApp OTP", details: errorMessage });
     }
 });
 
-// 2. Verify Real OTP (Strict Check - No Dummy)
+// 2. Verify WhatsApp OTP (Strict Check - No Dummy)
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     
