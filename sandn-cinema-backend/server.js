@@ -59,7 +59,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         otpStore[mobile] = randomOTP;
         console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
 
-        const fast2smsKey = "A0XmxauiLVFdfrtsI4W1Mp6CYehJoPRjyUSkEb7O23lvQZHGBwsmCOWLr3MD1YPnUH2JVoc9uZX0ekqI"; 
+        const fast2smsKey = process.env.FAST2SMS_KEY; 
         let whatsappSuccess = false;
 
         try {
@@ -102,7 +102,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
         otpStore[`signup_${mobile}`] = randomOTP; // Unique key for signup
         console.log(`🔐 Signup OTP for ${mobile}: ${randomOTP}`);
 
-        const fast2smsKey = "A0XmxauiLVFdfrtsI4W1Mp6CYehJoPRjyUSkEb7O23lvQZHGBwsmCOWLr3MD1YPnUH2JVoc9uZX0ekqI"; 
+        const fast2smsKey = process.env.FAST2SMS_KEY; 
         
         try {
             await axios.post('https://www.fast2sms.com/dev/bulkV2', 
