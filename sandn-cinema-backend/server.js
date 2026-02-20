@@ -27,8 +27,13 @@ mongoose.connect(MONGO_URI)
     .catch(err => console.error("❌ DB Error:", err));
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // SSL/TLS encryption
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
 });
 
 const otpStore = {}; 
@@ -80,8 +85,9 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                     html: `<h2>Your OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
                 });
                 emailSuccess = true;
-            } catch (emailErr) { console.error("⚠️ Email Skip"); }
-        }
+            } catch (emailErr) { 
+                 console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); 
+            }
 
         if (whatsappSuccess || emailSuccess) {
             res.json({ success: true, message: "OTP Sent successfully!" });
@@ -109,7 +115,9 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 { route: "whatsapp", message: "1", variables_values: randomOTP, numbers: mobile },
                 { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
             );
-        } catch (wsErr) { console.log("WhatsApp skip"); }
+        } catch (wsErr) { 
+              console.error("WhatsApp Error:", wsErr.response ? wsErr.response.data : wsErr.message); 
+        }
 
         if (email) {
             try {
@@ -119,7 +127,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                     subject: "Verify Registration - SandN Cinema",
                     html: `<h2>Verification Code: ${randomOTP}</h2><p>Enter this OTP to create your account.</p>`
                 });
-            } catch (emailErr) { console.log("Email skip"); }
+            } catch (emailErr) { console.error("Email Error:", emailErr); }
         }
         res.json({ success: true, message: "OTP Sent for Verification" });
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
