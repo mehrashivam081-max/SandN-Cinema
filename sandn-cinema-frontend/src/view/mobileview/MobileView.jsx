@@ -40,7 +40,6 @@ const MobileView = () => {
   const touchStartX = useRef(0);
 
   const handleTouchStart = (e) => { 
-      // Agar user login hai, feed khuli hai ya kisi aur page par hai to swipe block karein
       if (userData || feedType || viewState !== 'HOME') return;
       touchStartX.current = e.targetTouches[0].clientX; 
       isSwiping.current = true;
@@ -50,28 +49,28 @@ const MobileView = () => {
       if (!isSwiping.current || userData || feedType) return;
       const currentX = e.targetTouches[0].clientX; 
       const diff = currentX - touchStartX.current;
-      setSwipeOffset(diff); // Screen uglee ke sath move karegi
+      setSwipeOffset(diff); 
   };
   
   const handleTouchEnd = () => {
       if (!isSwiping.current) return;
       isSwiping.current = false;
       
-      // Agar 80px se zyada swipe hua hai tabhi feed open hogi, warna wapas snap ho jayegi
       if (swipeOffset < -80) setFeedType('trending'); 
       else if (swipeOffset > 80) setFeedType('viral'); 
       
-      setSwipeOffset(0); // Wapas apni jagah par set
+      setSwipeOffset(0); 
   };
 
-  // ✅ REAL API LOGIC
+  // ✅ REAL API LOGIC (WhatsApp OTP)
   const handleMobileSearch = async () => {
       if (mobile.length !== 10) return alert("Please enter valid 10 digit number");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
           if (res.data.success) { 
-              alert(`Real OTP Sent to ${mobile}`); // Dummy hataya
+              // ✅ Changed to WhatsApp message
+              alert(`WhatsApp OTP Sent to ${mobile}`); 
               setSearchStep(1); 
           } else {
               setIsNotRegistered(true);
@@ -89,7 +88,7 @@ const MobileView = () => {
           if (res.data.success) {
               setSearchStep(2); 
           } else {
-              alert("Galat OTP! Kripya sahi OTP dalein."); // Strict Verification
+              alert("Galat OTP! Kripya sahi OTP dalein.");
           }
       } catch (e) {
           alert("Verification Failed. Server error.");
@@ -131,14 +130,12 @@ const MobileView = () => {
   return (
     <div className="mobile-container" style={{ overflow: 'hidden', position: 'relative', background: '#222' }}>
       
-      {/* Background Feeds Layer */}
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
       {viewState === 'BOOKING' && <BookingForm onClose={() => setViewState('HOME')} />}
       
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* ✅ Swipe Wrapper Layer */}
       <div 
         className="mobile-swipe-wrapper"
         onTouchStart={handleTouchStart} 
@@ -181,7 +178,7 @@ const MobileView = () => {
                         )}
                         {searchStep === 1 && (
                             <>
-                                <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
+                                <input type="number" placeholder="Enter WhatsApp OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
@@ -194,11 +191,10 @@ const MobileView = () => {
                     </div>
 
                     <div className="info-box-red-mob">
-                        <h2>{searchStep === 0 ? "Search Your Data By Registered Mobile No." : searchStep === 1 ? "OTP Verification" : "Security Check"}</h2>
+                        <h2>{searchStep === 0 ? "Search Your Data By Registered Mobile No." : searchStep === 1 ? "WhatsApp OTP Verification" : "Security Check"}</h2>
                     </div>
 
                     <div className="magnet-section-mob">
-                      {/* Video chalane ke liye */}
                       <video className="magnet-video-mob" autoPlay loop muted playsInline>
                         <source src={magnetVideo} type="video/mp4" />
                       </video>

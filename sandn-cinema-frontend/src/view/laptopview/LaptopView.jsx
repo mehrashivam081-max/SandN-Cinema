@@ -16,7 +16,6 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
-// ✅ CORRECT BACKEND URL
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const LaptopView = () => {
@@ -32,14 +31,15 @@ const LaptopView = () => {
   const [isNotRegistered, setIsNotRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // ✅ REAL API LOGIC (Strict - No Dummy Code)
+  // ✅ REAL API LOGIC (WhatsApp OTP)
   const handleSearch = async () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
           if (res.data.success) { 
-              alert(`Real OTP Sent to ${mobile}`); 
+              // ✅ Changed to WhatsApp message
+              alert(`WhatsApp OTP Sent to ${mobile}`); 
               setSearchStep(1); 
           } else {
               setIsNotRegistered(true);
@@ -89,7 +89,6 @@ const LaptopView = () => {
       setSearchStep(0); setUserData(null); setMobile(''); setOtp(''); setPassword('');
   };
 
-  // ✅ ROLE BASED DASHBOARD ROUTING
   const renderDashboard = () => {
       if (userData.role === 'ADMIN') return <OwnerDashboard />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
@@ -123,7 +122,7 @@ const LaptopView = () => {
              )}
              {searchStep === 1 && (
                 <>
-                    <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{width:'150px'}} />
+                    <input type="text" placeholder="Enter WhatsApp OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{width:'150px'}} />
                     <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify'}</button>
                 </>
              )}
@@ -153,7 +152,6 @@ const LaptopView = () => {
         {searchStep === 3 ? (
             <div style={{width: '100%', padding: '20px'}}>
                 {renderDashboard()}
-                {/* Fallback Logout */}
                 <button className="search-btn" onClick={handleLogout} style={{marginTop:'20px', display: 'block', marginLeft: 'auto', marginRight: 'auto'}}>Logout Main Panel</button>
             </div>
         ) : (

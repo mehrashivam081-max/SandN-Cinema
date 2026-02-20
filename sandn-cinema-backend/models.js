@@ -4,19 +4,21 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     mobile: { type: String, required: true, unique: true },
-    password: { type: String, required: true }, // Bcrypt hash in real app
-    role: { type: String, default: 'USER' }, // USER, STUDIO, ADMIN
+    email: { type: String, required: true },
+    password: { type: String, required: true },
+    role: { type: String, default: 'USER' },
     
     // Profile
     profileImage: String,
     gender: String,
     state: String,
     city: String,
+    location: { lat: Number, long: Number }, // ✅ Added Location Tracker for User
     
     // Wallet & Coins
     wallet: {
         coins: { type: Number, default: 0 },
-        history: [{ type: String }] // Array of transaction descriptions
+        history: [{ type: String }]
     },
     
     // Security
@@ -34,27 +36,27 @@ const studioSchema = new mongoose.Schema({
     ownerName: { type: String, required: true },
     studioName: { type: String, required: true },
     mobile: { type: String, required: true, unique: true },
+    email: { type: String, required: true },
     password: { type: String, required: true },
     role: { type: String, default: 'STUDIO' },
     
     // Verification
     adhaarNumber: { type: String, required: true },
     isAdhaarVerified: { type: Boolean, default: false },
-    ownerImage: String, // URL/Path
+    ownerImage: String,
     
     // Details
     whatsapp: String,
-    email: String,
-    workPlace: String, // Home/Office
+    workPlace: String,
     experience: String,
-    location: { lat: Number, long: Number },
+    location: { lat: Number, long: Number }, // ✅ Location is already here
     
     // Business
     rating: { type: Number, default: 0 },
     revenue: {
         current: { type: Number, default: 0 },
         total: { type: Number, default: 0 },
-        history: [{ amount: Number, date: Date, status: String }] // Withdrawal history
+        history: [{ amount: Number, date: Date, status: String }]
     },
     
     otp: String,
@@ -66,15 +68,16 @@ const studioSchema = new mongoose.Schema({
 const adminSchema = new mongoose.Schema({
     name: String,
     mobile: { type: String, required: true, unique: true },
+    email: String,
     password: { type: String, required: true },
-    role: { type: String, default: 'ADMIN' }, // SUPER_ADMIN, SUB_ADMIN
-    permissions: [String], // e.g., ['VIEW_USERS', 'APPROVE_PAYMENTS']
+    role: { type: String, default: 'ADMIN' },
+    permissions: [String],
     logs: [{ action: String, time: Date }]
 });
 
-// --- 4. APP CONTENT (Terms, Policies) ---
+// --- 4. APP CONTENT ---
 const contentSchema = new mongoose.Schema({
-    type: { type: String, unique: true }, // TERMS_USER, TERMS_STUDIO, SECURITY_POLICY
+    type: { type: String, unique: true },
     text: String,
     lastUpdated: { type: Date, default: Date.now },
     history: [{ text: String, date: Date }]
@@ -86,7 +89,7 @@ const offerSchema = new mongoose.Schema({
     target: { type: String, enum: ['ALL', 'USER', 'STUDIO'] },
     title: String,
     message: String,
-    code: String, // For coupons
+    code: String,
     expiry: Date,
     createdAt: { type: Date, default: Date.now }
 });
