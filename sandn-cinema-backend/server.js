@@ -86,8 +86,8 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 });
                 emailSuccess = true;
             } catch (emailErr) { 
-                 console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); 
-            }
+    console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); }
+        }
 
         if (whatsappSuccess || emailSuccess) {
             res.json({ success: true, message: "OTP Sent successfully!" });
