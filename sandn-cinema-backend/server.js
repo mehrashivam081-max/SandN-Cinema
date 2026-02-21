@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 const axios = require('axios'); 
-const nodemailer = require('nodemailer'); 
 
 const { User, Studio, Admin } = require('./models');
 
@@ -26,15 +25,27 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ DB Error:", err));
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // SSL/TLS encryption
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
+// 🚀 NEW: Brevo Email API Function (Bypasses Render's Block)
+const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
+    // Note: Render me EMAIL_USER wahi hona chahiye jis se Brevo account banaya hai
+    const senderEmail = process.env.EMAIL_USER; 
+    const brevoKey = process.env.BREVO_KEY;
+
+    const data = {
+        sender: { name: "SandN Cinema", email: senderEmail },
+        to: [{ email: toEmail }],
+        subject: subject,
+        htmlContent: htmlContent
+    };
+
+    const headers = {
+        'accept': 'application/json',
+        'api-key': brevoKey,
+        'content-type': 'application/json'
+    };
+
+    return axios.post('https://api.brevo.com/v3/smtp/email', data, { headers });
+};
 
 const otpStore = {}; 
 
@@ -78,15 +89,15 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         let emailSuccess = false;
         if (account.data.email) {
             try {
-                await transporter.sendMail({
-                    from: `"SandN Cinema" <${process.env.EMAIL_USER}>`,
-                    to: account.data.email,
-                    subject: "Login Verification - SandN Cinema",
-                    html: `<h2>Your OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
-                });
+                // ✅ Calling new Brevo Function
+                await sendBrevoEmail(
+                    account.data.email,
+                    "Login Verification - SandN Cinema",
+                    `<h2>Your OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
+                );
                 emailSuccess = true;
             } catch (emailErr) { 
-                console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); 
+                console.error("🚨 BREVO EMAIL ERROR:", emailErr.response ? emailErr.response.data : emailErr.message); 
             }
         }
 
@@ -102,7 +113,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
     }
 });
 
-// ✅ 2. NEW: Send OTP for SIGNUP (Runs before saving data)
+// 2. Send OTP for SIGNUP (Runs before saving data)
 app.post('/api/auth/send-signup-otp', async (req, res) => {
     const { mobile, email } = req.body;
     try {
@@ -126,19 +137,19 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
 
         if (email) {
             try {
-                await transporter.sendMail({
-                    from: `"SandN Cinema" <${process.env.EMAIL_USER}>`,
-                    to: email,
-                    subject: "Verify Registration - SandN Cinema",
-                    html: `<h2>Verification Code: ${randomOTP}</h2><p>Enter this OTP to create your account.</p>`
-                });
-            } catch (emailErr) { console.error("Email Error:", emailErr); }
+                // ✅ Calling new Brevo Function
+                await sendBrevoEmail(
+                    email,
+                    "Verify Registration - SandN Cinema",
+                    `<h2>Verification Code: ${randomOTP}</h2><p>Enter this OTP to create your account.</p>`
+                );
+            } catch (emailErr) { console.error("Brevo Email Error:", emailErr.response ? emailErr.response.data : emailErr.message); }
         }
         res.json({ success: true, message: "OTP Sent for Verification" });
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
 });
 
-// ✅ 3. MODIFIED: Signup with OTP Verification & Location Save
+// 3. Signup with OTP Verification & Location Save
 app.post('/api/auth/signup', async (req, res) => {
     const { type, mobile, otp, name, studioName, password, email, location, ...otherData } = req.body;
 
@@ -154,12 +165,12 @@ app.post('/api/auth/signup', async (req, res) => {
         if (type === 'studio') {
             await Studio.create({
                 mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
-                isAdhaarVerified: false, location, // ✅ Location saved
+                isAdhaarVerified: false, location,
                 ...otherData
             });
         } else {
             await User.create({
-                mobile, password, email, role: 'USER', name: name, location, // ✅ Location saved
+                mobile, password, email, role: 'USER', name: name, location,
                 ...otherData
             });
         }
