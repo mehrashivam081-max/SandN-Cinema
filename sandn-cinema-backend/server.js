@@ -86,15 +86,20 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 });
                 emailSuccess = true;
             } catch (emailErr) { 
-    console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); }
+                console.error("🚨 EMAIL ERROR DETAILS:", emailErr.message); 
+            }
         }
 
+        // Final response check
         if (whatsappSuccess || emailSuccess) {
             res.json({ success: true, message: "OTP Sent successfully!" });
         } else {
             res.json({ success: false, message: "Failed to send OTP via both methods." });
         }
-    } catch (e) { res.status(500).json({ error: "Server Error", details: e.message }); }
+
+    } catch (e) { 
+        res.status(500).json({ error: "Server Error", details: e.message }); 
+    }
 });
 
 // ✅ 2. NEW: Send OTP for SIGNUP (Runs before saving data)
