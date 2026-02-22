@@ -17,18 +17,13 @@ import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-const LaptopView = () => {
+const LaptopView = ({
+    viewState, setViewState, searchStep, setSearchStep,
+    userData, setUserData, feedType, setFeedType,
+    mobile, setMobile, otp, setOtp, password, setPassword,
+    isNotRegistered, setIsNotRegistered, loading, setLoading, handleLogout
+}) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [viewState, setViewState] = useState('HOME'); 
-  const [feedType, setFeedType] = useState(null); 
-  
-  const [searchStep, setSearchStep] = useState(0); 
-  const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
-  const [userData, setUserData] = useState(null);
-  const [isNotRegistered, setIsNotRegistered] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const handleSearch = async () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
@@ -80,10 +75,6 @@ const LaptopView = () => {
   const handleManualSwipe = (direction) => {
       if (direction === 'left') setFeedType('trending');
       if (direction === 'right') setFeedType('viral');   
-  };
-
-  const handleLogout = () => {
-      setSearchStep(0); setUserData(null); setMobile(''); setOtp(''); setPassword('');
   };
 
   const renderDashboard = () => {

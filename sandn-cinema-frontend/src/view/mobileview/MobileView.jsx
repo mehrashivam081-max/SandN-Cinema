@@ -21,18 +21,13 @@ import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-const MobileView = () => {
+const MobileView = ({
+    viewState, setViewState, searchStep, setSearchStep,
+    userData, setUserData, feedType, setFeedType,
+    mobile, setMobile, otp, setOtp, password, setPassword,
+    isNotRegistered, setIsNotRegistered, loading, setLoading, handleLogout
+}) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [viewState, setViewState] = useState('HOME');
-  const [feedType, setFeedType] = useState(null);
-  
-  const [searchStep, setSearchStep] = useState(0); 
-  const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
-  const [userData, setUserData] = useState(null);
-  const [isNotRegistered, setIsNotRegistered] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   // ✅ REAL-TIME SWIPE LOGIC STATES
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -141,10 +136,6 @@ const MobileView = () => {
       } catch (e) {
           alert("Login Failed. Server error.");
       } finally { setLoading(false); }
-  };
-
-  const handleLogout = () => {
-      setSearchStep(0); setUserData(null); setMobile(''); setOtp(''); setPassword(''); setViewState('HOME');
   };
 
   const renderDashboard = () => {
