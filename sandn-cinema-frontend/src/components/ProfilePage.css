@@ -2,10 +2,11 @@
 .profile-sidebar-container {
     position: fixed;
     top: 0;
-    left: 0; /* Left side menu as per standard, or right if you prefer */
+    left: 0; 
     width: 30%;
-    height: 100%;
-    background: #1a1a1a; /* Dark Theme Background */
+    min-width: 260px; /* Mobile adjustment */
+    height: 100dvh; 
+    background: #1a1a1a; 
     color: #fff;
     z-index: 2000;
     transform: translateX(-100%);
@@ -13,12 +14,10 @@
     box-shadow: 2px 0 10px rgba(0,0,0,0.5);
     display: flex;
     flex-direction: column;
-    /* --- YE DO LINES ADD KAREIN --- */
-    overflow-y: auto; /* Vertical Scroll enable karega */
-    overscroll-behavior: contain; /* Scroll ko sidebar tak seemit rakhega */
+    overflow-y: auto; 
+    overscroll-behavior: contain; 
 }
 
-/* Scrollbar ko sundar (hidden/thin) banane ke liye ye bhi add kar sakte hain */
 .profile-sidebar-container::-webkit-scrollbar {
     width: 5px;
 }
@@ -28,10 +27,8 @@
     border-radius: 10px;
 }
 
-
 .profile-sidebar-container.slide-in {
     transform: translateX(0);
-    position: scroll;
 }
 
 .sidebar-backdrop {
@@ -77,7 +74,7 @@
     height: 80px;
     border-radius: 50%;
     overflow: hidden;
-    border: 2px solid #e50914; /* Netflix Red styling */
+    border: 2px solid #e50914; 
     cursor: pointer;
 }
 
@@ -109,6 +106,7 @@
     margin: 0;
     flex-grow: 1;
     overflow-y: auto;
+    padding-bottom: 80px; /* ✅ FIX: Prevents bottom items from hiding in mobile */
 }
 
 .profile-menu-item {
@@ -143,6 +141,17 @@
 .menu-arrow {
     color: #777;
 }
+
+/* ✅ FULL IMAGE FIX: CSS for Double Tap Image Overlay */
+.full-image-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
+    background: rgba(0,0,0,0.95); z-index: 3000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.full-screen-img {
+    width: 100%; max-width: 500px; height: auto; max-height: 80vh; object-fit: contain;
+}
+.close-instruction { color: white; margin-top: 20px; font-size: 14px; opacity: 0.7; }
 
 /* --- POPUPS & MODALS --- */
 .popup-overlay-fixed {
@@ -206,3 +215,42 @@
 .stars-container { font-size: 2rem; color: gold; cursor: pointer; text-align: center; margin: 10px 0; }
 .social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .social-card { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid; border-radius: 8px; text-decoration: none; font-size: 0.9rem; }
+/* ✅ NEW PROFILE ACTIONS ROW STYLES (Below DP) */
+.profile-actions-row {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 15px 20px;
+}
+
+.profile-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.profile-action-btn:hover {
+    transform: scale(1.1);
+}
+
+.p-action-icon {
+    font-size: 1.4rem;
+    background: #2a2a2a;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    border: 1px solid #444;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.p-action-label {
+    font-size: 0.75rem;
+    color: #bbb;
+    text-align: center;
+    font-weight: 500;
+}

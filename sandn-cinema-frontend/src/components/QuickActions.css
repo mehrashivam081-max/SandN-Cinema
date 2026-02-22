@@ -1,0 +1,24 @@
+.quick-actions-container {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.qa-icon-btn {
+    font-size: 1rem;
+    background: #111;
+    border: 1px solid #00ff00;
+    color: white;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease, background 0.2s;
+}
+.qa-icon-btn:hover {
+    transform: scale(1.15);
+    background: #222;
+}

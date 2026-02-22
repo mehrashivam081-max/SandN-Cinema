@@ -51,7 +51,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: 2, role: "Poster Designer", type: "Short Term", time: "Project Based", salary: "₹500 - ₹2k/art", urgent: false }
     ];
 
-    // --- REAL-TIME TRAFFIC STATE ---
     const [trafficStats, setTrafficStats] = useState({
         tab1: { label: "Today", visitors: 1240, registered: 45 },
         tab2: { label: "This Month", visitors: 35890, registered: 1250 },
@@ -86,17 +85,12 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         return () => clearInterval(interval);
     }, []);
 
-    // --- YE CODE ADD KAREIN (Background Scroll Lock) ---
     useEffect(() => {
         if (isOpen) {
-            // Jab Sidebar open ho, body scroll band kar do
             document.body.style.overflow = 'hidden';
         } else {
-            // Jab Sidebar close ho, wapas normal kar do
             document.body.style.overflow = 'unset';
         }
-
-        // Cleanup function (agar component unmount ho jaye)
         return () => {
             document.body.style.overflow = 'unset';
         };
@@ -104,7 +98,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
     const formatNum = (num) => num.toLocaleString('en-IN');
 
-    // --- MENU ITEMS (Updated) ---
+    // ✅ SHIFTED ITEMS: 4 items removed from here and moved to Profile Actions
     const menuItems = [
         { id: "Services", label: "Services & Portfolio", icon: "🛠️" },
         { id: "Accounts", label: "Accounts (Login/Signup)", icon: "👤" },
@@ -112,12 +106,16 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: "Traffic", label: "Traffic Status", icon: "📊" },
         { id: "Advertisement", label: "Business & Ads", icon: "📢" },
         { id: "Career & Vacancy", label: "Career & Vacancy", icon: "💼" },
-        { id: "About us", label: "About us", icon: "🏢" },
         { id: "Security & Privacy Policy", label: "Security & Privacy Policy", icon: "🔒" },
-        { id: "Customer Care", label: "Customer Care", icon: "🎧" },
-        { id: "How do we best for you", label: "How do we best for you", icon: "🤝" },
-        { id: "Rate us", label: "Rate us", icon: "⭐" },
-        { id: "More way to connect us...", label: "Connect with us...", icon: "🌐" }
+        { id: "How do we best for you", label: "How do we best for you", icon: "🤝" }
+    ];
+
+    // ✅ NEW PROFILE ACTIONS ROW
+    const profileActions = [
+        { id: "About us", label: "About", icon: "🏢" },
+        { id: "Customer Care", label: "Support", icon: "🎧" },
+        { id: "Rate us", label: "Rate", icon: "⭐" },
+        { id: "More way to connect us...", label: "Connect", icon: "🌐" }
     ];
 
     // Handlers
@@ -381,14 +379,32 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                 )}
 
                 <div className="sidebar-header-row"><button className="sidebar-close-btn" onClick={onClose}>✕</button></div>
+                
                 <div className="sidebar-content">
+                    {/* DP Section */}
                     <div className="dp-section">
                         <div className="profile-img-container" onMouseDown={handlePressStart} onMouseUp={handlePressEnd} onMouseLeave={handlePressEnd} onTouchStart={handlePressStart} onTouchEnd={handlePressEnd} onContextMenu={(e) => e.preventDefault()}>
                             <img src={profileImg} alt="DP" className="profile-dp" />
                         </div>
                     </div>
-                    <div className="profile-header-text">SandN Cinema<div className="header-underline"></div></div>
-                    <ul className="profile-menu-list">
+                    
+                    {/* Name */}
+                    <div className="profile-header-text">SandN Cinema</div>
+
+                    {/* ✅ NEW PROFILE ACTIONS ROW (Icons below name) */}
+                    <div className="profile-actions-row">
+                        {profileActions.map(action => (
+                            <div key={action.id} className="profile-action-btn" onClick={() => handleMenuClick(action.id)}>
+                                <div className="p-action-icon">{action.icon}</div>
+                                <div className="p-action-label">{action.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="header-underline" style={{marginTop: '0px'}}></div>
+                    
+                    {/* Remaining Menu List */}
+                    <ul className="profile-menu-list" style={{marginTop: '15px'}}>
                         {menuItems.map((item, index) => (
                             <li key={index} className="profile-menu-item" onClick={() => handleMenuClick(item.id)}>
                                 <div className="menu-left-group"><span className="menu-icon">{item.icon}</span><span className="menu-label">{item.label}</span></div>

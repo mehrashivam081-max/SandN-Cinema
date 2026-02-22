@@ -39,6 +39,11 @@ const MobileView = () => {
   const isSwiping = useRef(false);
   const touchStartX = useRef(0);
 
+  // ✅ MAGNET LOGIC STATES & REFS
+  const magnetRef = useRef(null);
+  const [magnetStyle, setMagnetStyle] = useState({ transform: 'translate(0px, 0px)', transition: 'transform 0.3s ease-out' });
+
+  // --- SWIPE HANDLERS ---
   const handleTouchStart = (e) => { 
       if (userData || feedType || viewState !== 'HOME') return;
       touchStartX.current = e.targetTouches[0].clientX; 
@@ -62,15 +67,42 @@ const MobileView = () => {
       setSwipeOffset(0); 
   };
 
-  // ✅ REAL API LOGIC (WhatsApp OTP)
+  // --- MAGNET HANDLERS ---
+  const handleMagnetMove = (e) => {
+    e.stopPropagation(); 
+    if (!magnetRef.current) return;
+    
+    const rect = magnetRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const deltaX = clientX - centerX;
+    const deltaY = clientY - centerY;
+
+    setMagnetStyle({
+        transform: `translate(${deltaX * 0.3}px, ${deltaY * 0.3}px)`,
+        transition: 'none' 
+    });
+  };
+
+  const handleMagnetLeave = () => {
+    setMagnetStyle({
+        transform: 'translate(0px, 0px)',
+        transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' 
+    });
+  };
+
+  // --- API LOGIC ---
   const handleMobileSearch = async () => {
       if (mobile.length !== 10) return alert("Please enter valid 10 digit number");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
           if (res.data.success) { 
-              // ✅ Changed to WhatsApp message
-              alert(`WhatsApp OTP Sent to ${mobile}`); 
+              alert(`OTP Sent to ${mobile} (via Email/WhatsApp)`); 
               setSearchStep(1); 
           } else {
               setIsNotRegistered(true);
@@ -115,7 +147,6 @@ const MobileView = () => {
       setSearchStep(0); setUserData(null); setMobile(''); setOtp(''); setPassword(''); setViewState('HOME');
   };
 
-  // ✅ ROLE BASED DASHBOARD ROUTING
   const renderDashboard = () => {
       if (userData.role === 'ADMIN') return <OwnerDashboard />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
@@ -144,7 +175,7 @@ const MobileView = () => {
         style={{ 
             transform: `translateX(${swipeOffset}px)`, 
             transition: isSwiping.current ? 'none' : 'transform 0.3s ease-out',
-            height: '100vh',
+            height: '100dvh',
             width: '100%',
             display: 'flex',
             flexDirection: 'column',
@@ -153,10 +184,14 @@ const MobileView = () => {
             zIndex: feedType ? 0 : 5 
         }}
       >
+          {/* ✅ UPDATED: User Profile Icon added & Header hidden if logged in */}
           {!userData && (
               <header className="mobile-header">
                 <div className="menu-icon-mob" onClick={() => setMenuOpen(true)}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
                 </div>
                 <h1 className="brand-title-mob">SandN <br/> Cinema</h1>
                 <div className="logo-circle-mob">SN</div>
@@ -178,7 +213,7 @@ const MobileView = () => {
                         )}
                         {searchStep === 1 && (
                             <>
-                                <input type="number" placeholder="Enter WhatsApp OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
+                                <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
@@ -191,11 +226,25 @@ const MobileView = () => {
                     </div>
 
                     <div className="info-box-red-mob">
-                        <h2>{searchStep === 0 ? "Search Your Data By Registered Mobile No." : searchStep === 1 ? "WhatsApp OTP Verification" : "Security Check"}</h2>
+                        <h2>{searchStep === 0 ? "Search Your Data By Registered Mobile No." : searchStep === 1 ? "OTP Verification" : "Security Check"}</h2>
                     </div>
 
-                    <div className="magnet-section-mob">
-                      <video className="magnet-video-mob" autoPlay loop muted playsInline>
+                    <div 
+                      className="magnet-section-mob"
+                      ref={magnetRef}
+                      onTouchMove={handleMagnetMove}
+                      onTouchEnd={handleMagnetLeave}
+                      onMouseMove={handleMagnetMove}
+                      onMouseLeave={handleMagnetLeave}
+                      style={{ 
+                        ...magnetStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', touchAction: 'none' 
+                      }}
+                    >
+                      <video 
+                        className="magnet-video-mob" 
+                        autoPlay loop muted playsInline
+                        style={{ width: '80%', maxWidth: '300px', borderRadius: '15px', boxShadow: '0px 10px 30px rgba(0,0,0,0.2)', pointerEvents: 'none' }}
+                      >
                         <source src={magnetVideo} type="video/mp4" />
                       </video>
                     </div>
