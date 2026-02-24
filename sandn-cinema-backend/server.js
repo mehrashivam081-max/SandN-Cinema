@@ -49,34 +49,40 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
 };
 
 // ==========================================
-// 🚀 2. NORMAL TEXT SMS API (Fast2SMS Fix)
+// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS)
 // ==========================================
 const sendTextSMS = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
-        { 
-            route: "otp", // OTP route using variable
-            variables_values: String(otp), 
-            numbers: String(mobile) 
-        },
-        { headers: { "authorization": fast2smsKey } }
+        { route: "otp", variables_values: otp, numbers: mobile },
+        { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
     );
 };
 
 // ==========================================
-// 🚀 3. WHATSAPP API (Fast2SMS Fix)
+// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS)
 // ==========================================
 const sendWhatsAppMsg = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
-        { 
-            route: "dlt", // DLT route sometimes works better for testing
-            message: "148386", // Fast2SMS default approved template ID for OTP
-            variables_values: String(otp), 
-            numbers: String(mobile) 
-        },
-        { headers: { "authorization": fast2smsKey } }
+        { route: "whatsapp", message: "1", variables_values: otp, numbers: mobile },
+        { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
     );
+};
+
+const otpStore = {}; 
+
+const findAccount = async (mobile) => {
+    let acc = await User.findOne({ mobile });
+    if (acc) return { type: 'USER', data: acc };
+    
+    acc = await Studio.findOne({ mobile });
+    if (acc) return { type: 'STUDIO', data: acc };
+    
+    acc = await Admin.findOne({ mobile });
+    if (acc) return { type: 'ADMIN', data: acc };
+    
+    return null;
 };
 
 // --- ROUTES ---
