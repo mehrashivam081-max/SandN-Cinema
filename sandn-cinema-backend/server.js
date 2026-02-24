@@ -53,8 +53,15 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
 // ==========================================
 const sendTextSMS = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
+    // 'q' route (Quick Transactional) DLT ke bina bhi chal jata hai
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
-        { route: "otp", variables_values: otp, numbers: mobile },
+        { 
+            route: "q", 
+            message: `Your SandN Cinema login OTP is ${otp}.`, // Simple message to avoid spam filter
+            language: "english", 
+            flash: 0, 
+            numbers: String(mobile) // Ensure it goes as a string
+        },
         { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
     );
 };
