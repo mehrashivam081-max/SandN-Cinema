@@ -15,6 +15,9 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
     const [careerInterest, setCareerInterest] = useState(false);
     const [userRating, setUserRating] = useState(0); 
 
+    // ✅ Ref to control scroll position
+    const sidebarContentRef = useRef(null);
+
     // --- COMPANY DATA ---
     const companyDetails = {
         name: "SandN Cinema",
@@ -69,6 +72,11 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             setCareerInterest(false);
             setCareerSubTab('short');
             setUserRating(0); 
+        } else {
+            // ✅ Scroll Memory Reset (Har baar top se khulega)
+            if (sidebarContentRef.current) {
+                sidebarContentRef.current.scrollTop = 0;
+            }
         }
     }, [isOpen]);
 
@@ -139,10 +147,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
     };
 
     const closePopup = (e) => { if(e) e.stopPropagation(); setActivePopup(null); };
-    const handlePressStart = () => { timerRef.current = setTimeout(() => { setIsFullView(true); }, 600); };
-    const handlePressEnd = () => { if (timerRef.current) clearTimeout(timerRef.current); };
-    const handleDoubleTap = (e) => { if(e) e.stopPropagation(); setIsFullView(false); };
-
 
     // --- RENDER POPUP CONTENT ---
     const renderPopupContent = () => {
@@ -357,15 +361,17 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             <div className={`sidebar-backdrop ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
             <div className={`profile-sidebar-container ${isOpen ? 'slide-in' : ''}`}>
                 
+                {/* ✅ DP Full Screen Layout Fix */}
                 {isFullView && (
-                    <div className="full-image-overlay" onDoubleClick={handleDoubleTap} onClick={(e) => e.stopPropagation()}>
-                        <img src={profileImg} alt="Full Profile" className="full-screen-img" onDoubleClick={handleDoubleTap} />
-                        <p className="close-instruction">Double tap to close</p>
+                    <div className="full-image-overlay" onClick={() => setIsFullView(false)} style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100dvh', background: 'rgba(0,0,0,0.95)', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
+                        <img src={profileImg} alt="Full Profile" className="full-screen-img" style={{width: '100%', maxWidth: '500px', height: 'auto', maxHeight: '80vh', objectFit: 'contain'}} />
+                        <p className="close-instruction" style={{color: 'white', marginTop: '20px', fontSize: '14px', opacity: 0.7}}>Tap anywhere to close</p>
                     </div>
                 )}
 
+                {/* ✅ Popup Wrapper for Perfect Center Alignment */}
                 {activePopup && (
-                    <div className="popup-overlay-fixed" onClick={closePopup}>
+                    <div className="popup-overlay-fixed" onClick={closePopup} style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)'}}>
                         <div className="custom-popup-box" onClick={(e) => e.stopPropagation()}>
                             <div className="popup-header-row">
                                 <div className="popup-title-badge">
@@ -380,10 +386,12 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
                 <div className="sidebar-header-row"><button className="sidebar-close-btn" onClick={onClose}>✕</button></div>
                 
-                <div className="sidebar-content">
+                {/* ✅ Added ref for scrolling reset */}
+                <div className="sidebar-content" ref={sidebarContentRef} style={{flexGrow: 1, overflowY: 'auto'}}>
                     {/* DP Section */}
                     <div className="dp-section">
-                        <div className="profile-img-container" onMouseDown={handlePressStart} onMouseUp={handlePressEnd} onMouseLeave={handlePressEnd} onTouchStart={handlePressStart} onTouchEnd={handlePressEnd} onContextMenu={(e) => e.preventDefault()}>
+                        {/* ✅ Profile DP Click to Open Full View */}
+                        <div className="profile-img-container" onClick={() => setIsFullView(true)} style={{cursor: 'pointer'}}>
                             <img src={profileImg} alt="DP" className="profile-dp" />
                         </div>
                     </div>
@@ -391,7 +399,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     {/* Name */}
                     <div className="profile-header-text">SandN Cinema</div>
 
-                    {/* ✅ NEW PROFILE ACTIONS ROW (Icons below name) */}
+                    {/* PROFILE ACTIONS ROW (Icons below name) */}
                     <div className="profile-actions-row">
                         {profileActions.map(action => (
                             <div key={action.id} className="profile-action-btn" onClick={() => handleMenuClick(action.id)}>

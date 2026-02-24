@@ -11,27 +11,59 @@ const MainLanding = () => {
   const width = useViewport(); // Current screen width pata ki
 
   // ✅ PERSISTENT STATE LOGIC (For Refresh & Screen Switch)
-  const [viewState, setViewState] = useState(() => localStorage.getItem('sn_viewState') || 'HOME');
-  const [searchStep, setSearchStep] = useState(() => parseInt(localStorage.getItem('sn_searchStep')) || 0);
+  const [viewState, setViewState] = useState(() => sessionStorage.getItem('sn_viewState') || 'HOME');
+  const [searchStep, setSearchStep] = useState(() => parseInt(sessionStorage.getItem('sn_searchStep')) || 0);
   const [userData, setUserData] = useState(() => {
-      const saved = localStorage.getItem('sn_userData');
+      const saved = sessionStorage.getItem('sn_userData');
       return saved && saved !== "undefined" ? JSON.parse(saved) : null;
   });
 
-  const [feedType, setFeedType] = useState(null);
-  const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
+  // ✅ PERSISTENT INPUT LOGIC (Inputs bhi refresh par safe rahenge)
+  const [feedType, setFeedType] = useState(() => sessionStorage.getItem('sn_feedType') || null);
+  const [mobile, setMobile] = useState(() => sessionStorage.getItem('sn_mobile') || '');
+  const [otp, setOtp] = useState(() => sessionStorage.getItem('sn_otp') || '');
+  const [password, setPassword] = useState(() => sessionStorage.getItem('sn_password') || '');
+  
   const [isNotRegistered, setIsNotRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Sync state changes to LocalStorage
-  useEffect(() => { localStorage.setItem('sn_viewState', viewState); }, [viewState]);
-  useEffect(() => { localStorage.setItem('sn_searchStep', searchStep.toString()); }, [searchStep]);
+  useEffect(() => { sessionStorage.setItem('sn_viewState', viewState); }, [viewState]);
+  useEffect(() => { sessionStorage.setItem('sn_searchStep', searchStep.toString()); }, [searchStep]);
   useEffect(() => { 
-      if(userData) localStorage.setItem('sn_userData', JSON.stringify(userData)); 
-      else localStorage.removeItem('sn_userData');
+      if(userData) sessionStorage.setItem('sn_userData', JSON.stringify(userData)); 
+      else sessionStorage.removeItem('sn_userData');
   }, [userData]);
+
+  // Sync inputs to SessionStorage 
+  useEffect(() => { if(feedType) sessionStorage.setItem('sn_feedType', feedType); else sessionStorage.removeItem('sn_feedType'); }, [feedType]);
+  useEffect(() => { sessionStorage.setItem('sn_mobile', mobile); }, [mobile]);
+  useEffect(() => { sessionStorage.setItem('sn_otp', otp); }, [otp]);
+  useEffect(() => { sessionStorage.setItem('sn_password', password); }, [password]);
+
+  // ✅ HARDWARE BACK BUTTON LOGIC (1 Step Back)
+  useEffect(() => {
+      window.history.pushState(null, null, window.location.href);
+      
+      const handleBackButton = (e) => {
+          e.preventDefault();
+          if (searchStep > 0) {
+              setSearchStep(prev => prev - 1); 
+              window.history.pushState(null, null, window.location.href);
+          } else if (feedType !== null) {
+              setFeedType(null); 
+              window.history.pushState(null, null, window.location.href);
+          } else if (viewState !== 'HOME') {
+              setViewState('HOME'); 
+              window.history.pushState(null, null, window.location.href);
+          } else {
+              window.history.back(); // App exit
+          }
+      };
+
+      window.addEventListener('popstate', handleBackButton);
+      return () => window.removeEventListener('popstate', handleBackButton);
+  }, [searchStep, feedType, viewState]);
 
   const handleLogout = () => {
       setSearchStep(0);
@@ -40,7 +72,9 @@ const MainLanding = () => {
       setOtp('');
       setPassword('');
       setViewState('HOME');
+      setFeedType(null);
       localStorage.removeItem('sn_userData');
+      sessionStorage.clear(); 
   };
 
   // Bundling all states to pass as props

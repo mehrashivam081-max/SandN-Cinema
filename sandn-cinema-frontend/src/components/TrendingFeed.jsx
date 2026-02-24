@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import '../styles/components.css';
 
-const TrendingFeed = ({ type, onClose }) => {
+// ✅ NAYA LOGIC: feedData prop added for Admin Panel Uploads
+const TrendingFeed = ({ type, onClose, feedData = [] }) => {
     // Determine title based on type (Trending or Viral)
     const title = type === 'trending' ? '🔥 Trending Now' : '🚀 Viral Content';
     
@@ -38,6 +39,12 @@ const TrendingFeed = ({ type, onClose }) => {
         }
     };
 
+    // ✅ NAYA LOGIC: Admin Data Array Map (Fallback to old dummy data if empty)
+    const itemsToShow = feedData && feedData.length > 0 ? feedData : [
+        { id: 1, title: "Amazing Cinema Moment #1", mediaUrl: "" },
+        { id: 2, title: "Behind the Scenes #2", mediaUrl: "" }
+    ];
+
     return (
         <div 
            className="modal-overlay"
@@ -66,14 +73,20 @@ const TrendingFeed = ({ type, onClose }) => {
                 </div>
                 
                 <div className="feed-content" style={{ flex: 1, overflowY: 'auto' }}>
-                    <div className="feed-item" style={{ marginBottom: '20px' }}>
-                        <div style={{height: '300px', background: '#ccc', display:'flex', alignItems:'center', justifyContent:'center', color: '#333'}}>Video/Image 1</div>
-                        <p style={{padding: '10px', color: '#fff'}}>Amazing Cinema Moment #1</p>
-                    </div>
-                    <div className="feed-item" style={{ marginBottom: '20px' }}>
-                        <div style={{height: '300px', background: '#ccc', display:'flex', alignItems:'center', justifyContent:'center', color: '#333'}}>Video/Image 2</div>
-                        <p style={{padding: '10px', color: '#fff'}}>Behind the Scenes #2</p>
-                    </div>
+                    
+                    {/* ✅ NAYA LOGIC: Map through feedData dynamically */}
+                    {itemsToShow.map((item) => (
+                        <div key={item.id} className="feed-item" style={{ marginBottom: '20px' }}>
+                            <div style={{height: '300px', background: '#ccc', display:'flex', alignItems:'center', justifyContent:'center', color: '#333', overflow: 'hidden'}}>
+                                {item.mediaUrl ? (
+                                    <img src={item.mediaUrl} alt={item.title} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                                ) : (
+                                    `Video/Image ${item.id}`
+                                )}
+                            </div>
+                            <p style={{padding: '10px', color: '#fff'}}>{item.title}</p>
+                        </div>
+                    ))}
                     
                     <div style={{textAlign: 'center', padding: '20px', color: '#888', marginTop: 'auto'}}>
                         Swipe {type === 'trending' ? 'Right 👉' : '👈 Left'} to go back

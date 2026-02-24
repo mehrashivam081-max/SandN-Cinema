@@ -29,6 +29,9 @@ const MobileView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // ✅ TOP LEFT HOME FUNCTION
+  const goHome = () => { setViewState('HOME'); setSearchStep(0); setFeedType(null); };
+
   // ✅ REAL-TIME SWIPE LOGIC STATES
   const [swipeOffset, setSwipeOffset] = useState(0);
   const isSwiping = useRef(false);
@@ -144,17 +147,19 @@ const MobileView = ({
       return <UserDashboard userData={userData} onLogout={handleLogout} />;
   };
 
-  if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
-  if (viewState === 'AUTH') return <LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
-  if (viewState === 'SIGNUP') return <SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
-  if (viewState === 'RECOVERY') return <ForgotPassword onLoginClick={() => setViewState('AUTH')} />;
+  // ✅ COLLAB VIEW ADDED 
+  if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', height:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back Home</button></div>;
+  if (viewState === 'SERVICE') return <ServicesPage onBack={goHome} />;
+  if (viewState === 'AUTH') return <LoginPage onBack={goHome} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
+  if (viewState === 'SIGNUP') return <SignupPage onLoginClick={() => setViewState('AUTH')} onBack={goHome} onSuccessLogin={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
+  if (viewState === 'RECOVERY') return <ForgotPassword onLoginClick={() => setViewState('AUTH')} onBack={goHome} />;
 
   return (
     <div className="mobile-container" style={{ overflow: 'hidden', position: 'relative', background: '#222' }}>
       
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
-      {viewState === 'BOOKING' && <BookingForm onClose={() => setViewState('HOME')} />}
+      {viewState === 'BOOKING' && <BookingForm onClose={goHome} />}
       
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
@@ -175,17 +180,18 @@ const MobileView = ({
             zIndex: feedType ? 0 : 5 
         }}
       >
-          {/* ✅ UPDATED: User Profile Icon added & Header hidden if logged in */}
           {!userData && (
               <header className="mobile-header">
                 <div className="menu-icon-mob" onClick={() => setMenuOpen(true)}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </div>
-                <h1 className="brand-title-mob">SandN <br/> Cinema</h1>
-                <div className="logo-circle-mob">SN</div>
+                {/* ✅ CLICKABLE TOP-LEFT HOME */}
+                <h1 className="brand-title-mob" onClick={goHome} style={{cursor:'pointer'}}>SandN <br/> Cinema</h1>
+                
+                {/* ✅ SN REPLACED WITH COLLAB */}
+                <div className="logo-circle-mob" onClick={() => setViewState('COLLAB')} style={{cursor:'pointer', fontSize:'10px', textAlign:'center', lineHeight:'1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    🤝<br/>Collab
+                </div>
               </header>
           )}
 
@@ -196,6 +202,9 @@ const MobileView = ({
             ) : (
                 <>
                     <div className="mobile-search-block">
+                        {/* ✅ MANUAL BACK BUTTON FOR STEPS */}
+                        {searchStep > 0 && <span onClick={() => setSearchStep(prev => prev - 1)} style={{ alignSelf: 'flex-start', color: '#555', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px', display: 'block' }}>← Back</span>}
+
                         {searchStep === 0 && (
                             <>
                                 <input type="number" placeholder="Search registered mobile no." className="mobile-input-field" value={mobile} onChange={e=>setMobile(e.target.value)} />

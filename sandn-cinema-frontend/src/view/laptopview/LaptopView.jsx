@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './LaptopView.css';
 import magnetVideo from '../../assets/magnet-clip.mp4';
@@ -24,6 +24,9 @@ const LaptopView = ({
     isNotRegistered, setIsNotRegistered, loading, setLoading, handleLogout
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // ✅ App Name Clickable as Home
+  const goHome = () => { setViewState('HOME'); setSearchStep(0); setFeedType(null); };
 
   const handleSearch = async () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
@@ -83,23 +86,25 @@ const LaptopView = ({
       return <UserDashboard userData={userData} onLogout={handleLogout} />;
   };
 
+  // ✅ Collab View Added
+  if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
+
   if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
   if (viewState === 'AUTH') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} /></div>;
   if (viewState === 'SIGNUP') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} /></div>;
   if (viewState === 'RECOVERY') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><ForgotPassword onLoginClick={() => setViewState('AUTH')} /></div>;
 
   return (
-    <div className="laptop-container">
+    // ✅ Responsive Fix: maxWidth 100vw ensures no overflow on Desktop Mode in mobile
+    <div className="laptop-container" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
       {viewState === 'BOOKING' && <BookingForm onClose={() => setViewState('HOME')} />}
 
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* ✅ UPDATED: Header will hide completely when user logs in */}
       {!userData && (
           <header className="laptop-header">
-            {/* User Profile Icon */}
             <div className="menu-icon" onClick={() => setMenuOpen(true)} style={{cursor: 'pointer'}}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -107,7 +112,8 @@ const LaptopView = ({
               </svg>
             </div>
             <div className="brand-section">
-              <h1 className="brand-title">SandN Cinema</h1>
+              {/* ✅ Clickable Brand Title to return Home */}
+              <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>SandN Cinema</h1>
               
               <div className="laptop-search-wrapper">
                  {searchStep === 0 && (
@@ -130,11 +136,13 @@ const LaptopView = ({
                  )}
               </div>
             </div>
-            <div className="logo-circle">SN</div>
+            {/* ✅ SN Logo Replaced with Collab Button keeping exact layout */}
+            <div className="logo-circle" onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', fontSize: '12px', textAlign: 'center', lineHeight: '1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                🤝<br/>Collab
+            </div>
           </header>
       )}
 
-      {/* ✅ UPDATED: Feed Buttons will hide completely when user logs in */}
       {!userData && (
         <>
             <div style={{position:'absolute', left:'20px', top:'50%', zIndex:10}}>

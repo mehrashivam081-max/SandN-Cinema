@@ -5,17 +5,28 @@ import './SignupPage.css';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
+const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
     const navigate = useNavigate(); 
-    const [activeTab, setActiveTab] = useState('user');
-    const [formData, setFormData] = useState({
-        name: '', email: '', mobile: '', password: '', confirm: '',  
-        studioName: '', adhaar: '', whatsapp: ''
+    
+    // ✅ Refresh Proof: Keep data in sessionStorage
+    const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('signupTab') || 'user');
+    const [formData, setFormData] = useState(() => {
+        const savedData = sessionStorage.getItem('signupForm');
+        return savedData ? JSON.parse(savedData) : {
+            name: '', email: '', mobile: '', password: '', confirm: '',  
+            studioName: '', adhaar: '', whatsapp: ''
+        };
     });
+
+    useEffect(() => { sessionStorage.setItem('signupTab', activeTab); }, [activeTab]);
+    useEffect(() => { sessionStorage.setItem('signupForm', JSON.stringify(formData)); }, [formData]);
+
     const [terms, setTerms] = useState(false);
     const [loading, setLoading] = useState(false);
     
-    // ✅ New States for Location and OTP Verification
+    // ✅ Terms Modal State
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    
     const [location, setLocation] = useState({ lat: null, long: null });
     const [isOtpSent, setIsOtpSent] = useState(false);
     const [otp, setOtp] = useState('');
@@ -23,7 +34,6 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
     const [showPass, setShowPass] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
 
-    // ✅ Get Live Location Tracker on component mount
     useEffect(() => {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(
@@ -38,11 +48,12 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
     const handleChange = (e) => setFormData({...formData, [e.target.name]: e.target.value});
 
     const goToLogin = () => {
+        sessionStorage.removeItem('signupForm');
+        sessionStorage.removeItem('signupTab');
         if (onLoginClick) onLoginClick();
         else navigate('/login'); 
     };
 
-    // ✅ STEP 1: Validate Form and Send OTP
     const handleSendOtp = async () => {
         const cleanPassword = formData.password.trim();
         const cleanConfirm = formData.confirm.trim();
@@ -60,7 +71,7 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
             const res = await axios.post(`${API_BASE}/send-signup-otp`, { mobile: cleanMobile, email: cleanEmail });
             if (res.data.success) {
                 alert("Verification Code Sent to Mobile & Email!");
-                setIsOtpSent(true); // Switch to OTP Input view
+                setIsOtpSent(true); 
             } else {
                 alert(res.data.message);
             }
@@ -68,7 +79,6 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
         finally { setLoading(false); }
     };
 
-    // ✅ STEP 2: Verify OTP, Register, Save Location & Auto-Login
     const handleVerifyAndRegister = async () => {
         if (!otp || otp.length < 4) return alert("Please enter a valid OTP");
         
@@ -76,15 +86,14 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
         const cleanMobile = formData.mobile.trim();
         const cleanPassword = formData.password.trim();
 
-        // Location & OTP added to payload
         const payload = { 
             type: activeTab, 
             ...formData, 
             mobile: cleanMobile, 
             email: formData.email.trim(), 
             password: cleanPassword,
-            location: location, // Location Tracking Data
-            otp: otp // Verification OTP
+            location: location, 
+            otp: otp 
         };
 
         try {
@@ -94,18 +103,41 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                     const loginRes = await axios.post(`${API_BASE}/login`, { mobile: cleanMobile, password: cleanPassword });
                     if(loginRes.data.success) {
                          alert("Account Verified & Created Successfully!");
+                         sessionStorage.removeItem('signupForm');
+                         sessionStorage.removeItem('signupTab');
                          localStorage.setItem('user', JSON.stringify(loginRes.data.user));
                          if (onSuccessLogin) onSuccessLogin(loginRes.data.user);
-                         else navigate('/'); // FIXED BLACK SCREEN
+                         else navigate('/'); 
                     } else { alert("Account Created! Please Login."); goToLogin(); }
                 } catch { alert("Account Created! Please Login."); goToLogin(); }
-            } else alert(res.data.message); // Shows "Invalid OTP" if wrong
+            } else alert(res.data.message); 
         } catch (e) { alert("Registration Failed: Server Error"); } 
         finally { setLoading(false); }
     };
 
     return (
         <div className="signup-page-container">
+            
+            {/* ✅ Top-Left Home Button */}
+            <div style={{position: 'absolute', top: '20px', left: '20px', cursor: 'pointer', color: '#fff', fontSize: '18px', fontWeight: 'bold'}} onClick={() => { sessionStorage.removeItem('signupForm'); if(onBack) onBack(); else navigate('/'); }}>
+                🏠 Home
+            </div>
+
+            {/* ✅ Terms Modal (Customizable by Super Admin Later) */}
+            {showTermsModal && (
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:9999, display:'flex', justifyContent:'center', alignItems:'center'}}>
+                    <div style={{background:'white', padding:'25px', borderRadius:'15px', width:'85%', maxWidth:'400px', color:'black', textAlign:'left'}}>
+                        <h3>Terms & Privacy Access</h3>
+                        <div style={{fontSize:'13px', marginTop:'15px', lineHeight:'1.6', maxHeight:'300px', overflowY:'auto'}}>
+                            <strong>1. Data Collection:</strong> We collect details and location to offer accurate services.<br/><br/>
+                            <strong>2. Security:</strong> Your media is fully encrypted.<br/><br/>
+                            <strong>3. Policy Update:</strong> Admin holds the right to alter content & guidelines.
+                        </div>
+                        <button onClick={() => setShowTermsModal(false)} style={{marginTop:'20px', width:'100%', background:'#e50914', color:'white', padding:'10px', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>I Understand</button>
+                    </div>
+                </div>
+            )}
+
             <div className="signup-card-glass">
                 <h2 className="signup-title">{isOtpSent ? "Verify Account" : "Create Account"}</h2>
                 
@@ -117,31 +149,32 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                         </div>
 
                         <div className="signup-body">
-                            <input name="name" placeholder={activeTab === 'studio' ? "Owner Full Name" : "Full Name"} onChange={handleChange} />
-                            <input name="email" type="email" placeholder="Email Address (for Verification)" onChange={handleChange} />
+                            <input name="name" value={formData.name} placeholder={activeTab === 'studio' ? "Owner Full Name" : "Full Name"} onChange={handleChange} />
+                            <input name="email" value={formData.email} type="email" placeholder="Email Address (for Verification)" onChange={handleChange} />
 
                             {activeTab === 'studio' && (
                                 <>
-                                    <input name="studioName" placeholder="Studio Name" onChange={handleChange} />
-                                    <input name="whatsapp" placeholder="WhatsApp Number" onChange={handleChange} />
-                                    <input name="adhaar" placeholder="Aadhaar Number (12 Digit)" onChange={handleChange} />
+                                    <input name="studioName" value={formData.studioName} placeholder="Studio Name" onChange={handleChange} />
+                                    <input name="whatsapp" value={formData.whatsapp} placeholder="WhatsApp Number" onChange={handleChange} />
+                                    <input name="adhaar" value={formData.adhaar} placeholder="Aadhaar Number (12 Digit)" onChange={handleChange} />
                                 </>
                             )}
-                            <input name="mobile" type="number" placeholder="Mobile Number" onChange={handleChange} />
+                            <input name="mobile" value={formData.mobile} type="number" placeholder="Mobile Number" onChange={handleChange} />
                             
                             <div className="password-wrapper">
-                                <input name="password" type={showPass ? "text" : "password"} placeholder="Create Password" onChange={handleChange} />
+                                <input name="password" value={formData.password} type={showPass ? "text" : "password"} placeholder="Create Password" onChange={handleChange} />
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
 
                             <div className="password-wrapper">
-                                <input name="confirm" type={showConfirm ? "text" : "password"} placeholder="Confirm Password" onChange={handleChange} />
+                                <input name="confirm" value={formData.confirm} type={showConfirm ? "text" : "password"} placeholder="Confirm Password" onChange={handleChange} />
                                 <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</span>
                             </div>
 
-                            <div className="terms-check-aligned">
-                                <input type="checkbox" id="terms" onChange={(e) => setTerms(e.target.checked)} />
-                                <label htmlFor="terms">I agree to Terms & Location Access</label>
+                            {/* ✅ Fixed Checkbox Alignment & Clickable Terms Text */}
+                            <div className="terms-check-aligned" style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginTop:'5px', marginBottom:'15px', color:'white', fontSize:'13px'}}>
+                                <input type="checkbox" id="terms" onChange={(e) => setTerms(e.target.checked)} style={{margin:0, width:'16px', height:'16px', cursor:'pointer'}} />
+                                <label htmlFor="terms" style={{cursor:'pointer'}}>I agree to <span onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} style={{color:'red', textDecoration:'underline'}}>Terms & Location Access</span></label>
                             </div>
 
                             <button className="signup-btn-primary" onClick={handleSendOtp} disabled={loading}>
@@ -150,7 +183,6 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                         </div>
                     </>
                 ) : (
-                    // ✅ OTP VERIFICATION SECTION
                     <div className="signup-body otp-verification-section">
                         <p style={{color: 'white', textAlign: 'center', fontSize: '14px', marginBottom: '15px'}}>
                             Verification code sent to {formData.mobile} & {formData.email}
@@ -165,14 +197,15 @@ const SignupPage = ({ onLoginClick, onSuccessLogin }) => {
                         <button className="signup-btn-primary" onClick={handleVerifyAndRegister} disabled={loading}>
                             {loading ? 'Creating Account...' : 'VERIFY & REGISTER'}
                         </button>
-                        <p className="text-link" style={{textAlign: 'center', marginTop: '10px'}} onClick={() => setIsOtpSent(false)}>
+                        {/* ✅ Step Back Logic (Return to Edit) */}
+                        <p className="text-link" style={{textAlign: 'center', marginTop: '10px', cursor:'pointer'}} onClick={() => setIsOtpSent(false)}>
                             ← Edit Details
                         </p>
                     </div>
                 )}
 
                 <div className="signup-footer">
-                    <p>Already have an account? <span className="text-link" onClick={goToLogin}>Login here</span></p>
+                    <p>Already have an account? <span className="text-link" onClick={goToLogin} style={{cursor:'pointer'}}>Login here</span></p>
                 </div>
             </div>
         </div>
