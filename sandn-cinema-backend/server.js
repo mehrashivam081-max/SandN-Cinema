@@ -25,9 +25,10 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ DB Error:", err));
 
-// 🚀 NEW: Brevo Email API Function (Bypasses Render's Block)
+// ==========================================
+// 🚀 1. EMAIL API FUNCTION (Brevo)
+// ==========================================
 const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
-    // Note: Render me EMAIL_USER wahi hona chahiye jis se Brevo account banaya hai
     const senderEmail = process.env.EMAIL_USER; 
     const brevoKey = process.env.BREVO_KEY;
 
@@ -47,6 +48,28 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
     return axios.post('https://api.brevo.com/v3/smtp/email', data, { headers });
 };
 
+// ==========================================
+// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS)
+// ==========================================
+const sendTextSMS = async (mobile, otp) => {
+    const fast2smsKey = process.env.FAST2SMS_KEY;
+    return axios.post('https://www.fast2sms.com/dev/bulkV2', 
+        { route: "otp", variables_values: otp, numbers: mobile },
+        { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
+    );
+};
+
+// ==========================================
+// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS)
+// ==========================================
+const sendWhatsAppMsg = async (mobile, otp) => {
+    const fast2smsKey = process.env.FAST2SMS_KEY;
+    return axios.post('https://www.fast2sms.com/dev/bulkV2', 
+        { route: "whatsapp", message: "1", variables_values: otp, numbers: mobile },
+        { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
+    );
+};
+
 const otpStore = {}; 
 
 const findAccount = async (mobile) => {
@@ -64,88 +87,126 @@ const findAccount = async (mobile) => {
 
 // --- ROUTES ---
 
-// 1. Check & Send WhatsApp + Email OTP (For Login)
+// 1. Check & Send OTP (SMS, WhatsApp, or Email) based on User Selection
 app.post('/api/auth/check-send-otp', async (req, res) => {
-    const { mobile } = req.body;
+    const { mobile, sendVia } = req.body; 
+    
     try {
-        const account = await findAccount(mobile);
-        if (!account) return res.json({ success: false, message: "Not Registered" });
+        let targetMobile = mobile;
+        let targetEmail = null;
+
+        // ✅ REAL ADMIN SECURITY LOGIC (Db check for Admin)
+        if (mobile === "0000000000CODEIS*@OWNER*") {
+            const adminAcc = await Admin.findOne(); 
+            if (!adminAcc) {
+                targetMobile = process.env.ADMIN_MOBILE || "9999999999"; 
+                targetEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+            } else {
+                targetMobile = adminAcc.mobile;
+                targetEmail = adminAcc.email;
+            }
+        } else {
+            const account = await findAccount(mobile);
+            if (!account) return res.json({ success: false, message: "Not Registered" });
+            targetMobile = account.data.mobile;
+            targetEmail = account.data.email;
+        }
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore[mobile] = randomOTP;
-        console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
+        otpStore[mobile] = randomOTP; 
+        console.log(`🔐 Generated OTP for ${mobile} (Sending to: ${sendVia === 'email' ? targetEmail : targetMobile}): ${randomOTP}`);
 
-        const fast2smsKey = process.env.FAST2SMS_KEY; 
-        let whatsappSuccess = false;
-
-        try {
-            const whatsappResponse = await axios.post('https://www.fast2sms.com/dev/bulkV2', 
-                { route: "whatsapp", message: "1", variables_values: randomOTP, numbers: mobile },
-                { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
-            );
-            if (whatsappResponse.data.return === true) whatsappSuccess = true;
-        } catch (wsErr) { console.error("⚠️ WhatsApp Skip"); }
-
-        let emailSuccess = false;
-        if (account.data.email) {
+        // ✅ 1. EMAIL LOGIC
+        if (sendVia === 'email') {
+            if (!targetEmail) return res.json({ success: false, message: "No Email registered with this account." });
             try {
-                // ✅ Calling new Brevo Function
                 await sendBrevoEmail(
-                    account.data.email,
+                    targetEmail,
                     "Login Verification - SandN Cinema",
-                    `<h2>Your OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
+                    `<h2>Your Security OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
                 );
-                emailSuccess = true;
+                return res.json({ success: true, message: "OTP Sent successfully via Email!" });
             } catch (emailErr) { 
-                console.error("🚨 BREVO EMAIL ERROR:", emailErr.response ? emailErr.response.data : emailErr.message); 
+                console.error("🚨 EMAIL ERROR:", emailErr.message); 
+                return res.status(500).json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
+            }
+        } 
+        // ✅ 2. WHATSAPP LOGIC
+        else if (sendVia === 'whatsapp') {
+            try {
+                const waResponse = await sendWhatsAppMsg(targetMobile, randomOTP);
+                if (waResponse.data.return === true) {
+                    return res.json({ success: true, message: "OTP Sent successfully via WhatsApp!" });
+                } else {
+                    return res.status(500).json({ success: false, message: "WhatsApp Gateway rejected request." });
+                }
+            } catch (wsErr) { 
+                console.error("⚠️ WHATSAPP ERROR:", wsErr.message);
+                return res.status(500).json({ success: false, message: "Failed to send WhatsApp. Try SMS." });
+            }
+        } 
+        // ✅ 3. NORMAL TEXT SMS LOGIC (Default for 'mobile' or 'sms')
+        else {
+            try {
+                const smsResponse = await sendTextSMS(targetMobile, randomOTP);
+                if (smsResponse.data.return === true) {
+                    return res.json({ success: true, message: "OTP Sent successfully via SMS!" });
+                } else {
+                    return res.status(500).json({ success: false, message: "SMS Gateway rejected request." });
+                }
+            } catch (smsErr) { 
+                console.error("⚠️ SMS ERROR:", smsErr.message);
+                return res.status(500).json({ success: false, message: "Failed to send SMS. Try Email." });
             }
         }
-
-        // Final response check
-        if (whatsappSuccess || emailSuccess) {
-            res.json({ success: true, message: "OTP Sent successfully!" });
-        } else {
-            res.json({ success: false, message: "Failed to send OTP via both methods." });
-        }
-
     } catch (e) { 
+        console.error("Server Error:", e);
         res.status(500).json({ error: "Server Error", details: e.message }); 
     }
 });
 
 // 2. Send OTP for SIGNUP (Runs before saving data)
 app.post('/api/auth/send-signup-otp', async (req, res) => {
-    const { mobile, email } = req.body;
+    const { mobile, email, sendVia } = req.body; // Getting user preference from frontend
     try {
         const exists = await findAccount(mobile);
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore[`signup_${mobile}`] = randomOTP; // Unique key for signup
+        otpStore[`signup_${mobile}`] = randomOTP; 
         console.log(`🔐 Signup OTP for ${mobile}: ${randomOTP}`);
 
-        const fast2smsKey = process.env.FAST2SMS_KEY; 
-        
-        try {
-            await axios.post('https://www.fast2sms.com/dev/bulkV2', 
-                { route: "whatsapp", message: "1", variables_values: randomOTP, numbers: mobile },
-                { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
-            );
-        } catch (wsErr) { 
-              console.error("WhatsApp Error:", wsErr.response ? wsErr.response.data : wsErr.message); 
-        }
-
-        if (email) {
+        // Email OTP
+        if (sendVia === 'email' && email) {
             try {
-                // ✅ Calling new Brevo Function
                 await sendBrevoEmail(
                     email,
                     "Verify Registration - SandN Cinema",
                     `<h2>Verification Code: ${randomOTP}</h2><p>Enter this OTP to create your account.</p>`
                 );
-            } catch (emailErr) { console.error("Brevo Email Error:", emailErr.response ? emailErr.response.data : emailErr.message); }
+                return res.json({ success: true, message: "OTP Sent to your Email." });
+            } catch (emailErr) { 
+                return res.status(500).json({ success: false, message: "Email Error. Try SMS." });
+            }
+        } 
+        // WhatsApp OTP
+        else if (sendVia === 'whatsapp') {
+            try {
+                await sendWhatsAppMsg(mobile, randomOTP);
+                return res.json({ success: true, message: "OTP Sent via WhatsApp." });
+            } catch (wsErr) { 
+                return res.status(500).json({ success: false, message: "WhatsApp Error. Try Text SMS." });
+            }
+        } 
+        // Normal Text SMS OTP (Default)
+        else {
+            try {
+                await sendTextSMS(mobile, randomOTP);
+                return res.json({ success: true, message: "OTP Sent via Text SMS." });
+            } catch (smsErr) { 
+                return res.status(500).json({ success: false, message: "SMS Error. Try Email." });
+            }
         }
-        res.json({ success: true, message: "OTP Sent for Verification" });
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
 });
 
@@ -153,8 +214,8 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
 app.post('/api/auth/signup', async (req, res) => {
     const { type, mobile, otp, name, studioName, password, email, location, ...otherData } = req.body;
 
-    // Strict Signup OTP Verify
-    if (otpStore[`signup_${mobile}`] !== otp && otp !== "111111") {
+    // Strict Signup OTP Verify (No more 111111 dummy code bypass)
+    if (otpStore[`signup_${mobile}`] !== otp) {
         return res.json({ success: false, message: "Invalid Verification OTP! Registration Failed." });
     }
 
@@ -186,7 +247,7 @@ app.post('/api/auth/signup', async (req, res) => {
 // 4. Verify OTP (For Login)
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
-    if (otpStore[mobile] === otp || otp === "111111") { 
+    if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
         res.json({ success: true });
     } else {
@@ -197,7 +258,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 // 5. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
     const { mobile, otp } = req.body;
-    if (otpStore[mobile] === otp || otp === "111111") { 
+    if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
         const account = await findAccount(mobile);
         if(account) {
