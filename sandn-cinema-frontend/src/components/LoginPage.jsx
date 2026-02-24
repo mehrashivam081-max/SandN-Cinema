@@ -142,24 +142,30 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
                         </div>
                         
-                        {/* ✅ OTP Selection Logic visible for ALL tabs (including Code) */}
-                        <div style={{ marginBottom: '15px' }}>
-                            <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button 
-                                    onClick={() => setOtpMethod('mobile')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
-                                >
-                                    📱 SMS
-                                </button>
-                                <button 
-                                    onClick={() => setOtpMethod('email')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
-                                >
-                                    ✉️ Email
-                                </button>
-                            </div>
-                        </div>
+{/* ✅ OTP Selection Logic (SMS, WhatsApp, Email) visible for ALL tabs */}
+<div style={{ marginBottom: '15px' }}>
+    <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
+    <div style={{ display: 'flex', gap: '8px' }}>
+        <button 
+            onClick={() => setOtpMethod('mobile')}
+            style={{ flex: 1, padding: '8px', fontSize: '13px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+        >
+            📱 SMS
+        </button>
+        <button 
+            onClick={() => setOtpMethod('whatsapp')}
+            style={{ flex: 1, padding: '8px', fontSize: '13px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+        >
+            💬 WhatsApp
+        </button>
+        <button 
+            onClick={() => setOtpMethod('email')}
+            style={{ flex: 1, padding: '8px', fontSize: '13px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+        >
+            ✉️ Email
+        </button>
+    </div>
+</div>
 
                         {/* ✅ GET OTP Button */}
                         <button className="login-btn" onClick={handleCheckUser} disabled={loading}>{loading ? 'Checking...' : 'GET OTP'}</button>
