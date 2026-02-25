@@ -3,8 +3,28 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 const axios = require('axios'); 
+const fs = require('fs');
+const path = require('path');
 
 const { User, Studio, Admin } = require('./models');
+
+// ✅ Setup Multer for File Uploads
+const multer = require('multer');
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir); // Agar 'uploads' folder nahi hai to bana dega
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+    },
+    filename: function (req, file, cb) {
+        // Unique file name generate karega
+        cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-')); 
+    }
+});
+const upload = multer({ storage: storage });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +40,8 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+// ✅ Make 'uploads' folder publicly accessible
+app.use('/uploads', express.static('uploads')); 
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
@@ -126,9 +148,8 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         otpStore[mobile] = randomOTP; 
         console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
 
-        // ✅ EMAIL LOGIC
         if (sendVia === 'email') {
-            if (!targetEmail) return res.json({ success: false, message: "No Email registered with this account." });
+            if (!targetEmail || targetEmail.includes('dummy_')) return res.json({ success: false, message: "No valid Email registered with this account." });
             try {
                 await sendBrevoEmail(
                     targetEmail,
@@ -140,7 +161,6 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 return res.status(500).json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
             }
         } 
-        // ✅ WHATSAPP LOGIC (With Strict Check & Friendly Error)
         else if (sendVia === 'whatsapp') {
             try {
                 const waResponse = await sendWhatsAppMsg(targetMobile, randomOTP);
@@ -153,7 +173,6 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
-        // ✅ SMS LOGIC (With Strict Check & Friendly Error)
         else {
             try {
                 const smsResponse = await sendTextSMS(targetMobile, randomOTP);
@@ -183,7 +202,6 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
         otpStore[`signup_${mobile}`] = randomOTP; 
         console.log(`🔐 Signup OTP for ${mobile}: ${randomOTP}`);
 
-        // ✅ EMAIL LOGIC
         if (sendVia === 'email' && email) {
             try {
                 await sendBrevoEmail(
@@ -196,7 +214,6 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 return res.status(500).json({ success: false, message: "Email Error. Try SMS." });
             }
         } 
-        // ✅ WHATSAPP LOGIC (With Strict Check & Friendly Error)
         else if (sendVia === 'whatsapp') {
             try {
                 const waResponse = await sendWhatsAppMsg(mobile, randomOTP);
@@ -209,7 +226,6 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
-        // ✅ SMS LOGIC (With Strict Check & Friendly Error)
         else {
             try {
                 const smsResponse = await sendTextSMS(mobile, randomOTP);
@@ -255,18 +271,17 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
-// ✅ 4. Verify OTP (For Login) - [MODIFIED TO CHECK FOR NEW USER]
+// ✅ 4. Verify OTP (For Login) - Checks for New User
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
         
-        // Naya Logic: Check if user has no password
         const account = await findAccount(mobile);
         let isNewUser = false;
         
         if (account) {
-            // Agar password nahi hai ya default hai
+            // Check if password is empty or default
             if (!account.data.password || account.data.password.trim() === "") {
                 isNewUser = true;
             }
@@ -278,7 +293,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     }
 });
 
-// ✅ 5. Create Password (NEW ROUTE FOR MANUAL REGISTRATIONS)
+// ✅ 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
     const { mobile, password, email } = req.body;
     try {
@@ -332,47 +347,37 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// 8. ✅ Admin Manual Add User Route (Updated for 500 Error Fix)
-app.post('/api/auth/admin-add-user', async (req, res) => {
-    const { type, name, mobile, password } = req.body;
-    
-    // Debugging के लिए कंसोल में चेक करें कि डेटा क्या आ रहा है
-    console.log("Admin adding user:", { type, name, mobile });
+// ✅ 8. Admin/Studio Manual Add User with Data Upload
+app.post('/api/auth/admin-add-user', upload.single('mediaFile'), async (req, res) => {
+    const { type, name, mobile, location } = req.body;
+    const file = req.file; 
 
     try {
-        // 1. Check if number already exists
         const exists = await findAccount(mobile);
-        if (exists) {
-            return res.json({ success: false, message: "This mobile number is already registered!" });
+        if (exists) return res.json({ success: false, message: "Mobile number is already registered!" });
+
+        // ✅ Dummy email setup to bypass DB validation error
+        const dummyEmail = `dummy_${mobile}@sandn.com`;
+
+        const newUser = {
+            mobile,
+            password: "", // Empty so setup is triggered
+            email: dummyEmail, 
+            role: type,
+            location: location || "",
+            uploadedData: file ? file.path : null // Save file path if uploaded
+        };
+
+        if (type === 'STUDIO') {
+            await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false });
+        } else {
+            await User.create({ ...newUser, name: name });
         }
 
-        // 2. Create based on type with minimum required fields
-        if (type === 'STUDIO') {
-            await Studio.create({ 
-                mobile, 
-                password: password || "", // खाली पासवर्ड ताकि setup trigger हो
-                role: 'STUDIO', 
-                ownerName: name, 
-                studioName: name,
-                isAdhaarVerified: false // Default value
-            });
-        } else {
-            await User.create({ 
-                mobile, 
-                password: password || "", 
-                role: 'USER', 
-                name: name 
-            });
-        }
-        
-        res.json({ success: true, message: "Account created successfully!" });
-    } catch (e) { 
-        console.error("❌ DB Insert Error:", e.message); 
-        res.status(500).json({ 
-            success: false, 
-            message: "Database Error: Make sure all required fields are provided.",
-            details: e.message 
-        }); 
+        res.json({ success: true, message: "User registered successfully!" });
+    } catch (e) {
+        console.error("DB Insert Error:", e.message);
+        res.status(500).json({ success: false, message: "Database Error: " + e.message });
     }
 });
 
