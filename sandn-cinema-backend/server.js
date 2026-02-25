@@ -281,8 +281,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         let isNewUser = false;
         
         if (account) {
-            // Check if password is empty or default
-            if (!account.data.password || account.data.password.trim() === "") {
+           // ✅ Naya Logic: Agar password khali hai ya "temp123" hai, to use naya user manenge
+            if (!account.data.password || account.data.password.trim() === "" || account.data.password === "temp123") {
                 isNewUser = true;
             }
         }
@@ -361,7 +361,7 @@ app.post('/api/auth/admin-add-user', upload.single('mediaFile'), async (req, res
 
         const newUser = {
             mobile,
-            password: "", // Empty so setup is triggered
+            password: "temp123", // Empty so setup is triggered
             email: dummyEmail, 
             role: type,
             location: location || "",
