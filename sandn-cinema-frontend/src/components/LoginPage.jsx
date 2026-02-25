@@ -13,7 +13,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const [step, setStep] = useState(() => parseInt(sessionStorage.getItem('loginStep')) || 1); 
     const [inputValue, setInputValue] = useState(() => sessionStorage.getItem('loginInput') || ''); 
     
-    // ✅ OTP Method Selection (Default: mobile)
+    // ✅ OTP Method Selection (Default: mobile) - Added WhatsApp support
     const [otpMethod, setOtpMethod] = useState(() => sessionStorage.getItem('loginOtpMethod') || 'mobile'); 
     
     const [otp, setOtp] = useState('');
@@ -45,7 +45,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             });
             
             if (res.data.success) {
-                alert(`OTP Sent successfully via ${otpMethod === 'mobile' ? 'SMS' : 'Email'}!`);
+                // ✅ Dynamic alert message based on selected method
+                const methodLabel = otpMethod === 'mobile' ? 'SMS' : otpMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
+                alert(`OTP Sent successfully via ${methodLabel}!`);
                 setStep(2);
             } else {
                 setError(res.data.message || "Failed to send OTP.");
@@ -142,19 +144,25 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
                         </div>
                         
-                        {/* ✅ OTP Selection Logic visible for ALL tabs (including Code) */}
+                        {/* ✅ OTP Selection Logic visible for ALL tabs (including Code) with 3 buttons */}
                         <div style={{ marginBottom: '15px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
-                            <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
                                 <button 
-                                    onClick={() => setOtpMethod('mobile')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                    onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}
+                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
                                 >
                                     📱 SMS
                                 </button>
                                 <button 
-                                    onClick={() => setOtpMethod('email')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                    onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}
+                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                >
+                                    💬 WhatsApp
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}
+                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
                                 >
                                     ✉️ Email
                                 </button>

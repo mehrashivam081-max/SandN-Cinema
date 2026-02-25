@@ -18,8 +18,12 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
         };
     });
 
+    // ✅ Added OTP Method Selection for Signup
+    const [otpMethod, setOtpMethod] = useState(() => sessionStorage.getItem('signupOtpMethod') || 'mobile'); 
+
     useEffect(() => { sessionStorage.setItem('signupTab', activeTab); }, [activeTab]);
     useEffect(() => { sessionStorage.setItem('signupForm', JSON.stringify(formData)); }, [formData]);
+    useEffect(() => { sessionStorage.setItem('signupOtpMethod', otpMethod); }, [otpMethod]);
 
     const [terms, setTerms] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -68,9 +72,15 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
 
         setLoading(true);
         try {
-            const res = await axios.post(`${API_BASE}/send-signup-otp`, { mobile: cleanMobile, email: cleanEmail });
+            // ✅ Include sendVia logic
+            const res = await axios.post(`${API_BASE}/send-signup-otp`, { 
+                mobile: cleanMobile, 
+                email: cleanEmail,
+                sendVia: otpMethod 
+            });
             if (res.data.success) {
-                alert("Verification Code Sent to Mobile & Email!");
+                const methodLabel = otpMethod === 'mobile' ? 'SMS' : otpMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
+                alert(`Verification Code Sent via ${methodLabel}!`);
                 setIsOtpSent(true); 
             } else {
                 alert(res.data.message);
@@ -171,6 +181,31 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
                                 <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</span>
                             </div>
 
+                            {/* ✅ 3-Button OTP Selection for Signup */}
+                            <div style={{ marginTop: '10px', marginBottom: '5px' }}>
+                                <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block', textAlign: 'left' }}>Receive OTP via:</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button 
+                                        onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}
+                                        style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                    >
+                                        📱 SMS
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}
+                                        style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                    >
+                                        💬 WhatsApp
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}
+                                        style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
+                                    >
+                                        ✉️ Email
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* ✅ Fixed Checkbox Alignment & Clickable Terms Text */}
                             <div className="terms-check-aligned" style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginTop:'5px', marginBottom:'15px', color:'white', fontSize:'13px'}}>
                                 <input type="checkbox" id="terms" onChange={(e) => setTerms(e.target.checked)} style={{margin:0, width:'16px', height:'16px', cursor:'pointer'}} />
@@ -185,7 +220,7 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
                 ) : (
                     <div className="signup-body otp-verification-section">
                         <p style={{color: 'white', textAlign: 'center', fontSize: '14px', marginBottom: '15px'}}>
-                            Verification code sent to {formData.mobile} & {formData.email}
+                            Verification code sent!
                         </p>
                         <input 
                             type="text" 
