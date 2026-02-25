@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import axios from 'axios'; 
 import './MobileView.css';
 
-// Video File Import (Ensure it exists in assets folder)
 import magnetVideo from '../../assets/magnet-clip.mp4'; 
 
 import ProfilePage from '../../components/ProfilePage';
@@ -29,16 +28,20 @@ const MobileView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ New State for Professional Popup
+  // ✅ New States for Popup & First Time User Setup
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
 
-  // ✅ TOP LEFT HOME FUNCTION
+  // ✅ TOP LEFT HOME FUNCTION (Resets everything)
   const goHome = () => { 
       setViewState('HOME'); 
       setSearchStep(0); 
       setFeedType(null); 
-      setShowOtpPopup(false); 
+      setShowOtpPopup(false);
+      setIsFirstTimeUser(false);
+      setNewEmail(''); 
   };
 
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -88,12 +91,15 @@ const MobileView = ({
     setMagnetStyle({ transform: 'translate(0px, 0px)', transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' });
   };
 
-  // --- API LOGIC (Updated with Popup) ---
+  // --- API LOGIC ---
+
+  // 1. Search Click -> Open Popup
   const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Please enter valid 10 digit number");
-      setShowOtpPopup(true); // Open Popup instead of direct API call
+      setShowOtpPopup(true); 
   };
 
+  // 2. Send OTP via Selected Method
   const handleSendOtp = async (selectedMethod) => {
       setOtpMethod(selectedMethod);
       setLoading(true);
@@ -113,31 +119,61 @@ const MobileView = ({
       } finally { setLoading(false); }
   };
 
+  // 3. Verify OTP -> Check if new user
   const handleVerifyOTP = async () => {
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp });
           if (res.data.success) {
-              setSearchStep(2); 
+              if (res.data.isNewUser) {
+                  // User has no password -> Show Setup Screen
+                  setIsFirstTimeUser(true);
+                  setSearchStep(2); 
+              } else {
+                  // Normal User -> Login Screen
+                  setSearchStep(2); 
+              }
           } else {
-              alert("Galat OTP! Kripya sahi OTP dalein.");
+              alert(res.data.message || "Invalid OTP! Kripya sahi OTP dalein.");
           }
       } catch (e) {
           alert("Verification Failed. Server error.");
       } finally { setLoading(false); }
   };
 
-  const handleVerifyPassword = async () => {
+  // 4. Login OR Create Password
+  const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
+
       try {
-          const res = await axios.post(`${API_BASE}/login`, { mobile, password });
-          if (res.data.success) {
-              setUserData(res.data.user);
-              setSearchStep(3);
+          if (isFirstTimeUser) {
+              // --- SETUP LOGIC ---
+              if (!newEmail) return alert("Please enter your email for future recovery.");
+              
+              const res = await axios.post(`${API_BASE}/create-password`, { 
+                  mobile, 
+                  password, 
+                  email: newEmail 
+              });
+
+              if (res.data.success) {
+                  alert("Account Setup Complete! Logging in...");
+                  setUserData(res.data.user);
+                  setSearchStep(3);
+              } else {
+                  alert(res.data.message);
+              }
           } else {
-              alert("Wrong Password");
+              // --- NORMAL LOGIN ---
+              const res = await axios.post(`${API_BASE}/login`, { mobile, password });
+              if (res.data.success) {
+                  setUserData(res.data.user);
+                  setSearchStep(3);
+              } else {
+                  alert("Wrong Password");
+              }
           }
       } catch (e) {
           alert("Login Failed. Server error.");
@@ -150,7 +186,6 @@ const MobileView = ({
       return <UserDashboard userData={userData} onLogout={handleLogout} />;
   };
 
-  // ✅ COLLAB VIEW ADDED 
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', height:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back Home</button></div>;
   if (viewState === 'SERVICE') return <ServicesPage onBack={goHome} />;
   if (viewState === 'AUTH') return <LoginPage onBack={goHome} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
@@ -166,7 +201,7 @@ const MobileView = ({
       
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* ✅ OTP Selection Popup Overlay for Mobile */}
+      {/* ✅ OTP Selection Popup Overlay */}
       {showOtpPopup && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
               <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '85%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', animation: 'fadeIn 0.3s ease-in-out' }}>
@@ -214,10 +249,7 @@ const MobileView = ({
                 <div className="menu-icon-mob" onClick={() => setMenuOpen(true)}>
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </div>
-                {/* ✅ CLICKABLE TOP-LEFT HOME */}
                 <h1 className="brand-title-mob" onClick={goHome} style={{cursor:'pointer'}}>SandN <br/> Cinema</h1>
-                
-                {/* ✅ SN REPLACED WITH COLLAB */}
                 <div className="logo-circle-mob" onClick={() => setViewState('COLLAB')} style={{cursor:'pointer', fontSize:'10px', textAlign:'center', lineHeight:'1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
                     🤝<br/>Collab
                 </div>
@@ -231,7 +263,6 @@ const MobileView = ({
             ) : (
                 <>
                     <div className="mobile-search-block">
-                        {/* ✅ MANUAL BACK BUTTON FOR STEPS */}
                         {searchStep > 0 && <span onClick={() => setSearchStep(prev => prev - 1)} style={{ alignSelf: 'flex-start', color: '#555', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px', display: 'block' }}>← Back</span>}
 
                         {searchStep === 0 && (
@@ -246,10 +277,16 @@ const MobileView = ({
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
+                        {/* ✅ Dynamic Step 2: Login OR Setup Password */}
                         {searchStep === 2 && (
                             <>
-                                <input type="password" placeholder="Enter Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} />
-                                <button className="mobile-blue-btn" onClick={handleVerifyPassword} disabled={loading}>{loading?'Logging in...':'Login & Access'}</button>
+                                {isFirstTimeUser && (
+                                     <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} />
+                                )}
+                                <input type="password" placeholder={isFirstTimeUser ? "Create New Password" : "Enter Password"} className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} />
+                                <button className="mobile-blue-btn" onClick={handleLoginOrSetup} disabled={loading}>
+                                    {loading ? 'Processing...' : isFirstTimeUser ? 'Setup Account' : 'Login & Access'}
+                                </button>
                             </>
                         )}
                     </div>

@@ -25,25 +25,29 @@ const LaptopView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ New State for Professional Popup
+  // ✅ New States for Popup & Password Creation
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Check if user has no password
+  const [newEmail, setNewEmail] = useState(''); // To add email during first setup
 
-  // ✅ App Name Clickable as Home
+  // ✅ App Name Clickable as Home (Reset everything)
   const goHome = () => { 
       setViewState('HOME'); 
       setSearchStep(0); 
-      setFeedType(null); 
-      setShowOtpPopup(false); 
+      setFeedType(null);
+      setShowOtpPopup(false);
+      setIsFirstTimeUser(false);
+      setNewEmail('');
   };
 
-  // Triggered when Search button is clicked
+  // ✅ 1. Handle Search Click (Open Popup)
   const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
-      setShowOtpPopup(true); // Open Popup instead of direct API call
+      setShowOtpPopup(true); // Open the method selection popup
   };
 
-  // Called when user clicks a method inside the popup
+  // ✅ 2. Send OTP via Selected Method
   const handleSendOtp = async (selectedMethod) => {
       setOtpMethod(selectedMethod);
       setLoading(true);
@@ -54,7 +58,7 @@ const LaptopView = ({
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
               alert(`OTP Sent successfully via ${methodLabel}`); 
               setSearchStep(1); 
-              setShowOtpPopup(false); // Close Popup on success
+              setShowOtpPopup(false); // Close popup
           } else {
               setIsNotRegistered(true);
               setShowOtpPopup(false);
@@ -64,34 +68,63 @@ const LaptopView = ({
       } finally { setLoading(false); }
   };
 
+  // ✅ 3. Verify OTP & Check User Status
   const handleVerifyOTP = async () => {
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp });
           if (res.data.success) {
-              setSearchStep(2); 
+              // Check if backend says user needs to create password
+              if (res.data.isNewUser) {
+                  setIsFirstTimeUser(true);
+                  setSearchStep(2); 
+              } else {
+                  setSearchStep(2); 
+              }
           } else {
-              alert("Galat OTP! Kripya sahi OTP dalein.");
+              alert(res.data.message || "Galat OTP! Kripya sahi OTP dalein.");
           }
       } catch (e) {
           alert("Verification Failed. Server error.");
       } finally { setLoading(false); }
   };
 
-  const handleVerifyPassword = async () => {
+  // ✅ 4. Login OR Setup Password (Unified Function)
+  const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
+      
       try {
-          const res = await axios.post(`${API_BASE}/login`, { mobile, password });
-          if (res.data.success) { 
-              setUserData(res.data.user); 
-              setSearchStep(3); 
+          if (isFirstTimeUser) {
+              // --- SETUP LOGIC (Create Password) ---
+              if (!newEmail) return alert("Please enter your email for account recovery.");
+              
+              const res = await axios.post(`${API_BASE}/create-password`, { 
+                  mobile, 
+                  password, 
+                  email: newEmail 
+              });
+
+              if (res.data.success) { 
+                  alert("Account Setup Successful! Logging in...");
+                  setUserData(res.data.user); 
+                  setSearchStep(3); 
+              } else {
+                  alert(res.data.message || "Setup Failed");
+              }
           } else {
-              alert("Wrong Password");
+              // --- NORMAL LOGIN LOGIC ---
+              const res = await axios.post(`${API_BASE}/login`, { mobile, password });
+              if (res.data.success) { 
+                  setUserData(res.data.user); 
+                  setSearchStep(3); 
+              } else {
+                  alert(res.data.message || "Wrong Password");
+              }
           }
       } catch (e) {
-          alert("Login Failed. Server error.");
+          alert("Action Failed. Server error.");
       } finally { setLoading(false); }
   };
 
@@ -121,28 +154,26 @@ const LaptopView = ({
 
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* ✅ OTP Selection Popup Overlay */}
+      {/* ✅ PROFESSIONAL OTP POPUP OVERLAY */}
       {showOtpPopup && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-              <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '350px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', animation: 'fadeIn 0.3s ease-in-out' }}>
-                  <h3 style={{ color: '#333', marginBottom: '10px', fontSize: '1.2rem' }}>Send OTP to {mobile}</h3>
-                  <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Choose your preferred method below:</p>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
+              <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '350px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'popIn 0.3s ease' }}>
+                  <h3 style={{ margin: '0 0 10px', color: '#333' }}>Send OTP to {mobile}</h3>
+                  <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Select verification method:</p>
                   
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                           📱 Send via Text SMS
                       </button>
-                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                           💬 Send via WhatsApp
                       </button>
-                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
                           ✉️ Send via Email
                       </button>
                   </div>
 
-                  <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '20px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline' }}>
-                      Cancel
-                  </p>
+                  <p onClick={() => setShowOtpPopup(false)} style={{ marginTop: '20px', color: '#999', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel</p>
               </div>
           </div>
       )}
@@ -158,24 +189,35 @@ const LaptopView = ({
             <div className="brand-section">
               <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>SandN Cinema</h1>
               
-              <div className="laptop-search-wrapper">
+              <div className="laptop-search-wrapper" style={{ flexDirection: 'column', gap: '8px' }}>
                  {searchStep === 0 && (
                     <>
-                        <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} />
-                        <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'Searching...':'Search'}</button>
+                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                            <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} />
+                            <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'...':'Search'}</button>
+                        </div>
+                        {/* ✅ NOTE: Inline buttons removed here as requested, moved to Popup */}
                     </>
                  )}
                  {searchStep === 1 && (
-                    <>
-                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{width:'150px'}} />
-                        <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify'}</button>
-                    </>
+                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{flex:1}} />
+                        <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'...':'Verify'}</button>
+                    </div>
                  )}
+                 {/* ✅ Dynamic Step 2: Login OR Create Password */}
                  {searchStep === 2 && (
-                    <>
-                        <input type="password" placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width:'150px'}} />
-                        <button className="search-btn" onClick={handleVerifyPassword} disabled={loading}>{loading?'Logging...':'Login'}</button>
-                    </>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                        {isFirstTimeUser && (
+                            <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} />
+                        )}
+                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                            <input type="password" placeholder={isFirstTimeUser ? "Create New Password" : "Enter Password"} className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{flex: 1}} />
+                            <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading}>
+                                {loading ? '...' : isFirstTimeUser ? 'Setup Account' : 'Login'}
+                            </button>
+                        </div>
+                    </div>
                  )}
               </div>
             </div>
