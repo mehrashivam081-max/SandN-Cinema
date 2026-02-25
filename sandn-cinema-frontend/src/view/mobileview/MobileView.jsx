@@ -29,15 +29,22 @@ const MobileView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ TOP LEFT HOME FUNCTION
-  const goHome = () => { setViewState('HOME'); setSearchStep(0); setFeedType(null); };
+  // ✅ New State for Professional Popup
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [otpMethod, setOtpMethod] = useState('mobile');
 
-  // ✅ REAL-TIME SWIPE LOGIC STATES
+  // ✅ TOP LEFT HOME FUNCTION
+  const goHome = () => { 
+      setViewState('HOME'); 
+      setSearchStep(0); 
+      setFeedType(null); 
+      setShowOtpPopup(false); 
+  };
+
   const [swipeOffset, setSwipeOffset] = useState(0);
   const isSwiping = useRef(false);
   const touchStartX = useRef(0);
 
-  // ✅ MAGNET LOGIC STATES & REFS
   const magnetRef = useRef(null);
   const [magnetStyle, setMagnetStyle] = useState({ transform: 'translate(0px, 0px)', transition: 'transform 0.3s ease-out' });
 
@@ -58,10 +65,8 @@ const MobileView = ({
   const handleTouchEnd = () => {
       if (!isSwiping.current) return;
       isSwiping.current = false;
-      
       if (swipeOffset < -80) setFeedType('trending'); 
       else if (swipeOffset > 80) setFeedType('viral'); 
-      
       setSwipeOffset(0); 
   };
 
@@ -69,44 +74,42 @@ const MobileView = ({
   const handleMagnetMove = (e) => {
     e.stopPropagation(); 
     if (!magnetRef.current) return;
-    
     const rect = magnetRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-
     const deltaX = clientX - centerX;
     const deltaY = clientY - centerY;
-
-    setMagnetStyle({
-        transform: `translate(${deltaX * 0.3}px, ${deltaY * 0.3}px)`,
-        transition: 'none' 
-    });
+    setMagnetStyle({ transform: `translate(${deltaX * 0.3}px, ${deltaY * 0.3}px)`, transition: 'none' });
   };
 
   const handleMagnetLeave = () => {
-    setMagnetStyle({
-        transform: 'translate(0px, 0px)',
-        transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' 
-    });
+    setMagnetStyle({ transform: 'translate(0px, 0px)', transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' });
   };
 
-  // --- API LOGIC ---
-  const handleMobileSearch = async () => {
+  // --- API LOGIC (Updated with Popup) ---
+  const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Please enter valid 10 digit number");
+      setShowOtpPopup(true); // Open Popup instead of direct API call
+  };
+
+  const handleSendOtp = async (selectedMethod) => {
+      setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
+          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod });
           if (res.data.success) { 
-              alert(`OTP Sent to ${mobile} (via Email/WhatsApp)`); 
+              const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
+              alert(`OTP Sent successfully via ${methodLabel}`); 
               setSearchStep(1); 
+              setShowOtpPopup(false);
           } else {
               setIsNotRegistered(true);
+              setShowOtpPopup(false);
           }
       } catch (e) {
-          alert("Server Error. Thoda wait karein.");
+          alert(e.response?.data?.message || "Server Error. Please try again.");
       } finally { setLoading(false); }
   };
 
@@ -163,6 +166,32 @@ const MobileView = ({
       
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
+      {/* ✅ OTP Selection Popup Overlay for Mobile */}
+      {showOtpPopup && (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+              <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '85%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', animation: 'fadeIn 0.3s ease-in-out' }}>
+                  <h3 style={{ color: '#333', marginBottom: '10px', fontSize: '1.1rem' }}>Send OTP to {mobile}</h3>
+                  <p style={{ color: '#666', fontSize: '13px', marginBottom: '20px' }}>Choose your preferred method below:</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#2b5876', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                          📱 Send via Text SMS
+                      </button>
+                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#25D366', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                          💬 Send via WhatsApp
+                      </button>
+                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#EA4335', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                          ✉️ Send via Email
+                      </button>
+                  </div>
+
+                  <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '20px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline' }}>
+                      Cancel
+                  </p>
+              </div>
+          </div>
+      )}
+
       <div 
         className="mobile-swipe-wrapper"
         onTouchStart={handleTouchStart} 
@@ -208,7 +237,7 @@ const MobileView = ({
                         {searchStep === 0 && (
                             <>
                                 <input type="number" placeholder="Search registered mobile no." className="mobile-input-field" value={mobile} onChange={e=>setMobile(e.target.value)} />
-                                <button className="mobile-blue-btn" onClick={handleMobileSearch} disabled={loading}>{loading?'Searching...':'Search'}</button>
+                                <button className="mobile-blue-btn" onClick={handleSearchClick} disabled={loading}>{loading?'Searching...':'Search'}</button>
                             </>
                         )}
                         {searchStep === 1 && (

@@ -25,22 +25,42 @@ const LaptopView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ App Name Clickable as Home
-  const goHome = () => { setViewState('HOME'); setSearchStep(0); setFeedType(null); };
+  // ✅ New State for Professional Popup
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [otpMethod, setOtpMethod] = useState('mobile');
 
-  const handleSearch = async () => {
+  // ✅ App Name Clickable as Home
+  const goHome = () => { 
+      setViewState('HOME'); 
+      setSearchStep(0); 
+      setFeedType(null); 
+      setShowOtpPopup(false); 
+  };
+
+  // Triggered when Search button is clicked
+  const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
+      setShowOtpPopup(true); // Open Popup instead of direct API call
+  };
+
+  // Called when user clicks a method inside the popup
+  const handleSendOtp = async (selectedMethod) => {
+      setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
+          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod });
+          
           if (res.data.success) { 
-              alert(`WhatsApp OTP Sent to ${mobile}`); 
+              const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
+              alert(`OTP Sent successfully via ${methodLabel}`); 
               setSearchStep(1); 
+              setShowOtpPopup(false); // Close Popup on success
           } else {
               setIsNotRegistered(true);
+              setShowOtpPopup(false);
           }
       } catch (e) {
-          alert("Server Error. Thoda wait karein.");
+          alert(e.response?.data?.message || "Server Error. Please try again.");
       } finally { setLoading(false); }
   };
 
@@ -86,7 +106,6 @@ const LaptopView = ({
       return <UserDashboard userData={userData} onLogout={handleLogout} />;
   };
 
-  // ✅ Collab View Added
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
 
   if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
@@ -95,13 +114,38 @@ const LaptopView = ({
   if (viewState === 'RECOVERY') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><ForgotPassword onLoginClick={() => setViewState('AUTH')} /></div>;
 
   return (
-    // ✅ Responsive Fix: maxWidth 100vw ensures no overflow on Desktop Mode in mobile
     <div className="laptop-container" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
       {viewState === 'BOOKING' && <BookingForm onClose={() => setViewState('HOME')} />}
 
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
+
+      {/* ✅ OTP Selection Popup Overlay */}
+      {showOtpPopup && (
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+              <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '350px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', animation: 'fadeIn 0.3s ease-in-out' }}>
+                  <h3 style={{ color: '#333', marginBottom: '10px', fontSize: '1.2rem' }}>Send OTP to {mobile}</h3>
+                  <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Choose your preferred method below:</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                          📱 Send via Text SMS
+                      </button>
+                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                          💬 Send via WhatsApp
+                      </button>
+                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', transition: '0.2s' }}>
+                          ✉️ Send via Email
+                      </button>
+                  </div>
+
+                  <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '20px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline' }}>
+                      Cancel
+                  </p>
+              </div>
+          </div>
+      )}
 
       {!userData && (
           <header className="laptop-header">
@@ -112,19 +156,18 @@ const LaptopView = ({
               </svg>
             </div>
             <div className="brand-section">
-              {/* ✅ Clickable Brand Title to return Home */}
               <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>SandN Cinema</h1>
               
               <div className="laptop-search-wrapper">
                  {searchStep === 0 && (
                     <>
                         <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} />
-                        <button className="search-btn" onClick={handleSearch} disabled={loading}>{loading?'Searching...':'Search'}</button>
+                        <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'Searching...':'Search'}</button>
                     </>
                  )}
                  {searchStep === 1 && (
                     <>
-                        <input type="text" placeholder="Enter WhatsApp OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{width:'150px'}} />
+                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{width:'150px'}} />
                         <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify'}</button>
                     </>
                  )}
@@ -136,7 +179,6 @@ const LaptopView = ({
                  )}
               </div>
             </div>
-            {/* ✅ SN Logo Replaced with Collab Button keeping exact layout */}
             <div className="logo-circle" onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', fontSize: '12px', textAlign: 'center', lineHeight: '1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
                 🤝<br/>Collab
             </div>
