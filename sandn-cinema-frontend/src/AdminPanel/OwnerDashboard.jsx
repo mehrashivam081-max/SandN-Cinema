@@ -19,6 +19,9 @@ const OwnerDashboard = () => {
     
     const [previews, setPreviews] = useState([]); // Array to store preview URLs
     const [accounts, setAccounts] = useState([]); // To store list of users/studios
+    
+    // ✅ New State for Auto-suggest Dropdown
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // ✅ Fetch Accounts on Component Load
     useEffect(() => {
@@ -50,7 +53,32 @@ const OwnerDashboard = () => {
         setPreviews(filePreviews);
     };
 
-    // ✅ Add New User/Studio Logic
+    // ✅ Auto-suggest Mobile Input Logic
+    const handleMobileChange = (e) => {
+        const val = e.target.value;
+        setFormData({ ...formData, mobile: val });
+        if (val.length > 0) {
+            setShowSuggestions(true);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    // ✅ Handle Suggestion Click (Auto-fill data)
+    const handleSuggestionClick = (acc) => {
+        setFormData({
+            ...formData,
+            mobile: acc.mobile,
+            name: acc.name || acc.studioName || '',
+            type: acc.role || 'USER'
+        });
+        setShowSuggestions(false);
+    };
+
+    // Check if current mobile number already exists in accounts list
+    const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
+
+    // ✅ Add New User/Studio Logic or Append Data
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number!");
@@ -74,7 +102,7 @@ const OwnerDashboard = () => {
             });
 
             if (res.data.success) {
-                alert(`✅ ${formData.type} Added Successfully with Data!`);
+                alert(`✅ Success: ${res.data.message}`);
                 setShowModal(false);
                 setFormData({ type: 'USER', name: '', mobile: '', files: [] }); 
                 setPreviews([]); // Clear previews
@@ -108,6 +136,9 @@ const OwnerDashboard = () => {
         }
     };
 
+    // Filter accounts for auto-suggest based on typed mobile number
+    const filteredSuggestions = accounts.filter(acc => acc.mobile.includes(formData.mobile));
+
     return (
         <div style={{ padding: '40px' }}>
             <h2 style={{ color: 'var(--accent-gold, #ffd700)', textAlign: 'center', marginBottom: '40px' }}>👑 Super Admin Control</h2>
@@ -122,11 +153,11 @@ const OwnerDashboard = () => {
                 {/* ✅ New Registration Card */}
                 <div style={{ ...cardStyle, border: '1px solid #28a745' }}>
                     <h3>Manual Registration</h3>
-                    <p style={{ fontSize: '12px', color: '#aaa', margin: '10px 0' }}>Add & Upload User Media</p>
+                    <p style={{ fontSize: '12px', color: '#aaa', margin: '10px 0' }}>Add New or Append Data</p>
                     <button 
                         onClick={() => setShowModal(true)} 
                         style={{ marginTop: '10px', padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-                        ➕ Add New Account
+                        ➕ Manage Accounts
                     </button>
                 </div>
             </div>
@@ -167,24 +198,36 @@ const OwnerDashboard = () => {
                 </table>
             </div>
 
-            {/* ✅ Registration Modal with Previews */}
+            {/* ✅ Registration Modal with Previews & Auto-suggest */}
             {showModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '95%', maxWidth: '500px', color: '#333', maxHeight: '90vh', overflowY: 'auto' }}>
                         
-                        <span onClick={() => {setShowModal(false); setPreviews([]);}} style={{ float: 'right', cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>✖</span>
+                        <span onClick={() => {setShowModal(false); setPreviews([]); setShowSuggestions(false);}} style={{ float: 'right', cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>✖</span>
                         <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2b5876' }}>User Entry & Data Upload</h3>
                         
                         <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Role</label>
-                                <select 
-                                    value={formData.type} 
-                                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}>
-                                    <option value="USER">User</option>
-                                    <option value="STUDIO">Studio</option>
-                                </select>
+                            
+                            {/* ✅ AUTO-SUGGEST MOBILE INPUT */}
+                            <div style={{ position: 'relative' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Mobile Number (Type to search)</label>
+                                <input type="number" placeholder="10-Digit Mobile No." required value={formData.mobile}
+                                    onChange={handleMobileChange}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} // Delay hides suggestion to allow click
+                                    style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }} />
+                                
+                                {/* Dropdown for matching numbers */}
+                                {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
+                                    <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#f9f9f9', border: '1px solid #ccc', borderRadius: '5px', maxHeight: '150px', overflowY: 'auto', margin: 0, padding: 0, listStyle: 'none', zIndex: 10 }}>
+                                        {filteredSuggestions.map((acc, idx) => (
+                                            <li key={idx} 
+                                                onClick={() => handleSuggestionClick(acc)}
+                                                style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', fontSize: '12px' }}>
+                                                <strong>{acc.mobile}</strong> - {acc.name || acc.studioName} ({acc.role})
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
 
                             <div>
@@ -195,10 +238,14 @@ const OwnerDashboard = () => {
                             </div>
 
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Mobile Number</label>
-                                <input type="number" placeholder="Mobile" required value={formData.mobile}
-                                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }} />
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Role</label>
+                                <select 
+                                    value={formData.type} 
+                                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}>
+                                    <option value="USER">User</option>
+                                    <option value="STUDIO">Studio</option>
+                                </select>
                             </div>
 
                             {/* ✅ MULTIPLE DATA UPLOAD FIELD */}
@@ -228,8 +275,9 @@ const OwnerDashboard = () => {
                                 )}
                             </div>
 
-                            <button type="submit" disabled={loading} style={{ background: '#2b5876', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                {loading ? 'Uploading Data...' : '🚀 Finalize & Upload'}
+                            {/* ✅ DYNAMIC SUBMIT BUTTON */}
+                            <button type="submit" disabled={loading} style={{ background: isExistingAccount ? '#ff8c00' : '#2b5876', color: 'white', border: 'none', padding: '15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                {loading ? 'Uploading Data...' : isExistingAccount ? '🚀 Append Data (Re-upload)' : '🚀 Finalize & Upload'}
                             </button>
                         </form>
                     </div>
