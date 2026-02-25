@@ -49,23 +49,36 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
 };
 
 // ==========================================
-// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS)
+// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS Fix for 400 Error)
 // ==========================================
 const sendTextSMS = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
+    // ✅ FIX: Using 'dlt' route, default FSTSMS sender ID, and '148386' template to prevent blocking
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
-        { route: "otp", variables_values: otp, numbers: mobile },
+        { 
+            route: "dlt", 
+            sender_id: "FSTSMS",
+            message: "148386",
+            variables_values: String(otp), 
+            numbers: String(mobile) 
+        },
         { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
     );
 };
 
 // ==========================================
-// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS)
+// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS Fix)
 // ==========================================
 const sendWhatsAppMsg = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
+    // ✅ FIX: Converted values to String to prevent API rejection
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
-        { route: "whatsapp", message: "1", variables_values: otp, numbers: mobile },
+        { 
+            route: "whatsapp", 
+            message: "1", 
+            variables_values: String(otp), 
+            numbers: String(mobile) 
+        },
         { headers: { "authorization": fast2smsKey, "Content-Type": "application/json" } }
     );
 };
