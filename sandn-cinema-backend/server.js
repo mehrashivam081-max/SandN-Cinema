@@ -332,6 +332,27 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
+// 8. ✅ Admin Manual Add User Route (NO OTP REQUIRED)
+app.post('/api/auth/admin-add-user', async (req, res) => {
+    const { type, name, mobile, password } = req.body;
+    try {
+        // Check if already registered
+        const exists = await findAccount(mobile);
+        if (exists) return res.json({ success: false, message: "Mobile number already registered!" });
+
+        // Create based on type
+        if (type === 'STUDIO') {
+            await Studio.create({ mobile, password, role: 'STUDIO', ownerName: name, studioName: name });
+        } else {
+            await User.create({ mobile, password, role: 'USER', name });
+        }
+        
+        res.json({ success: true, message: "Added Successfully" });
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Error adding user" }); 
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
