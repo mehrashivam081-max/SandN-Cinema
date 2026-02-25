@@ -104,14 +104,17 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 
 const otpStore = {}; 
 
+// ✅ Data clean up function: Spaces hata kar pure String banayega
 const findAccount = async (mobile) => {
-    let acc = await User.findOne({ mobile });
+    const cleanMobile = String(mobile).trim(); 
+
+    let acc = await User.findOne({ mobile: cleanMobile });
     if (acc) return { type: 'USER', data: acc };
     
-    acc = await Studio.findOne({ mobile });
+    acc = await Studio.findOne({ mobile: cleanMobile });
     if (acc) return { type: 'STUDIO', data: acc };
     
-    acc = await Admin.findOne({ mobile });
+    acc = await Admin.findOne({ mobile: cleanMobile });
     if (acc) return { type: 'ADMIN', data: acc };
     
     return null;
@@ -121,7 +124,8 @@ const findAccount = async (mobile) => {
 
 // 1. Check & Send OTP (Login)
 app.post('/api/auth/check-send-otp', async (req, res) => {
-    const { mobile, sendVia } = req.body; 
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { sendVia } = req.body; 
     
     try {
         let targetMobile = mobile;
@@ -192,7 +196,8 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
 
 // 2. Send OTP for SIGNUP 
 app.post('/api/auth/send-signup-otp', async (req, res) => {
-    const { mobile, email, sendVia } = req.body; 
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { email, sendVia } = req.body; 
     try {
         const exists = await findAccount(mobile);
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
@@ -242,7 +247,8 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
 
 // 3. Signup with OTP Verification 
 app.post('/api/auth/signup', async (req, res) => {
-    const { type, mobile, otp, name, studioName, password, email, location, ...otherData } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { type, otp, name, studioName, password, email, location, ...otherData } = req.body;
 
     if (otpStore[`signup_${mobile}`] !== otp) {
         return res.json({ success: false, message: "Invalid Verification OTP! Registration Failed." });
@@ -272,7 +278,8 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // ✅ 4. Verify OTP (For Login) - Checks for New User / Temp Password
 app.post('/api/auth/verify-otp', async (req, res) => {
-    const { mobile, otp } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
         
@@ -294,7 +301,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
 // ✅ 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
-    const { mobile, password, email } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { password, email } = req.body;
     try {
         let account = await User.findOne({ mobile });
         if (!account) account = await Studio.findOne({ mobile });
@@ -316,7 +324,8 @@ app.post('/api/auth/create-password', async (req, res) => {
 
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
-    const { mobile, otp } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
         const account = await findAccount(mobile);
@@ -332,7 +341,8 @@ app.post('/api/auth/login-otp', async (req, res) => {
 
 // 7. Password Login
 app.post('/api/auth/login', async (req, res) => {
-    const { mobile, password } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { password } = req.body;
     try {
         const account = await findAccount(mobile);
         if (account && account.data.password === password) {
@@ -348,7 +358,8 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ✅ 8. Admin/Studio Manual Add User with MULTIPLE Data Upload
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
-    const { type, name, mobile, location, addedBy } = req.body;
+    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const { type, name, location, addedBy } = req.body;
     const files = req.files; 
 
     try {
@@ -392,7 +403,9 @@ app.post('/api/auth/list-accounts', async (req, res) => {
             const studios = await Studio.find({}).lean();
             res.json({ success: true, data: [...users, ...studios] });
         } else if (requesterRole === 'STUDIO') {
-            const users = await User.find({ addedBy: requesterMobile }).lean();
+            // ✅ Clean searching here too, just in case
+            const cleanMobile = String(requesterMobile).trim();
+            const users = await User.find({ addedBy: cleanMobile }).lean();
             res.json({ success: true, data: users });
         } else {
             res.json({ success: false, message: "Unauthorized access" });
@@ -404,7 +417,8 @@ app.post('/api/auth/list-accounts', async (req, res) => {
 
 // ✅ 10. Delete an Account
 app.post('/api/auth/delete-account', async (req, res) => {
-    const { targetMobile, targetRole } = req.body;
+    const targetMobile = String(req.body.targetMobile).trim(); // ✅ Clean Mobile
+    const { targetRole } = req.body;
     try {
         if (targetRole === 'STUDIO') {
             await Studio.findOneAndDelete({ mobile: targetMobile });
