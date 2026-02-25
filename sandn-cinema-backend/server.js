@@ -332,24 +332,47 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// 8. ✅ Admin Manual Add User Route (NO OTP REQUIRED)
+// 8. ✅ Admin Manual Add User Route (Updated for 500 Error Fix)
 app.post('/api/auth/admin-add-user', async (req, res) => {
     const { type, name, mobile, password } = req.body;
-    try {
-        // Check if already registered
-        const exists = await findAccount(mobile);
-        if (exists) return res.json({ success: false, message: "Mobile number already registered!" });
+    
+    // Debugging के लिए कंसोल में चेक करें कि डेटा क्या आ रहा है
+    console.log("Admin adding user:", { type, name, mobile });
 
-        // Create based on type
+    try {
+        // 1. Check if number already exists
+        const exists = await findAccount(mobile);
+        if (exists) {
+            return res.json({ success: false, message: "This mobile number is already registered!" });
+        }
+
+        // 2. Create based on type with minimum required fields
         if (type === 'STUDIO') {
-            await Studio.create({ mobile, password, role: 'STUDIO', ownerName: name, studioName: name });
+            await Studio.create({ 
+                mobile, 
+                password: password || "", // खाली पासवर्ड ताकि setup trigger हो
+                role: 'STUDIO', 
+                ownerName: name, 
+                studioName: name,
+                isAdhaarVerified: false // Default value
+            });
         } else {
-            await User.create({ mobile, password, role: 'USER', name });
+            await User.create({ 
+                mobile, 
+                password: password || "", 
+                role: 'USER', 
+                name: name 
+            });
         }
         
-        res.json({ success: true, message: "Added Successfully" });
+        res.json({ success: true, message: "Account created successfully!" });
     } catch (e) { 
-        res.status(500).json({ success: false, message: "Error adding user" }); 
+        console.error("❌ DB Insert Error:", e.message); 
+        res.status(500).json({ 
+            success: false, 
+            message: "Database Error: Make sure all required fields are provided.",
+            details: e.message 
+        }); 
     }
 });
 
