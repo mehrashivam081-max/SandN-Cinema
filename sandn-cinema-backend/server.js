@@ -113,7 +113,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 targetEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
             } else {
                 targetMobile = adminAcc.mobile;
-                targetEmail = adminAcc.email;
+                targetEmail = adminAcc.email || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
             }
         } else {
             const account = await findAccount(mobile);
