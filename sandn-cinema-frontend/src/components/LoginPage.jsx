@@ -129,10 +129,19 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     {activeTab === 'code' ? 'Security Access' : 'SandN Cinema'}
                 </h2>
 
+                {/* ✅ SMART TABS LOGIC: Hide other tabs after OTP is sent */}
                 <div className="auth-tabs">
-                    <button className={activeTab === 'user' ? 'active' : ''} onClick={() => {setActiveTab('user'); setStep(1); setError('');}}>User</button>
-                    <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => {setActiveTab('studio'); setStep(1); setError('');}}>Studio</button>
-                    <button className={activeTab === 'code' ? 'active' : ''} onClick={() => {setActiveTab('code'); setStep(1); setError('');}}>Code</button>
+                    {step === 1 ? (
+                        <>
+                            <button className={activeTab === 'user' ? 'active' : ''} onClick={() => {setActiveTab('user'); setStep(1); setError('');}}>User</button>
+                            <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => {setActiveTab('studio'); setStep(1); setError('');}}>Studio</button>
+                            <button className={activeTab === 'code' ? 'active' : ''} onClick={() => {setActiveTab('code'); setStep(1); setError('');}}>Code</button>
+                        </>
+                    ) : (
+                        <button className="active" style={{ cursor: 'default', flex: 1, pointerEvents: 'none' }}>
+                            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Verification
+                        </button>
+                    )}
                 </div>
 
                 {error && <div className="error-msg">{error}</div>}
