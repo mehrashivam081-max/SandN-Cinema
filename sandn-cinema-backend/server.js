@@ -8,11 +8,11 @@ const path = require('path');
 
 const { User, Studio, Admin } = require('./models');
 
-// ✅ Setup Multer for File Uploads
+// ✅ Setup Multer for MULTIPLE File Uploads
 const multer = require('multer');
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir); // Agar 'uploads' folder nahi hai to bana dega
+    fs.mkdirSync(uploadDir); 
 }
 
 const storage = multer.diskStorage({
@@ -20,7 +20,6 @@ const storage = multer.diskStorage({
         cb(null, 'uploads/');
     },
     filename: function (req, file, cb) {
-        // Unique file name generate karega
         cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-')); 
     }
 });
@@ -271,7 +270,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
-// ✅ 4. Verify OTP (For Login) - Checks for New User
+// ✅ 4. Verify OTP (For Login) - Checks for New User / Temp Password
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     if (otpStore[mobile] === otp) { 
@@ -281,7 +280,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         let isNewUser = false;
         
         if (account) {
-           // ✅ Naya Logic: Agar password khali hai ya "temp123" hai, to use naya user manenge
+           // ✅ "temp123" wale accounts ko direct 'Create Password' par bhejega
             if (!account.data.password || account.data.password.trim() === "" || account.data.password === "temp123") {
                 isNewUser = true;
             }
@@ -347,25 +346,28 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// ✅ 8. Admin/Studio Manual Add User with Data Upload
-app.post('/api/auth/admin-add-user', upload.single('mediaFile'), async (req, res) => {
-    const { type, name, mobile, location } = req.body;
-    const file = req.file; 
+// ✅ 8. Admin/Studio Manual Add User with MULTIPLE Data Upload
+app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
+    const { type, name, mobile, location, addedBy } = req.body;
+    const files = req.files; 
 
     try {
         const exists = await findAccount(mobile);
         if (exists) return res.json({ success: false, message: "Mobile number is already registered!" });
 
-        // ✅ Dummy email setup to bypass DB validation error
         const dummyEmail = `dummy_${mobile}@sandn.com`;
+        
+        // Extract paths of all uploaded files
+        const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
         const newUser = {
             mobile,
-            password: "temp123", // Empty so setup is triggered
+            password: "temp123", 
             email: dummyEmail, 
             role: type,
             location: location || "",
-            uploadedData: file ? file.path : null // Save file path if uploaded
+            addedBy: addedBy || "ADMIN", // ✅ Ye track karega ki kisne banaya
+            uploadedData: filePaths // Array of multiple file paths
         };
 
         if (type === 'STUDIO') {
@@ -374,10 +376,44 @@ app.post('/api/auth/admin-add-user', upload.single('mediaFile'), async (req, res
             await User.create({ ...newUser, name: name });
         }
 
-        res.json({ success: true, message: "User registered successfully!" });
+        res.json({ success: true, message: "Registration successful and files uploaded!" });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         res.status(500).json({ success: false, message: "Database Error: " + e.message });
+    }
+});
+
+// ✅ 9. Get List of Accounts (Admin gets all, Studio gets only ones they added)
+app.post('/api/auth/list-accounts', async (req, res) => {
+    const { requesterRole, requesterMobile } = req.body;
+    try {
+        if (requesterRole === 'ADMIN' || requesterRole === 'OWNER') {
+            const users = await User.find({}).lean();
+            const studios = await Studio.find({}).lean();
+            res.json({ success: true, data: [...users, ...studios] });
+        } else if (requesterRole === 'STUDIO') {
+            const users = await User.find({ addedBy: requesterMobile }).lean();
+            res.json({ success: true, data: users });
+        } else {
+            res.json({ success: false, message: "Unauthorized access" });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to fetch list" });
+    }
+});
+
+// ✅ 10. Delete an Account
+app.post('/api/auth/delete-account', async (req, res) => {
+    const { targetMobile, targetRole } = req.body;
+    try {
+        if (targetRole === 'STUDIO') {
+            await Studio.findOneAndDelete({ mobile: targetMobile });
+        } else {
+            await User.findOneAndDelete({ mobile: targetMobile });
+        }
+        res.json({ success: true, message: "Account deleted successfully!" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to delete account" });
     }
 });
 
