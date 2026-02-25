@@ -34,10 +34,21 @@
   text-align: center;
 }
 
+/* ✅ Pehle jaisa hi layout hai, bas gap add kiya hai taki naye input overlap na karein */
 .laptop-search-wrapper {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 10px;
+}
+
+/* ✅ React code ke div ko relative banaya taki absolute button input ke andar hi rahe */
+.laptop-search-wrapper > div {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 350px;
 }
 
 .search-input {
@@ -48,8 +59,11 @@
   background: #eef2f5;
   outline: none;
   color: black;
+  /* Button ke peeche text na chhupe isliye right padding add ki hai */
+  padding-right: 90px; 
 }
 
+/* ✅ Pehle jaisa Absolute Position wala Button (Input ke andar) */
 .search-btn {
   position: absolute;
   right: 5px;
