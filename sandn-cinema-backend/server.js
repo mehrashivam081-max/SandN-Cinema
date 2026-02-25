@@ -102,6 +102,37 @@ const sendWhatsAppMsg = async (mobile, otp) => {
     );
 };
 
+// ==========================================
+// 🚀 4. NEW LOGIC: FALLBACK UPLOAD NOTIFICATION 
+// ==========================================
+const sendUploadNotification = async (mobile, email, name) => {
+    const customMessage = "999999"; // Dummy OTP variable to trigger Fast2SMS template
+    try {
+        console.log(`Trying WhatsApp notification for ${mobile}...`);
+        const waRes = await sendWhatsAppMsg(mobile, customMessage);
+        if (waRes.data && waRes.data.return === true) return console.log("✅ WhatsApp Notification Sent");
+        throw new Error("WhatsApp Failed");
+    } catch (e1) {
+        try {
+            console.log(`WhatsApp failed, trying SMS for ${mobile}...`);
+            const smsRes = await sendTextSMS(mobile, customMessage);
+            if (smsRes.data && smsRes.data.return === true) return console.log("✅ SMS Notification Sent");
+            throw new Error("SMS Failed");
+        } catch (e2) {
+            console.log(`SMS failed, trying Email for ${email}...`);
+            if (email && !email.includes('dummy_')) {
+                await sendBrevoEmail(
+                    email, 
+                    "Data Uploaded - SandN Cinema", 
+                    `<h2>Hello ${name},</h2><p>Your data has been successfully uploaded to your account.</p>`
+                );
+                return console.log("✅ Email Notification Sent");
+            }
+            console.log("❌ All notification methods failed or invalid email.");
+        }
+    }
+};
+
 const otpStore = {}; 
 
 // ✅ Data clean up function: Spaces hata kar pure String banayega
@@ -356,21 +387,36 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// ✅ 8. Admin/Studio Manual Add User with MULTIPLE Data Upload
+// ✅ 8. Admin/Studio Manual Add User + Re-upload Data + Notifications
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
     const { type, name, location, addedBy } = req.body;
     const files = req.files; 
 
     try {
-        const exists = await findAccount(mobile);
-        if (exists) return res.json({ success: false, message: "Mobile number is already registered!" });
-
-        const dummyEmail = `dummy_${mobile}@sandn.com`;
-        
+        const existingAccount = await findAccount(mobile);
         // Extract paths of all uploaded files
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
+        // ✅ LOGIC 1: APPENED DATA TO EXISTING USER
+        if (existingAccount) {
+            let accDoc;
+            if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile: mobile });
+            else accDoc = await User.findOne({ mobile: mobile });
+
+            if (filePaths.length > 0) {
+                accDoc.uploadedData = accDoc.uploadedData ? [...accDoc.uploadedData, ...filePaths] : filePaths;
+                await accDoc.save();
+            }
+
+            // Trigger Notification (WhatsApp -> SMS -> Email)
+            sendUploadNotification(mobile, accDoc.email, accDoc.name || accDoc.ownerName || name);
+            return res.json({ success: true, message: "Data appended to existing account & Notification sent!" });
+        }
+
+        // ✅ LOGIC 2: CREATE NEW USER/STUDIO
+        const dummyEmail = `dummy_${mobile}@sandn.com`;
+        
         const newUser = {
             mobile,
             password: "temp123", 
@@ -382,12 +428,15 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         };
 
         if (type === 'STUDIO') {
-            await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false });
+            // ✅ Fix: Added adhaarNumber: "Pending" to bypass required validation
+            await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false, adhaarNumber: "Pending" });
         } else {
             await User.create({ ...newUser, name: name });
         }
 
-        res.json({ success: true, message: "Registration successful and files uploaded!" });
+        // Trigger Notification (WhatsApp -> SMS -> Email)
+        sendUploadNotification(mobile, dummyEmail, name);
+        res.json({ success: true, message: "Registration successful, files uploaded & Notification sent!" });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         res.status(500).json({ success: false, message: "Database Error: " + e.message });
