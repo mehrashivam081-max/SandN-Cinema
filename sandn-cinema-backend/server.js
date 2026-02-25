@@ -49,11 +49,10 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
 };
 
 // ==========================================
-// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS Fix for 400 Error)
+// 🚀 2. NORMAL TEXT SMS API FUNCTION (Fast2SMS)
 // ==========================================
 const sendTextSMS = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
-    // ✅ FIX: Using 'dlt' route, default FSTSMS sender ID, and '148386' template to prevent blocking
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
         { 
             route: "dlt", 
@@ -67,11 +66,10 @@ const sendTextSMS = async (mobile, otp) => {
 };
 
 // ==========================================
-// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS Fix)
+// 🚀 3. WHATSAPP API FUNCTION (Fast2SMS)
 // ==========================================
 const sendWhatsAppMsg = async (mobile, otp) => {
     const fast2smsKey = process.env.FAST2SMS_KEY;
-    // ✅ FIX: Converted values to String to prevent API rejection
     return axios.post('https://www.fast2sms.com/dev/bulkV2', 
         { 
             route: "whatsapp", 
@@ -100,7 +98,7 @@ const findAccount = async (mobile) => {
 
 // --- ROUTES ---
 
-// 1. Check & Send OTP (SMS, WhatsApp, or Email) based on User Selection
+// 1. Check & Send OTP (Login)
 app.post('/api/auth/check-send-otp', async (req, res) => {
     const { mobile, sendVia } = req.body; 
     
@@ -108,7 +106,6 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         let targetMobile = mobile;
         let targetEmail = null;
 
-        // ✅ REAL ADMIN SECURITY LOGIC (Db check for Admin)
         if (mobile === "0000000000CODEIS*@OWNER*") {
             const adminAcc = await Admin.findOne(); 
             if (!adminAcc) {
@@ -127,9 +124,9 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[mobile] = randomOTP; 
-        console.log(`🔐 Generated OTP for ${mobile} (Sending to: ${sendVia === 'email' ? targetEmail : targetMobile}): ${randomOTP}`);
+        console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
 
-        // ✅ 1. EMAIL LOGIC
+        // ✅ EMAIL LOGIC
         if (sendVia === 'email') {
             if (!targetEmail) return res.json({ success: false, message: "No Email registered with this account." });
             try {
@@ -140,36 +137,33 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 );
                 return res.json({ success: true, message: "OTP Sent successfully via Email!" });
             } catch (emailErr) { 
-                console.error("🚨 EMAIL ERROR:", emailErr.message); 
                 return res.status(500).json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
             }
         } 
-        // ✅ 2. WHATSAPP LOGIC
+        // ✅ WHATSAPP LOGIC (With Strict Check & Friendly Error)
         else if (sendVia === 'whatsapp') {
             try {
                 const waResponse = await sendWhatsAppMsg(targetMobile, randomOTP);
-                if (waResponse.data.return === true) {
+                if (waResponse.data && waResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent successfully via WhatsApp!" });
                 } else {
-                    return res.status(500).json({ success: false, message: "WhatsApp Gateway rejected request." });
+                    return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (wsErr) { 
-                console.error("⚠️ WHATSAPP ERROR:", wsErr.message);
-                return res.status(500).json({ success: false, message: "Failed to send WhatsApp. Try SMS." });
+                return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
-        // ✅ 3. NORMAL TEXT SMS LOGIC (Default for 'mobile' or 'sms')
+        // ✅ SMS LOGIC (With Strict Check & Friendly Error)
         else {
             try {
                 const smsResponse = await sendTextSMS(targetMobile, randomOTP);
-                if (smsResponse.data.return === true) {
+                if (smsResponse.data && smsResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent successfully via SMS!" });
                 } else {
-                    return res.status(500).json({ success: false, message: "SMS Gateway rejected request." });
+                    return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (smsErr) { 
-                console.error("⚠️ SMS ERROR:", smsErr.message);
-                return res.status(500).json({ success: false, message: "Failed to send SMS. Try Email." });
+                return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
     } catch (e) { 
@@ -178,9 +172,9 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
     }
 });
 
-// 2. Send OTP for SIGNUP (Runs before saving data)
+// 2. Send OTP for SIGNUP 
 app.post('/api/auth/send-signup-otp', async (req, res) => {
-    const { mobile, email, sendVia } = req.body; // Getting user preference from frontend
+    const { mobile, email, sendVia } = req.body; 
     try {
         const exists = await findAccount(mobile);
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
@@ -189,7 +183,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
         otpStore[`signup_${mobile}`] = randomOTP; 
         console.log(`🔐 Signup OTP for ${mobile}: ${randomOTP}`);
 
-        // Email OTP
+        // ✅ EMAIL LOGIC
         if (sendVia === 'email' && email) {
             try {
                 await sendBrevoEmail(
@@ -202,32 +196,39 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 return res.status(500).json({ success: false, message: "Email Error. Try SMS." });
             }
         } 
-        // WhatsApp OTP
+        // ✅ WHATSAPP LOGIC (With Strict Check & Friendly Error)
         else if (sendVia === 'whatsapp') {
             try {
-                await sendWhatsAppMsg(mobile, randomOTP);
-                return res.json({ success: true, message: "OTP Sent via WhatsApp." });
+                const waResponse = await sendWhatsAppMsg(mobile, randomOTP);
+                if (waResponse.data && waResponse.data.return === true) {
+                    return res.json({ success: true, message: "OTP Sent via WhatsApp." });
+                } else {
+                    return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
+                }
             } catch (wsErr) { 
-                return res.status(500).json({ success: false, message: "WhatsApp Error. Try Text SMS." });
+                return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
-        // Normal Text SMS OTP (Default)
+        // ✅ SMS LOGIC (With Strict Check & Friendly Error)
         else {
             try {
-                await sendTextSMS(mobile, randomOTP);
-                return res.json({ success: true, message: "OTP Sent via Text SMS." });
+                const smsResponse = await sendTextSMS(mobile, randomOTP);
+                if (smsResponse.data && smsResponse.data.return === true) {
+                    return res.json({ success: true, message: "OTP Sent via Text SMS." });
+                } else {
+                    return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
+                }
             } catch (smsErr) { 
-                return res.status(500).json({ success: false, message: "SMS Error. Try Email." });
+                return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
 });
 
-// 3. Signup with OTP Verification & Location Save
+// 3. Signup with OTP Verification 
 app.post('/api/auth/signup', async (req, res) => {
     const { type, mobile, otp, name, studioName, password, email, location, ...otherData } = req.body;
 
-    // Strict Signup OTP Verify (No more 111111 dummy code bypass)
     if (otpStore[`signup_${mobile}`] !== otp) {
         return res.json({ success: false, message: "Invalid Verification OTP! Registration Failed." });
     }
@@ -239,36 +240,67 @@ app.post('/api/auth/signup', async (req, res) => {
         if (type === 'studio') {
             await Studio.create({
                 mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
-                isAdhaarVerified: false, location,
-                ...otherData
+                isAdhaarVerified: false, location, ...otherData
             });
         } else {
             await User.create({
-                mobile, password, email, role: 'USER', name: name, location,
-                ...otherData
+                mobile, password, email, role: 'USER', name: name, location, ...otherData
             });
         }
         
-        delete otpStore[`signup_${mobile}`]; // Clear OTP
+        delete otpStore[`signup_${mobile}`]; 
         res.json({ success: true });
     } catch (e) {
-        console.error("Signup Error:", e);
         res.status(500).json({ success: false, message: e.message });
     }
 });
 
-// 4. Verify OTP (For Login)
+// ✅ 4. Verify OTP (For Login) - [MODIFIED TO CHECK FOR NEW USER]
 app.post('/api/auth/verify-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
-        res.json({ success: true });
+        
+        // Naya Logic: Check if user has no password
+        const account = await findAccount(mobile);
+        let isNewUser = false;
+        
+        if (account) {
+            // Agar password nahi hai ya default hai
+            if (!account.data.password || account.data.password.trim() === "") {
+                isNewUser = true;
+            }
+        }
+        
+        res.json({ success: true, isNewUser });
     } else {
         res.json({ success: false, message: "Invalid OTP" });
     }
 });
 
-// 5. Login via OTP
+// ✅ 5. Create Password (NEW ROUTE FOR MANUAL REGISTRATIONS)
+app.post('/api/auth/create-password', async (req, res) => {
+    const { mobile, password, email } = req.body;
+    try {
+        let account = await User.findOne({ mobile });
+        if (!account) account = await Studio.findOne({ mobile });
+
+        if (account) {
+            account.password = password;
+            if (email) account.email = email; 
+            await account.save();
+            
+            res.json({ 
+                success: true, 
+                user: { name: account.name || account.ownerName, mobile: account.mobile, role: account.role } 
+            });
+        } else {
+            res.json({ success: false, message: "Account not found" });
+        }
+    } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
+});
+
+// 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
     const { mobile, otp } = req.body;
     if (otpStore[mobile] === otp) { 
@@ -284,7 +316,7 @@ app.post('/api/auth/login-otp', async (req, res) => {
     }
 });
 
-// 6. Password Login (Old Exact Logic)
+// 7. Password Login
 app.post('/api/auth/login', async (req, res) => {
     const { mobile, password } = req.body;
     try {
