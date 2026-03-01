@@ -106,7 +106,7 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 // 🚀 4. NEW LOGIC: FALLBACK UPLOAD NOTIFICATION 
 // ==========================================
 const sendUploadNotification = async (mobile, email, name) => {
-    const customMessage = "999999"; // Dummy OTP variable to trigger Fast2SMS template
+    const customMessage = "999999"; // Dummy variable to trigger Fast2SMS template
     try {
         console.log(`Trying WhatsApp notification for ${mobile}...`);
         const waRes = await sendWhatsAppMsg(mobile, customMessage);
@@ -135,9 +135,20 @@ const sendUploadNotification = async (mobile, email, name) => {
 
 const otpStore = {}; 
 
-// ✅ Data clean up function: Spaces hata kar pure String banayega
+// ✅ SMART CLEANER: Extract strictly the last 10 digits to prevent +91 bugs
+const getCleanMobile = (mobileRaw) => {
+    if (!mobileRaw) return "";
+    let str = String(mobileRaw).trim();
+    if (str === "0000000000CODEIS*@OWNER*") return str; // Keeps admin key safe
+    str = str.replace(/\D/g, ''); // Remove spaces and symbols
+    if (str.length > 10) {
+        str = str.slice(-10); // Extact only the last 10 digits
+    }
+    return str;
+};
+
 const findAccount = async (mobile) => {
-    const cleanMobile = String(mobile).trim(); 
+    const cleanMobile = getCleanMobile(mobile); 
 
     let acc = await User.findOne({ mobile: cleanMobile });
     if (acc) return { type: 'USER', data: acc };
@@ -155,7 +166,7 @@ const findAccount = async (mobile) => {
 
 // 1. Check & Send OTP (Login)
 app.post('/api/auth/check-send-otp', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { sendVia } = req.body; 
     
     try {
@@ -192,7 +203,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 );
                 return res.json({ success: true, message: "OTP Sent successfully via Email!" });
             } catch (emailErr) { 
-                return res.status(500).json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
+                return res.json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
             }
         } 
         else if (sendVia === 'whatsapp') {
@@ -201,10 +212,10 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 if (waResponse.data && waResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent successfully via WhatsApp!" });
                 } else {
-                    return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
+                    return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (wsErr) { 
-                return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
+                return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
         else {
@@ -213,10 +224,10 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 if (smsResponse.data && smsResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent successfully via SMS!" });
                 } else {
-                    return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
+                    return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (smsErr) { 
-                return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
+                return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
     } catch (e) { 
@@ -227,7 +238,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
 
 // 2. Send OTP for SIGNUP 
 app.post('/api/auth/send-signup-otp', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { email, sendVia } = req.body; 
     try {
         const exists = await findAccount(mobile);
@@ -246,7 +257,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 );
                 return res.json({ success: true, message: "OTP Sent to your Email." });
             } catch (emailErr) { 
-                return res.status(500).json({ success: false, message: "Email Error. Try SMS." });
+                return res.json({ success: false, message: "Email Error. Try SMS." });
             }
         } 
         else if (sendVia === 'whatsapp') {
@@ -255,10 +266,10 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 if (waResponse.data && waResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent via WhatsApp." });
                 } else {
-                    return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
+                    return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (wsErr) { 
-                return res.status(500).json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
+                return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
         else {
@@ -267,10 +278,10 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 if (smsResponse.data && smsResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent via Text SMS." });
                 } else {
-                    return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
+                    return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (smsErr) { 
-                return res.status(500).json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
+                return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
@@ -278,7 +289,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
 
 // 3. Signup with OTP Verification 
 app.post('/api/auth/signup', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { type, otp, name, studioName, password, email, location, ...otherData } = req.body;
 
     if (otpStore[`signup_${mobile}`] !== otp) {
@@ -309,7 +320,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // ✅ 4. Verify OTP (For Login) - Checks for New User / Temp Password
 app.post('/api/auth/verify-otp', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
@@ -318,7 +329,6 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         let isNewUser = false;
         
         if (account) {
-           // ✅ "temp123" wale accounts ko direct 'Create Password' par bhejega
             if (!account.data.password || account.data.password.trim() === "" || account.data.password === "temp123") {
                 isNewUser = true;
             }
@@ -332,7 +342,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
 // ✅ 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { password, email } = req.body;
     try {
         let account = await User.findOne({ mobile });
@@ -355,7 +365,7 @@ app.post('/api/auth/create-password', async (req, res) => {
 
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { otp } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
@@ -372,7 +382,7 @@ app.post('/api/auth/login-otp', async (req, res) => {
 
 // 7. Password Login
 app.post('/api/auth/login', async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { password } = req.body;
     try {
         const account = await findAccount(mobile);
@@ -389,20 +399,21 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ✅ 8. Admin/Studio Manual Add User + Re-upload Data + Notifications
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
-    const mobile = String(req.body.mobile).trim(); // ✅ Clean Mobile
+    const mobile = getCleanMobile(req.body.mobile); 
     const { type, name, location, addedBy } = req.body;
     const files = req.files; 
 
     try {
         const existingAccount = await findAccount(mobile);
+        
         // Extract paths of all uploaded files
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
         // ✅ LOGIC 1: APPENED DATA TO EXISTING USER
         if (existingAccount) {
             let accDoc;
-            if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile: mobile });
-            else accDoc = await User.findOne({ mobile: mobile });
+            if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile });
+            else accDoc = await User.findOne({ mobile });
 
             if (filePaths.length > 0) {
                 accDoc.uploadedData = accDoc.uploadedData ? [...accDoc.uploadedData, ...filePaths] : filePaths;
@@ -423,18 +434,16 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             email: dummyEmail, 
             role: type,
             location: location || "",
-            addedBy: addedBy || "ADMIN", // ✅ Ye track karega ki kisne banaya
-            uploadedData: filePaths // Array of multiple file paths
+            addedBy: addedBy || "ADMIN", 
+            uploadedData: filePaths 
         };
 
         if (type === 'STUDIO') {
-            // ✅ Fix: Added adhaarNumber: "Pending" to bypass required validation
             await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false, adhaarNumber: "Pending" });
         } else {
             await User.create({ ...newUser, name: name });
         }
 
-        // Trigger Notification (WhatsApp -> SMS -> Email)
         sendUploadNotification(mobile, dummyEmail, name);
         res.json({ success: true, message: "Registration successful, files uploaded & Notification sent!" });
     } catch (e) {
@@ -443,7 +452,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
     }
 });
 
-// ✅ 9. Get List of Accounts (Admin gets all, Studio gets only ones they added)
+// ✅ 9. Get List of Accounts
 app.post('/api/auth/list-accounts', async (req, res) => {
     const { requesterRole, requesterMobile } = req.body;
     try {
@@ -452,8 +461,7 @@ app.post('/api/auth/list-accounts', async (req, res) => {
             const studios = await Studio.find({}).lean();
             res.json({ success: true, data: [...users, ...studios] });
         } else if (requesterRole === 'STUDIO') {
-            // ✅ Clean searching here too, just in case
-            const cleanMobile = String(requesterMobile).trim();
+            const cleanMobile = getCleanMobile(requesterMobile);
             const users = await User.find({ addedBy: cleanMobile }).lean();
             res.json({ success: true, data: users });
         } else {
@@ -466,7 +474,7 @@ app.post('/api/auth/list-accounts', async (req, res) => {
 
 // ✅ 10. Delete an Account
 app.post('/api/auth/delete-account', async (req, res) => {
-    const targetMobile = String(req.body.targetMobile).trim(); // ✅ Clean Mobile
+    const targetMobile = getCleanMobile(req.body.targetMobile); 
     const { targetRole } = req.body;
     try {
         if (targetRole === 'STUDIO') {
@@ -477,6 +485,17 @@ app.post('/api/auth/delete-account', async (req, res) => {
         res.json({ success: true, message: "Account deleted successfully!" });
     } catch (error) {
         res.status(500).json({ success: false, message: "Failed to delete account" });
+    }
+});
+
+// ✅ 11. Search Account (For Frontend Validation before Firebase OTP)
+app.post('/api/auth/search-account', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const account = await findAccount(mobile);
+    if (account) {
+        res.json({ success: true, data: account.data });
+    } else {
+        res.json({ success: false, message: "Account not found" });
     }
 });
 
