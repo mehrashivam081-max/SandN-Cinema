@@ -25,13 +25,13 @@ const LaptopView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ New States for Popup & Password Creation
+  // States for Popup & Password Creation
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
-  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Check if user has no password
-  const [newEmail, setNewEmail] = useState(''); // To add email during first setup
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); 
+  const [newEmail, setNewEmail] = useState(''); 
 
-  // ✅ App Name Clickable as Home (Reset everything)
+  // App Name Clickable as Home (Reset everything)
   const goHome = () => { 
       setViewState('HOME'); 
       setSearchStep(0); 
@@ -39,15 +39,17 @@ const LaptopView = ({
       setShowOtpPopup(false);
       setIsFirstTimeUser(false);
       setNewEmail('');
+      setOtp('');
+      setPassword('');
   };
 
-  // ✅ 1. Handle Search Click (Open Popup)
+  // 1. Handle Search Click (Open Popup)
   const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
-      setShowOtpPopup(true); // Open the method selection popup
+      setShowOtpPopup(true); 
   };
 
-  // ✅ 2. Send OTP via Selected Method
+  // 2. Send OTP via Selected Method
   const handleSendOtp = async (selectedMethod) => {
       setOtpMethod(selectedMethod);
       setLoading(true);
@@ -58,7 +60,7 @@ const LaptopView = ({
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
               alert(`OTP Sent successfully via ${methodLabel}`); 
               setSearchStep(1); 
-              setShowOtpPopup(false); // Close popup
+              setShowOtpPopup(false); 
           } else {
               setIsNotRegistered(true);
               setShowOtpPopup(false);
@@ -68,14 +70,13 @@ const LaptopView = ({
       } finally { setLoading(false); }
   };
 
-  // ✅ 3. Verify OTP & Check User Status
+  // 3. Verify OTP & Check User Status
   const handleVerifyOTP = async () => {
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp });
           if (res.data.success) {
-              // Check if backend says user needs to create password
               if (res.data.isNewUser) {
                   setIsFirstTimeUser(true);
                   setSearchStep(2); 
@@ -90,14 +91,13 @@ const LaptopView = ({
       } finally { setLoading(false); }
   };
 
-  // ✅ 4. Login OR Setup Password (Unified Function)
+  // 4. Login OR Setup Password
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
       
       try {
           if (isFirstTimeUser) {
-              // --- SETUP LOGIC (Create Password) ---
               if (!newEmail) return alert("Please enter your email for account recovery.");
               
               const res = await axios.post(`${API_BASE}/create-password`, { 
@@ -114,7 +114,6 @@ const LaptopView = ({
                   alert(res.data.message || "Setup Failed");
               }
           } else {
-              // --- NORMAL LOGIN LOGIC ---
               const res = await axios.post(`${API_BASE}/login`, { mobile, password });
               if (res.data.success) { 
                   setUserData(res.data.user); 
@@ -196,7 +195,6 @@ const LaptopView = ({
                             <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} />
                             <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'...':'Search'}</button>
                         </div>
-                        {/* ✅ NOTE: Inline buttons removed here as requested, moved to Popup */}
                     </>
                  )}
                  {searchStep === 1 && (
@@ -205,7 +203,7 @@ const LaptopView = ({
                         <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'...':'Verify'}</button>
                     </div>
                  )}
-                 {/* ✅ Dynamic Step 2: Login OR Create Password */}
+                 {/* Dynamic Step 2: Login OR Create Password */}
                  {searchStep === 2 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                         {isFirstTimeUser && (

@@ -18,6 +18,7 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
+// API BASE URL - Update this to local during local testing if needed
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const MobileView = ({
@@ -28,13 +29,13 @@ const MobileView = ({
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ New States for Popup & First Time User Setup
+  // States for Popup & First Time User Setup
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [newEmail, setNewEmail] = useState('');
 
-  // ✅ TOP LEFT HOME FUNCTION (Resets everything)
+  // TOP LEFT HOME FUNCTION (Resets everything)
   const goHome = () => { 
       setViewState('HOME'); 
       setSearchStep(0); 
@@ -42,6 +43,8 @@ const MobileView = ({
       setShowOtpPopup(false);
       setIsFirstTimeUser(false);
       setNewEmail(''); 
+      setOtp('');
+      setPassword('');
   };
 
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -91,7 +94,7 @@ const MobileView = ({
     setMagnetStyle({ transform: 'translate(0px, 0px)', transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' });
   };
 
-  // --- API LOGIC ---
+  // --- API LOGIC (Production Ready - Fast2SMS/Brevo) ---
 
   // 1. Search Click -> Open Popup
   const handleSearchClick = () => {
@@ -105,6 +108,7 @@ const MobileView = ({
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod });
+          
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
               alert(`OTP Sent successfully via ${methodLabel}`); 
@@ -273,11 +277,12 @@ const MobileView = ({
                         )}
                         {searchStep === 1 && (
                             <>
+                                {/* Clean OTP input field */}
                                 <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
-                        {/* ✅ Dynamic Step 2: Login OR Setup Password */}
+                        {/* Dynamic Step 2: Login OR Setup Password */}
                         {searchStep === 2 && (
                             <>
                                 {isFirstTimeUser && (
