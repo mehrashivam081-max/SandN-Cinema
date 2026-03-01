@@ -8,12 +8,16 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, default: 'USER' },
     
+    // ✅ NEW: Tracking & Data
+    addedBy: { type: String, default: 'SELF' }, // Kisine add kiya ya khud signup kiya
+    uploadedData: [{ type: String }], // Photos/Videos ke paths ka array
+    
     // Profile
     profileImage: String,
     gender: String,
     state: String,
     city: String,
-    location: { lat: Number, long: Number }, // ✅ Added Location Tracker for User
+    location: { lat: Number, long: Number }, 
     
     // Wallet & Coins
     wallet: {
@@ -40,8 +44,12 @@ const studioSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, default: 'STUDIO' },
     
+    // ✅ NEW: Tracking & Data
+    addedBy: { type: String, default: 'SELF' },
+    uploadedData: [{ type: String }],
+
     // Verification
-    adhaarNumber: { type: String, required: true },
+    adhaarNumber: { type: String, default: "Pending" }, // 🛠 Required hata diya taaki signup na ruke
     isAdhaarVerified: { type: Boolean, default: false },
     ownerImage: String,
     
@@ -49,7 +57,7 @@ const studioSchema = new mongoose.Schema({
     whatsapp: String,
     workPlace: String,
     experience: String,
-    location: { lat: Number, long: Number }, // ✅ Location is already here
+    location: { lat: Number, long: Number }, 
     
     // Business
     rating: { type: Number, default: 0 },
