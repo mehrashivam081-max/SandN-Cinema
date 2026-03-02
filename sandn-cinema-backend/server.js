@@ -318,7 +318,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
-// ✅ 4. Verify OTP (For Login) - Checks for New User / Temp Password
+// 4. Verify OTP (For Login) - Checks for New User / Temp Password
 app.post('/api/auth/verify-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { otp } = req.body;
@@ -340,7 +340,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     }
 });
 
-// ✅ 5. Create Password (FOR MANUAL REGISTRATIONS)
+// 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { password, email } = req.body;
@@ -389,7 +389,7 @@ app.post('/api/auth/login', async (req, res) => {
         if (account && account.data.password === password) {
             res.json({
                 success: true,
-                user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type }
+                user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type, email: account.data.email, isFeedApproved: account.data.isFeedApproved }
             });
         } else {
             res.json({ success: false, message: "Invalid Password" });
@@ -397,7 +397,7 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// ✅ 8. Admin/Studio Manual Add User + Re-upload Data + Notifications
+// 8. Admin/Studio Manual Add User + Re-upload Data + Notifications
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { type, name, location, addedBy } = req.body;
@@ -409,7 +409,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         // Extract paths of all uploaded files
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
-        // ✅ LOGIC 1: APPENED DATA TO EXISTING USER
+        // APPENED DATA TO EXISTING USER
         if (existingAccount) {
             let accDoc;
             if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile });
@@ -425,7 +425,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             return res.json({ success: true, message: "Data appended to existing account & Notification sent!" });
         }
 
-        // ✅ LOGIC 2: CREATE NEW USER/STUDIO
+        // CREATE NEW USER/STUDIO
         const dummyEmail = `dummy_${mobile}@sandn.com`;
         
         const newUser = {
@@ -452,7 +452,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
     }
 });
 
-// ✅ 9. Get List of Accounts
+// 9. Get List of Accounts
 app.post('/api/auth/list-accounts', async (req, res) => {
     const { requesterRole, requesterMobile } = req.body;
     try {
@@ -472,13 +472,15 @@ app.post('/api/auth/list-accounts', async (req, res) => {
     }
 });
 
-// ✅ 10. Delete an Account
+// 10. Delete an Account
 app.post('/api/auth/delete-account', async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
     const { targetRole } = req.body;
     try {
         if (targetRole === 'STUDIO') {
             await Studio.findOneAndDelete({ mobile: targetMobile });
+        } else if (targetRole === 'ADMIN') {
+            await Admin.findOneAndDelete({ mobile: targetMobile });
         } else {
             await User.findOneAndDelete({ mobile: targetMobile });
         }
@@ -488,7 +490,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
     }
 });
 
-// ✅ 11. Search Account (For Frontend Validation before Firebase OTP)
+// 11. Search Account (For Frontend Validation before Firebase OTP)
 app.post('/api/auth/search-account', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const account = await findAccount(mobile);
@@ -496,6 +498,61 @@ app.post('/api/auth/search-account', async (req, res) => {
         res.json({ success: true, data: account.data });
     } else {
         res.json({ success: false, message: "Account not found" });
+    }
+});
+
+// ==========================================
+// ✅ NEW: ADMIN SPECIFIC LOGIC
+// ==========================================
+
+// 12. Update Studio Feed Approval
+app.post('/api/auth/update-studio-approval', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    try {
+        const studio = await Studio.findOne({ mobile });
+        if(studio) {
+            studio.isFeedApproved = req.body.isFeedApproved;
+            await studio.save();
+            res.json({ success: true, message: req.body.isFeedApproved ? "Studio Approved for Feed!" : "Studio Feed Access Revoked!" });
+        } else {
+            res.json({ success: false, message: "Studio not found" });
+        }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server error updating approval." }); 
+    }
+});
+
+// 13. Update Admin Profile
+app.post('/api/auth/update-admin', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    try {
+        const admin = await Admin.findOne({ mobile });
+        if (admin) {
+            if(req.body.name) admin.name = req.body.name;
+            if(req.body.email) admin.email = req.body.email;
+            if(req.body.password) admin.password = req.body.password;
+            await admin.save();
+            res.json({ success: true, message: "Profile Updated Successfully" });
+        } else {
+            res.json({ success: false, message: "Admin not found" });
+        }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server error updating profile." }); 
+    }
+});
+
+// 14. Add Sub-Admin
+app.post('/api/auth/add-subadmin', async (req, res) => {
+    const { name, mobile, email, password } = req.body;
+    try {
+        const cleanMobile = getCleanMobile(mobile);
+        const exists = await findAccount(cleanMobile);
+        if (exists) return res.json({ success: false, message: "Mobile already registered!" });
+        
+        await Admin.create({ name, mobile: cleanMobile, email, password, role: 'ADMIN' });
+        res.json({ success: true, message: "Sub-Admin created successfully." });
+    } catch (e) { 
+        res.status(500).json({ success: false, message: e.message }); 
     }
 });
 
