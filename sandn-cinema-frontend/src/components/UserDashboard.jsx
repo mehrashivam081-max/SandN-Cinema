@@ -1,191 +1,210 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import './UserDashboard.css';
 import { calculateDailyReward } from '../utils/coinLogic';
 
-// Backend se data aane tak ye Mock Data use hoga (Default Folders)
-const DEFAULT_FOLDERS = [
-    { id: 'def_1', name: 'Stranger Photography', type: 'folder', date: '2023-01-01', unseen: false, isDefault: true },
-    { id: 'u_1', name: 'My Wedding', type: 'folder', date: '2025-02-14', unseen: true, isDefault: false },
-    { id: 'u_2', name: 'Pre-Wedding Shoot', type: 'folder', date: '2025-02-10', unseen: false, isDefault: false },
-    { id: 'u_3', name: 'Birthday Bash', type: 'folder', date: '2024-12-25', unseen: true, isDefault: false }
-];
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
-const UserDashboard = ({ userData, onLogout, onUpdateUser }) => {
-    // --- States ---
-    const [folders, setFolders] = useState(userData.folders || DEFAULT_FOLDERS);
-    const [wallet, setWallet] = useState(userData.wallet || { coins: 0, currentStreak: 0 });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filter, setFilter] = useState('All'); // New, Oldest, All
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [selectedIds, setSelectedIds] = useState([]);
-    const [suggestedFolder, setSuggestedFolder] = useState(null);
+const UserDashboard = ({ user, userData, onLogout }) => {
+    // --- UI STATES ---
+    const [currentTab, setCurrentTab] = useState('HOME'); // HOME, SERVICES, BOOKINGS, PROFILE
+    const [loading, setLoading] = useState(true);
+    const [wallet, setWallet] = useState(user?.wallet || { coins: 0, currentStreak: 0 });
+    
+    // --- FOLDER & MEDIA STATES ---
+    const [folders, setFolders] = useState([]);
+    const [activeFolder, setActiveFolder] = useState(null); // null means showing folder list
+    const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
-    // --- 1. Coin Logic & Streak (On Mount) ---
+    // --- PROFILE STATES ---
+    const [profileImage, setProfileImage] = useState(user?.profileImage || null);
+    const [editProfileMode, setEditProfileMode] = useState(false);
+    const [editName, setEditName] = useState(user?.name || '');
+
+    // Default Folder (Stranger Photography)
+    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true };
+
     useEffect(() => {
-        const rewardResult = calculateDailyReward({ ...userData, wallet });
-        
+        // Daily Reward Logic
+        const currentUserData = userData || user || {};
+        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         if (rewardResult.rewardAdded) {
-            let msg = `Daily Reward: +1 Coin! Streak: ${rewardResult.currentStreak} Days.`;
-            if (rewardResult.isSundayBonus) msg = `🎉 Sunday Special! +7 Coins Bonus! Streak: ${rewardResult.currentStreak} Days.`;
-            alert(msg);
-
-            // Update Local State
+            alert(`Daily Reward: +1 Coin! Streak: ${rewardResult.currentStreak} Days.`);
             setWallet(rewardResult);
-            
-            // Note: Real App me yahan API call karke DB update karna hoga
-            // onUpdateUser({ ...userData, wallet: rewardResult });
         }
+        fetchMyData();
     }, []);
 
-    // --- 2. Random Folder Suggestion ---
-    useEffect(() => {
-        if (folders.length > 0) {
-            const random = folders[Math.floor(Math.random() * folders.length)];
-            setSuggestedFolder(random);
-        }
-    }, [folders]);
-
-    // --- 3. Filtering Logic ---
-    const getProcessedFolders = () => {
-        let result = folders.filter(f => 
-            f.name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-
-        if (filter === 'New') {
-            // Newest first, prioritize Unseen
-            result = result.sort((a, b) => new Date(b.date) - new Date(a.date)).filter(f => f.unseen);
-        } else if (filter === 'Oldest') {
-            // Oldest first
-            result = result.sort((a, b) => new Date(a.date) - new Date(b.date));
-        } else {
-            // All (Default: Newest first)
-            result = result.sort((a, b) => new Date(b.date) - new Date(a.date));
-        }
-        return result;
-    };
-
-    // --- Handlers ---
-    const handleLongPress = (id) => {
-        setSelectionMode(true);
-        handleSelect(id);
-    };
-
-    const handleSelect = (id) => {
-        if (selectedIds.includes(id)) {
-            const newIds = selectedIds.filter(item => item !== id);
-            setSelectedIds(newIds);
-            if (newIds.length === 0) setSelectionMode(false);
-        } else {
-            setSelectedIds([...selectedIds, id]);
+    // Fetch Data (Now expecting Folders from Backend)
+    const fetchMyData = async () => {
+        try {
+            const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
+            if (res.data.success) {
+                // Backend se uploadedData ab objects ka array aayega: [{ folderName: 'Wedding', files: [...] }]
+                const fetchedFolders = res.data.data.uploadedData || [];
+                setFolders([DEFAULT_FOLDER, ...fetchedFolders]);
+            } else {
+                setFolders([DEFAULT_FOLDER]);
+            }
+        } catch (error) {
+            console.error("Fetch error:", error);
+            setFolders([DEFAULT_FOLDER]);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleFolderClick = (folder) => {
-        if (selectionMode) {
-            handleSelect(folder.id);
-        } else {
-            // Check data logic
-            // Since we don't have real files, we show alert
-            alert(`Opening ${folder.name}... (Data logic will fetch files here)`);
-        }
+    // --- HELPERS ---
+    const isVideo = (filePath) => filePath.match(/\.(mp4|webm|ogg|mov)$/i);
+    const getCleanUrl = (filePath) => `${SERVER_URL}${filePath.replace(/\\/g, '/')}`;
+
+    // --- PROFILE HANDLERS ---
+    const handleDPChange = (e) => {
+        const file = e.target.files[0];
+        if (file) setProfileImage(URL.createObjectURL(file)); // Note: Real app needs API upload here
     };
 
-    const filteredFolders = getProcessedFolders();
+    const handleRemoveDP = () => setProfileImage(null);
 
-    return (
-        <div className="ud-container">
-            {/* --- Header --- */}
-            <div className="ud-header">
-                <div className="ud-menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
-                    ☰
-                    {menuOpen && (
-                        <div className="ud-menu-dropdown">
-                            <div className="ud-menu-item">Theme</div>
-                            <div className="ud-menu-item">Settings</div>
-                            <div className="ud-menu-item logout" onClick={onLogout}>Logout</div>
+    const handleSaveProfile = () => {
+        alert("Profile Updated Successfully!");
+        setEditProfileMode(false);
+        // Add backend update logic here later
+    };
+
+    // --- RENDER TABS ---
+    const renderContent = () => {
+        if (currentTab === 'SERVICES') return <div className="tab-placeholder"><h2>Our Services</h2><p>Booking modules coming soon...</p></div>;
+        if (currentTab === 'BOOKINGS') return <div className="tab-placeholder"><h2>Booking History</h2><p>No past bookings found.</p></div>;
+        if (currentTab === 'PROFILE') return renderProfileTab();
+        return renderHomeTab();
+    };
+
+    // 🔴 PROFILE (U) TAB
+    const renderProfileTab = () => (
+        <div className="profile-tab-vip">
+            <h2>Your Profile</h2>
+            <div className="profile-card-vip">
+                <div className="dp-section">
+                    <div className="dp-circle">
+                        {profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName.charAt(0)}</span>}
+                    </div>
+                    {editProfileMode && (
+                        <div className="dp-controls">
+                            <label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label>
+                            <button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button>
                         </div>
                     )}
                 </div>
 
-                <div className="ud-search-wrapper">
-                    <input 
-                        type="text" 
-                        className="ud-search-input" 
-                        placeholder="Search your memories..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <span className="ud-search-icon">🔍</span>
-                </div>
+                <div className="profile-details">
+                    <label>Registered Mobile No.</label>
+                    <input type="text" value={user.mobile} disabled className="vip-input disabled" />
 
-                <div className="ud-coin-badge">
-                    <span className="coin-val">{wallet.coins}</span>
-                    <span>COINS</span>
+                    <label>Full Name</label>
+                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={!editProfileMode} className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
+
+                    {editProfileMode ? (
+                        <button className="vip-btn-gold mt-20" onClick={handleSaveProfile}>Save Changes</button>
+                    ) : (
+                        <button className="vip-btn-outline mt-20" onClick={() => setEditProfileMode(true)}>Edit Profile</button>
+                    )}
                 </div>
             </div>
+            <button className="logout-btn-full mt-20" onClick={onLogout}>Logout Securely</button>
+        </div>
+    );
 
-            {/* --- Random Suggestion Banner --- */}
-            {suggestedFolder && (
-                <div className="ud-banner-row">
-                    <div className="ud-banner-card" style={{backgroundImage: 'linear-gradient(to right, #000, #333)'}}>
-                        <div className="banner-overlay"></div>
-                        <div className="banner-text">
-                            <h3>{suggestedFolder.name}</h3>
-                            <p>Suggested for you</p>
-                        </div>
+    // 🔴 HOME TAB (Folders -> Gallery)
+    const renderHomeTab = () => {
+        // If inside a folder, show its gallery
+        if (activeFolder) {
+            const displayedMedia = (activeFolder.files || []).filter(item => {
+                if (mediaFilter === 'PHOTOS') return !isVideo(item);
+                if (mediaFilter === 'VIDEOS') return isVideo(item);
+                return true;
+            });
+
+            return (
+                <div className="folder-gallery-view">
+                    <div className="folder-header-nav">
+                        <button onClick={() => setActiveFolder(null)} className="back-btn">⬅ Back to Folders</button>
+                        <h3>{activeFolder.folderName}</h3>
+                    </div>
+
+                    <div className="filter-group-vip">
+                        <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos</button>
+                    </div>
+
+                    <div className="ud-grid-vip mt-20">
+                        {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => (
+                            <div key={idx} className="gallery-item-vip">
+                                {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
+                                <div className="media-overlay-vip"><a href={getCleanUrl(filePath)} download target="_blank" className="download-btn-vip">⬇ Download</a></div>
+                            </div>
+                        )) : <div className="no-data-vip">Folder is empty.</div>}
                     </div>
                 </div>
-            )}
+            );
+        }
 
-            {/* --- Controls & Filters --- */}
-            <div className="ud-controls">
-                <div className="selection-info">
-                    {selectionMode ? (
-                        <>
-                            <input type="checkbox" checked readOnly />
-                            <span>{selectedIds.length} Selected</span>
-                        </>
-                    ) : (
-                        <span>Long press to select</span>
-                    )}
+        // Show Folder List
+        return (
+            <div className="folders-view">
+                <div className="welcome-banner">
+                    <h1>Your Digital Memories</h1>
+                    <p>Select a folder to view your curated albums.</p>
                 </div>
-
-                <div className="filter-group">
-                    <button className="filter-btn" onClick={() => setFilter(null)}>Filter</button>
-                    <button className={`filter-btn ${filter === 'New' ? 'active' : ''}`} onClick={() => setFilter('New')}>New</button>
-                    <button className={`filter-btn ${filter === 'All' ? 'active' : ''}`} onClick={() => setFilter('All')}>All</button>
-                </div>
-            </div>
-
-            {/* --- Folder Grid --- */}
-            <div className="ud-grid">
-                {filteredFolders.length > 0 ? (
-                    filteredFolders.map(folder => (
-                        <div 
-                            key={folder.id} 
-                            className={`ud-card ${selectedIds.includes(folder.id) ? 'selected' : ''}`}
-                            onClick={() => handleFolderClick(folder)}
-                            onContextMenu={(e) => { e.preventDefault(); handleLongPress(folder.id); }}
-                        >
-                            {selectedIds.includes(folder.id) && <div className="check-mark">✔</div>}
-                            
-                            <div className="card-img-box">
-                                {/* Thumbnail logic here */}
+                
+                {loading ? <div className="loading-state-vip">Loading Folders...</div> : (
+                    <div className="folders-grid">
+                        {folders.map((folder, index) => (
+                            <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)}>
+                                <div className="folder-icon">📁</div>
+                                <h4>{folder.folderName}</h4>
+                                <p>{folder.files?.length || 0} Items</p>
+                                {folder.isDefault && <span className="default-badge">Premium</span>}
                             </div>
-                            
-                            <div className="card-info">
-                                <h4>{folder.name}</h4>
-                                <button className="download-btn">
-                                    Download ⬇
-                                </button>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="no-data">No Data Found</div>
+                        ))}
+                    </div>
                 )}
             </div>
+        );
+    };
+
+    return (
+        <div className="ud-container-vip">
+            <header className="ud-header-vip">
+                <div className="brand-logo-vip">
+                    <h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span>
+                </div>
+                <div className="ud-coin-badge-vip" title="Your Reward Coins">
+                    <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS</span>
+                </div>
+            </header>
+
+            <main className="user-main-content">
+                {renderContent()}
+            </main>
+
+            {/* 🔴 BOTTOM NAVIGATION BAR */}
+            <nav className="bottom-nav-bar">
+                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); }}>
+                    🏠<span>Home</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
+                    📸<span>Services</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
+                    📅<span>Bookings</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
+                    👤<span>{editName.split(' ')[0] || 'U'}</span>
+                </button>
+            </nav>
         </div>
     );
 };

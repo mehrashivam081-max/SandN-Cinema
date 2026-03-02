@@ -12,9 +12,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [filterRole, setFilterRole] = useState('ALL'); // ✅ NEW: Filter State
 
     // --- UPLOAD DATA STATES ---
-    const [formData, setFormData] = useState({ type: 'USER', name: '', mobile: '', files: [] });
+    // ✅ ADDED folderName here
+    const [formData, setFormData] = useState({ type: 'USER', name: '', mobile: '', folderName: '', files: [] });
     const [previews, setPreviews] = useState([]);
+    
+    // Auto-Suggest Toggles
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
 
     // --- ADMIN SETTINGS STATES ---
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || '', email: user?.email || '', password: user?.password || '' });
@@ -62,6 +66,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowSuggestions(false);
     };
 
+    // ✅ NAYA FOLDER CLICK HANDLER
+    const handleFolderSuggestionClick = (folderName) => {
+        setFormData({ ...formData, folderName: folderName });
+        setShowFolderSuggestions(false);
+    };
+
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
@@ -70,6 +80,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         data.append('type', formData.type);
         data.append('name', formData.name);
         data.append('mobile', formData.mobile);
+        data.append('folderName', formData.folderName); // ✅ Folder name sent to backend
         data.append('addedBy', 'ADMIN'); 
         formData.files.forEach(file => data.append('mediaFiles', file));
 
@@ -77,7 +88,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const res = await axios.post(`${API_BASE}/admin-add-user`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data.success) {
                 alert(`✅ Success: ${res.data.message}`);
-                setFormData({ type: 'USER', name: '', mobile: '', files: [] }); 
+                // ✅ Form reset with folderName
+                setFormData({ type: 'USER', name: '', mobile: '', folderName: '', files: [] }); 
                 setPreviews([]); 
                 fetchAccounts();
             } else { alert(res.data.message); }
@@ -100,8 +112,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
         try {
             const res = await axios.post(`${API_BASE}/update-studio-approval`, { mobile, isFeedApproved: !currentStatus });
             if (res.data.success) {
-                alert(`✅ Status Changed & Notification Sent to Studio!`); // ✅ Clear success message
-                fetchAccounts(); // Automatically refreshes UI
+                alert(`✅ Status Changed!`); 
+                fetchAccounts(); 
             }
         } catch (error) { alert("Failed to update approval."); }
     };
@@ -134,6 +146,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
     const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
+
+    // ✅ Logic for FOLDER Auto-Suggest
+    const selectedAccount = accounts.find(acc => acc.mobile === formData.mobile);
+    let existingFolders = [];
+    if (selectedAccount && selectedAccount.uploadedData) {
+        existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
+    }
+    const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
     // Derived Stats
     const totalUsers = accounts.filter(a => a.role === 'USER').length;
@@ -173,10 +193,22 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <div className="view-section">
                         <div className="section-header"><h2>Overview Statistics</h2></div>
                         <div className="dashboard-stats-grid">
-                            <div className="stat-card blue"><h3>{accounts.length}</h3><p>Total Accounts</p></div>
-                            <div className="stat-card green"><h3>{totalUsers}</h3><p>Total Users</p></div>
-                            <div className="stat-card purple"><h3>{totalStudios}</h3><p>Total Studios</p></div>
-                            <div className="stat-card red"><h3>{totalAdmins}</h3><p>Admins/Sub-Admins</p></div>
+                            <div className="stat-card blue">
+                                <h3>{accounts.length}</h3>
+                                <p>Total Accounts</p>
+                            </div>
+                            <div className="stat-card green">
+                                <h3>{totalUsers}</h3>
+                                <p>Total Users</p>
+                            </div>
+                            <div className="stat-card purple">
+                                <h3>{totalStudios}</h3>
+                                <p>Total Studios</p>
+                            </div>
+                            <div className="stat-card red">
+                                <h3>{totalAdmins}</h3>
+                                <p>Admins/Sub-Admins</p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -240,7 +272,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: INCOME & REVENUE (NEW) */}
+                {/* 🔴 TAB 3: INCOME & REVENUE */}
                 {activeTab === 'INCOME' && (
                     <div className="view-section">
                         <div className="section-header"><h2>💰 Financial Overview</h2></div>
@@ -285,15 +317,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: UPLOAD DATA (With Placeholder Fix) */}
+                {/* 🔴 TAB 4: UPLOAD DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                
                                 <div style={{ position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Mobile Number (Auto-suggest)</label>
-                                    {/* ✅ Added custom-admin-input class and placeholder */}
                                     <input type="number" placeholder="Enter 10-Digit Mobile No." required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
                                     {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
                                         <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
@@ -305,10 +337,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         </ul>
                                     )}
                                 </div>
+
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Name</label>
                                     <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" />
                                 </div>
+
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Role</label>
                                     <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
@@ -316,6 +350,36 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <option value="STUDIO">Studio</option>
                                     </select>
                                 </div>
+
+                                {/* ✅ FOLDER NAME INPUT WITH AUTO-SUGGEST */}
+                                <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name (Optional)</label>
+                                    <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to see existing folders for this user. Leave blank for "Stranger Photography".</p>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g., Wedding, Birthday Party" 
+                                        value={formData.folderName} 
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, folderName: e.target.value });
+                                            setShowFolderSuggestions(true);
+                                        }} 
+                                        onFocus={() => setShowFolderSuggestions(true)}
+                                        onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)}
+                                        className="custom-admin-input" 
+                                    />
+                                    {showFolderSuggestions && existingFolders.length > 0 && (
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
+                                            {filteredFolderSuggestions.length > 0 ? filteredFolderSuggestions.map((folder, idx) => (
+                                                <li key={idx} onMouseDown={() => handleFolderSuggestionClick(folder)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                                    📁 <strong>{folder}</strong>
+                                                </li>
+                                            )) : (
+                                                <li style={{ padding: '10px', color: '#888', fontStyle: 'italic', fontSize: '12px' }}>✨ Create new folder: "{formData.folderName}"</li>
+                                            )}
+                                        </ul>
+                                    )}
+                                </div>
+
                                 <div style={{ border: '2px dashed #ccc', padding: '15px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
                                     <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Upload Multiple Files (Images/Videos)</label>
                                     <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />

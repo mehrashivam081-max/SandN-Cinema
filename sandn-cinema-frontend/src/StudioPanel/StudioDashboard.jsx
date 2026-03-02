@@ -14,6 +14,10 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
 
+    // ✅ NAYE STATES FOLDER LOGIC KE LIYE
+    const [folderName, setFolderName] = useState('');
+    const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+
     // --- 2. FETCH CLIENTS LOGIC ---
     const fetchClients = async () => {
         setFetching(true);
@@ -79,6 +83,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         formData.append('name', clientName || 'Client');
         formData.append('type', 'USER');
         formData.append('addedBy', user.mobile); 
+        formData.append('folderName', folderName); // ✅ Folder Name added here
 
         for (let i = 0; i < files.length; i++) {
             formData.append('mediaFiles', files[i]);
@@ -93,6 +98,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 alert(`✅ Success: ${res.data.message}`);
                 setClientMobile('');
                 setClientName('');
+                setFolderName(''); // ✅ Clear folder name
                 setFiles([]);
                 document.getElementById('file-input-field').value = '';
                 fetchClients();
@@ -106,6 +112,16 @@ const StudioDashboard = ({ user, onLogout }) => {
             setLoading(false);
         }
     };
+
+    // ✅ FOLDER AUTO-SUGGEST LOGIC
+    // Find if the currently typed mobile number exists in clients list
+    const selectedClient = clients.find(c => c.mobile === clientMobile);
+    let existingFolders = [];
+    if (selectedClient && selectedClient.uploadedData) {
+        existingFolders = selectedClient.uploadedData.map(f => f.folderName).filter(Boolean);
+    }
+    const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(folderName.toLowerCase()));
+
 
     return (
         <div className="studio-container">
@@ -140,6 +156,38 @@ const StudioDashboard = ({ user, onLogout }) => {
                             value={clientName}
                             onChange={(e) => setClientName(e.target.value)}
                         />
+                    </div>
+
+                    {/* ✅ NEW: FOLDER NAME INPUT WITH AUTO-SUGGEST */}
+                    <div className="input-group" style={{ position: 'relative' }}>
+                        <label>📂 Folder Name (Optional)</label>
+                        <p style={{ fontSize: '11px', color: '#888', margin: '-3px 0 8px 0' }}>Leave blank for "Stranger Photography".</p>
+                        <input 
+                            type="text"
+                            placeholder="e.g., Wedding, Birthday Party" 
+                            value={folderName}
+                            onChange={(e) => {
+                                setFolderName(e.target.value);
+                                setShowFolderSuggestions(true);
+                            }}
+                            onFocus={() => setShowFolderSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)}
+                        />
+                        {/* Dropdown for folder suggestions */}
+                        {showFolderSuggestions && existingFolders.length > 0 && (
+                            <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                                {filteredFolderSuggestions.length > 0 ? filteredFolderSuggestions.map((folder, idx) => (
+                                    <li key={idx} onMouseDown={() => {
+                                        setFolderName(folder);
+                                        setShowFolderSuggestions(false);
+                                    }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                        📁 <strong>{folder}</strong>
+                                    </li>
+                                )) : (
+                                    <li style={{ padding: '10px', color: '#888', fontStyle: 'italic', fontSize: '12px' }}>✨ Create new folder: "{folderName}"</li>
+                                )}
+                            </ul>
+                        )}
                     </div>
                     
                     <div className="input-group">
@@ -202,23 +250,35 @@ const StudioDashboard = ({ user, onLogout }) => {
                         </thead>
                         <tbody>
                             {clients.length > 0 ? (
-                                clients.map((client, idx) => (
-                                    <tr key={idx}>
-                                        <td className="bold-text">{client.name}</td>
-                                        <td>{client.mobile}</td>
-                                        <td><span className="badge">{client.uploadedData?.length || 0} Files</span></td>
-                                        <td>{new Date(client.joinedDate).toLocaleDateString()}</td>
-                                        <td><span className="status-active">Active</span></td> {/* ✅ Active status is here */}
-                                        <td>
-                                            <button 
-                                                className="delete-btn-table" 
-                                                onClick={() => handleDeleteClient(client.mobile)}
-                                            >
-                                                🗑️ Delete
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
+                                clients.map((client, idx) => {
+                                    // Handle both new folder structure and old plain string array structure to count files safely
+                                    let fileCount = 0;
+                                    if (client.uploadedData) {
+                                        if (client.uploadedData.length > 0 && typeof client.uploadedData[0] === 'object') {
+                                            fileCount = client.uploadedData.reduce((acc, folder) => acc + (folder.files ? folder.files.length : 0), 0);
+                                        } else {
+                                            fileCount = client.uploadedData.length;
+                                        }
+                                    }
+
+                                    return (
+                                        <tr key={idx}>
+                                            <td className="bold-text">{client.name}</td>
+                                            <td>{client.mobile}</td>
+                                            <td><span className="badge">{fileCount} Files</span></td>
+                                            <td>{new Date(client.joinedDate).toLocaleDateString()}</td>
+                                            <td><span className="status-active">Active</span></td> {/* ✅ Active status is here */}
+                                            <td>
+                                                <button 
+                                                    className="delete-btn-table" 
+                                                    onClick={() => handleDeleteClient(client.mobile)}
+                                                >
+                                                    🗑️ Delete
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
                                     <td colSpan="6" className="empty-msg">No clients added yet. Start by uploading data.</td>
