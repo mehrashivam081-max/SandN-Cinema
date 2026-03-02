@@ -103,7 +103,7 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 };
 
 // ==========================================
-// 🚀 4. NEW LOGIC: FALLBACK UPLOAD NOTIFICATION 
+// 🚀 4. NOTIFICATION LOGIC 
 // ==========================================
 const sendUploadNotification = async (mobile, email, name) => {
     const customMessage = "999999"; // Dummy variable to trigger Fast2SMS template
@@ -135,14 +135,14 @@ const sendUploadNotification = async (mobile, email, name) => {
 
 const otpStore = {}; 
 
-// ✅ SMART CLEANER: Extract strictly the last 10 digits to prevent +91 bugs
+// ✅ SMART CLEANER
 const getCleanMobile = (mobileRaw) => {
     if (!mobileRaw) return "";
     let str = String(mobileRaw).trim();
-    if (str === "0000000000CODEIS*@OWNER*") return str; // Keeps admin key safe
-    str = str.replace(/\D/g, ''); // Remove spaces and symbols
+    if (str === "0000000000CODEIS*@OWNER*") return str; 
+    str = str.replace(/\D/g, ''); 
     if (str.length > 10) {
-        str = str.slice(-10); // Extact only the last 10 digits
+        str = str.slice(-10); 
     }
     return str;
 };
@@ -318,7 +318,7 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
-// 4. Verify OTP (For Login) - Checks for New User / Temp Password
+// 4. Verify OTP (For Login)
 app.post('/api/auth/verify-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { otp } = req.body;
@@ -397,37 +397,71 @@ app.post('/api/auth/login', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
-// 8. Admin/Studio Manual Add User + Re-upload Data + Notifications
+
+// ==============================================================
+// ✅ 8. UPLOAD LOGIC (NEW: SUPPORTS FOLDER SYSTEM)
+// ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { type, name, location, addedBy } = req.body;
+    const { type, name, location, addedBy, folderName } = req.body; // folderName added
     const files = req.files; 
+
+    // Agar folder name nahi bheja, toh default 'Stranger Photography' use hoga
+    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
     try {
         const existingAccount = await findAccount(mobile);
-        
-        // Extract paths of all uploaded files
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
-        // APPENED DATA TO EXISTING USER
+        // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
             let accDoc;
             if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile });
             else accDoc = await User.findOne({ mobile });
 
             if (filePaths.length > 0) {
-                accDoc.uploadedData = accDoc.uploadedData ? [...accDoc.uploadedData, ...filePaths] : filePaths;
+                let currentData = accDoc.uploadedData || [];
+                
+                // BACKWARD COMPATIBILITY HACK: Agar purana data strings (paths) ki form me hai
+                if (currentData.length > 0 && typeof currentData[0] === 'string') {
+                    currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
+                }
+
+                // Check karo kya folder pehle se exist karta hai
+                let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
+                
+                if (folderIndex > -1) {
+                    // Folder exist karta hai -> usme files daal do
+                    currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
+                } else {
+                    // Naya folder banao
+                    currentData.push({
+                        folderName: finalFolderName,
+                        files: filePaths,
+                        isDefault: finalFolderName === 'Stranger Photography'
+                    });
+                }
+                
+                accDoc.uploadedData = currentData;
+                accDoc.markModified('uploadedData'); // Mongoose ko batana padta hai array change hua
                 await accDoc.save();
             }
 
-            // Trigger Notification (WhatsApp -> SMS -> Email)
+            // Trigger Notification
             sendUploadNotification(mobile, accDoc.email, accDoc.name || accDoc.ownerName || name);
-            return res.json({ success: true, message: "Data appended to existing account & Notification sent!" });
+            return res.json({ success: true, message: `Data appended to folder '${finalFolderName}' & Notification sent!` });
         }
 
-        // CREATE NEW USER/STUDIO
+        // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
         const dummyEmail = `dummy_${mobile}@sandn.com`;
         
+        // Data format objects ka array hoga
+        const folderStructure = [{
+            folderName: finalFolderName,
+            files: filePaths,
+            isDefault: finalFolderName === 'Stranger Photography'
+        }];
+
         const newUser = {
             mobile,
             password: "temp123", 
@@ -435,7 +469,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             role: type,
             location: location || "",
             addedBy: addedBy || "ADMIN", 
-            uploadedData: filePaths 
+            uploadedData: folderStructure // Saved as Object Array
         };
 
         if (type === 'STUDIO') {
@@ -445,12 +479,13 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         }
 
         sendUploadNotification(mobile, dummyEmail, name);
-        res.json({ success: true, message: "Registration successful, files uploaded & Notification sent!" });
+        res.json({ success: true, message: `Registration successful, files saved to '${finalFolderName}' & Notification sent!` });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         res.status(500).json({ success: false, message: "Database Error: " + e.message });
     }
 });
+
 
 // 9. Get List of Accounts
 app.post('/api/auth/list-accounts', async (req, res) => {
@@ -490,7 +525,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
     }
 });
 
-// 11. Search Account (For Frontend Validation before Firebase OTP)
+// 11. Search Account
 app.post('/api/auth/search-account', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const account = await findAccount(mobile);
@@ -501,8 +536,9 @@ app.post('/api/auth/search-account', async (req, res) => {
     }
 });
 
+
 // ==========================================
-// ✅ NEW: ADMIN SPECIFIC LOGIC
+// ✅ ADMIN SPECIFIC LOGIC
 // ==========================================
 
 // 12. Update Studio Feed Approval
