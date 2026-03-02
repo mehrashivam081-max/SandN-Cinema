@@ -108,14 +108,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Error deleting account."); }
     };
 
+    // ✅ FIXED PENDING BUG: Optimistic UI Update added here
     const toggleStudioApproval = async (mobile, currentStatus) => {
+        // Optimistic UI Update: Turant status change karo UI mein
+        setAccounts(prevAccounts => 
+            prevAccounts.map(acc => 
+                acc.mobile === mobile ? { ...acc, isFeedApproved: !currentStatus } : acc
+            )
+        );
+
         try {
             const res = await axios.post(`${API_BASE}/update-studio-approval`, { mobile, isFeedApproved: !currentStatus });
             if (res.data.success) {
-                alert(`✅ Status Changed!`); 
+                // Background me fetch kar lo taaki data sync rahe, alert hta diya for smooth experience
                 fetchAccounts(); 
+            } else {
+                // Agar fail hua, toh purana status wapas le aao
+                fetchAccounts();
+                alert("Failed to update approval on server.");
             }
-        } catch (error) { alert("Failed to update approval."); }
+        } catch (error) { 
+            fetchAccounts(); // Revert back on error
+            alert("Error connecting to server."); 
+        }
     };
 
     // ==========================================
@@ -151,6 +166,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const selectedAccount = accounts.find(acc => acc.mobile === formData.mobile);
     let existingFolders = [];
     if (selectedAccount && selectedAccount.uploadedData) {
+        // Backend now sends an array of objects: [{ folderName: "...", files: [...] }]
         existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
     }
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));

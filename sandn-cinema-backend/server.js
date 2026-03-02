@@ -592,6 +592,27 @@ app.post('/api/auth/add-subadmin', async (req, res) => {
     }
 });
 
+// 15. Update Studio Profile
+app.post('/api/auth/update-studio-profile', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    try {
+        const studio = await Studio.findOne({ mobile });
+        if (studio) {
+            if(req.body.studioName) studio.studioName = req.body.studioName;
+            if(req.body.ownerName) studio.ownerName = req.body.ownerName;
+            if(req.body.email) studio.email = req.body.email;
+            if(req.body.password) studio.password = req.body.password;
+            if(req.body.location) studio.location = req.body.location;
+            await studio.save();
+            res.json({ success: true, message: "Studio Profile Updated Successfully!" });
+        } else {
+            res.json({ success: false, message: "Studio not found" });
+        }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server error updating profile." }); 
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
