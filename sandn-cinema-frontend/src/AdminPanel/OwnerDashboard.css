@@ -127,3 +127,59 @@
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 1100px) { .dashboard-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+/* ✅ FILTER TABS FOR MANAGE ACCOUNTS */
+.admin-filter-tabs {
+    display: flex;
+    gap: 12px;
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+}
+
+.admin-filter-tabs button {
+    padding: 10px 20px;
+    border: 1px solid #ddd;
+    background: transparent;
+    border-radius: 6px;
+    font-weight: 600;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.admin-filter-tabs button:hover {
+    background: #f0f2f5;
+    border-color: #ccc;
+}
+
+.admin-filter-tabs button.active {
+    background: #0f3460;
+    color: white;
+    border-color: #0f3460;
+    box-shadow: 0 4px 10px rgba(15, 52, 96, 0.3);
+}
+
+/* ✅ PLACEHOLDER & INPUT FIX */
+.custom-admin-input {
+    width: 100%;
+    padding: 12px 15px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #ffffff;
+    color: #333 !important; /* Forces text to be visible */
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.custom-admin-input::placeholder {
+    color: #999; /* Light grey placeholder */
+    opacity: 1; /* Ensures it isn't transparent */
+}
+
+.custom-admin-input:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+}
