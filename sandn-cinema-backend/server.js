@@ -147,9 +147,29 @@ const getCleanMobile = (mobileRaw) => {
     return str;
 };
 
-const findAccount = async (mobile) => {
+// ✅ ADDED STRICT ROLE FILTER LOGIC HERE
+const findAccount = async (mobile, roleFilter = null) => {
     const cleanMobile = getCleanMobile(mobile); 
 
+    if (roleFilter === 'USER') {
+        let acc = await User.findOne({ mobile: cleanMobile });
+        if (acc) return { type: 'USER', data: acc };
+        return null;
+    } 
+    
+    if (roleFilter === 'STUDIO') {
+        let acc = await Studio.findOne({ mobile: cleanMobile });
+        if (acc) return { type: 'STUDIO', data: acc };
+        return null;
+    }
+
+    if (roleFilter === 'ADMIN' || roleFilter === 'CODE') {
+        let acc = await Admin.findOne({ mobile: cleanMobile });
+        if (acc) return { type: 'ADMIN', data: acc };
+        return null;
+    }
+
+    // Default fallback if no filter passed
     let acc = await User.findOne({ mobile: cleanMobile });
     if (acc) return { type: 'USER', data: acc };
     
@@ -167,7 +187,7 @@ const findAccount = async (mobile) => {
 // 1. Check & Send OTP (Login)
 app.post('/api/auth/check-send-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { sendVia } = req.body; 
+    const { sendVia, roleFilter } = req.body; 
     
     try {
         let targetMobile = mobile;
@@ -183,8 +203,9 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 targetEmail = adminAcc.email || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
             }
         } else {
-            const account = await findAccount(mobile);
-            if (!account) return res.json({ success: false, message: "Not Registered" });
+            // ✅ PASSING ROLE FILTER
+            const account = await findAccount(mobile, roleFilter);
+            if (!account) return res.json({ success: false, message: "Not Registered in this section." });
             targetMobile = account.data.mobile;
             targetEmail = account.data.email;
         }
@@ -241,7 +262,7 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { email, sendVia } = req.body; 
     try {
-        const exists = await findAccount(mobile);
+        const exists = await findAccount(mobile); // For signup we check globally to avoid duplicate mobiles anywhere
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
@@ -321,20 +342,23 @@ app.post('/api/auth/signup', async (req, res) => {
 // 4. Verify OTP (For Login)
 app.post('/api/auth/verify-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { otp } = req.body;
+    const { otp, roleFilter } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
         
-        const account = await findAccount(mobile);
+        // ✅ PASSING ROLE FILTER
+        const account = await findAccount(mobile, roleFilter);
         let isNewUser = false;
         
         if (account) {
             if (!account.data.password || account.data.password.trim() === "" || account.data.password === "temp123") {
                 isNewUser = true;
             }
+            res.json({ success: true, isNewUser });
+        } else {
+             res.json({ success: false, message: "Account not found for this role." });
         }
         
-        res.json({ success: true, isNewUser });
     } else {
         res.json({ success: false, message: "Invalid OTP" });
     }
@@ -343,10 +367,18 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 // 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { password, email } = req.body;
+    const { password, email, roleFilter } = req.body;
     try {
-        let account = await User.findOne({ mobile });
-        if (!account) account = await Studio.findOne({ mobile });
+        let account = null;
+        
+        // ✅ Strict checking for setup
+        if (roleFilter === 'USER') {
+            account = await User.findOne({ mobile });
+        } else if (roleFilter === 'STUDIO') {
+            account = await Studio.findOne({ mobile });
+        } else {
+            account = await User.findOne({ mobile }) || await Studio.findOne({ mobile });
+        }
 
         if (account) {
             account.password = password;
@@ -358,7 +390,7 @@ app.post('/api/auth/create-password', async (req, res) => {
                 user: { name: account.name || account.ownerName, mobile: account.mobile, role: account.role } 
             });
         } else {
-            res.json({ success: false, message: "Account not found" });
+            res.json({ success: false, message: "Account not found in this section" });
         }
     } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
 });
@@ -366,10 +398,10 @@ app.post('/api/auth/create-password', async (req, res) => {
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { otp } = req.body;
+    const { otp, roleFilter } = req.body;
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
-        const account = await findAccount(mobile);
+        const account = await findAccount(mobile, roleFilter); // ✅ Filter added
         if(account) {
             res.json({ success: true, user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type } });
         } else {
@@ -383,23 +415,23 @@ app.post('/api/auth/login-otp', async (req, res) => {
 // 7. Password Login
 app.post('/api/auth/login', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { password } = req.body;
+    const { password, roleFilter } = req.body;
     try {
-        const account = await findAccount(mobile);
+        const account = await findAccount(mobile, roleFilter); // ✅ Filter added
         if (account && account.data.password === password) {
             res.json({
                 success: true,
                 user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type, email: account.data.email, isFeedApproved: account.data.isFeedApproved }
             });
         } else {
-            res.json({ success: false, message: "Invalid Password" });
+            res.json({ success: false, message: "Invalid Password or Role" });
         }
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (NEW: SUPPORTS FOLDER SYSTEM)
+// ✅ 8. UPLOAD LOGIC (BUG FIXED: MONGOOSE STRICT SCHEMA BYPASS)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
@@ -410,52 +442,47 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
     try {
-        const existingAccount = await findAccount(mobile);
+        const existingAccount = await findAccount(mobile); // General check for upload
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
         // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
-            let accDoc;
-            if (existingAccount.type === 'STUDIO') accDoc = await Studio.findOne({ mobile });
-            else accDoc = await User.findOne({ mobile });
+            let currentData = existingAccount.data.uploadedData || [];
+            
+            // Backup Fix: Agar purana data sirf strings ki array me tha, use objects me convert karo
+            if (currentData.length > 0 && typeof currentData[0] === 'string') {
+                currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
+            }
 
-            if (filePaths.length > 0) {
-                let currentData = accDoc.uploadedData || [];
-                
-                // BACKWARD COMPATIBILITY HACK: Agar purana data strings (paths) ki form me hai
-                if (currentData.length > 0 && typeof currentData[0] === 'string') {
-                    currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
-                }
+            let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
+            
+            if (folderIndex > -1) {
+                // Folder exist karta hai -> usme files daal do
+                currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
+            } else {
+                // Naya folder banao
+                currentData.push({
+                    folderName: finalFolderName,
+                    files: filePaths,
+                    isDefault: finalFolderName === 'Stranger Photography'
+                });
+            }
 
-                // Check karo kya folder pehle se exist karta hai
-                let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
-                
-                if (folderIndex > -1) {
-                    // Folder exist karta hai -> usme files daal do
-                    currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
-                } else {
-                    // Naya folder banao
-                    currentData.push({
-                        folderName: finalFolderName,
-                        files: filePaths,
-                        isDefault: finalFolderName === 'Stranger Photography'
-                    });
-                }
-                
-                accDoc.uploadedData = currentData;
-                accDoc.markModified('uploadedData'); // Mongoose ko batana padta hai array change hua
-                await accDoc.save();
+            // ✅ MOST IMPORTANT FIX: Use updateOne to bypass mongoose schema crash for old accounts
+            if (existingAccount.type === 'STUDIO') {
+                await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+            } else {
+                await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             }
 
             // Trigger Notification
-            sendUploadNotification(mobile, accDoc.email, accDoc.name || accDoc.ownerName || name);
+            sendUploadNotification(mobile, existingAccount.data.email, existingAccount.data.name || existingAccount.data.ownerName || name);
             return res.json({ success: true, message: `Data appended to folder '${finalFolderName}' & Notification sent!` });
         }
 
         // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
         const dummyEmail = `dummy_${mobile}@sandn.com`;
         
-        // Data format objects ka array hoga
         const folderStructure = [{
             folderName: finalFolderName,
             files: filePaths,
@@ -469,7 +496,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             role: type,
             location: location || "",
             addedBy: addedBy || "ADMIN", 
-            uploadedData: folderStructure // Saved as Object Array
+            uploadedData: folderStructure 
         };
 
         if (type === 'STUDIO') {
@@ -528,7 +555,8 @@ app.post('/api/auth/delete-account', async (req, res) => {
 // 11. Search Account
 app.post('/api/auth/search-account', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
-    const account = await findAccount(mobile);
+    const { roleFilter } = req.body; // ✅ Added Filter
+    const account = await findAccount(mobile, roleFilter);
     if (account) {
         res.json({ success: true, data: account.data });
     } else {
