@@ -10,6 +10,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState([]);
     const [filterRole, setFilterRole] = useState('ALL'); 
+    
+    // --- LOGOUT POPUP STATE ---
+    const [showLogoutPopup, setShowLogoutPopup] = useState(false);
 
     // --- ADMIN PROFILE DP STATE ---
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
@@ -25,52 +28,39 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || 'Owner', email: user?.email || '', password: user?.password || '' });
     const [subAdmin, setSubAdmin] = useState({ name: '', mobile: '', email: '', password: '' });
 
-    // --- SOCIAL LINKS STATE ---
-    const [socialLinks, setSocialLinks] = useState([
-        { platform: 'Instagram', url: '' },
-        { platform: 'YouTube', url: '' },
-        { platform: 'Facebook', url: '' },
-        { platform: 'WhatsApp', url: '' },
-        { platform: 'Twitter', url: '' }
-    ]);
+    // --- SOCIAL LINKS & POLICY STATE ---
+    const [socialLinks, setSocialLinks] = useState([]);
     const [newLink, setNewLink] = useState({ platform: 'Instagram', url: '' });
-
-    // --- CRITERIA TAB STATES ---
-    const [collabRequests, setCollabRequests] = useState([
-        { id: 1, name: 'Rahul Sharma', brand: 'Nike India', email: 'rahul@nike.com', status: 'Pending' },
-        { id: 2, name: 'Anjali Verma', brand: 'Loreal', email: 'anjali@loreal.com', status: 'Pending' }
-    ]);
-
-    // --- SECURITY TAB STATES ---
     const [policyData, setPolicyData] = useState({
-        terms: "User content will be safely managed...",
-        privacy: "We do not sell data to 3rd parties...",
-        bestForYou: "We provide cinematic quality at best prices..."
+        terms: "",
+        privacy: "",
+        bestForYou: ""
     });
 
-    // --- DIRECT BOOKINGS STATE ---
-    const [bookings, setBookings] = useState([
-        { id: 101, name: "Priya Singh", date: "2026-04-15", type: "Wedding", status: "Pending" },
-        { id: 102, name: "Amit Patel", date: "2026-03-20", type: "Pre-Wedding", status: "Pending" }
-    ]);
+    // --- DATABASE LIST STATES ---
+    const [collabRequests, setCollabRequests] = useState([]);
+    const [bookings, setBookings] = useState([]);
 
-    // --- REVENUE DATA (Real-time logic structure) ---
-    // Calculated based on actual logic. In a real app, this comes from backend.
-    const calculatedTotal = accounts.length * 1500; // Dummy logic for real-time vibe
-    const [incomeData, setIncomeData] = useState({
-        total: calculatedTotal,
-        transactions: []
-    });
+    // --- REVENUE DATA ---
+    const calculatedTotal = accounts.length * 1500; 
+    const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
+    // 🟢 INITIAL FETCH
     useEffect(() => {
         fetchAccounts();
+        fetchPlatformSettings(); // Fetch Social Links & Policies
+        fetchBookings();         // Fetch Bookings
+        fetchCollabs();          // Fetch Collabs
     }, []);
 
     useEffect(() => {
-        // Sync dynamic revenue based on accounts
         setIncomeData(prev => ({ ...prev, total: accounts.length * 1500 }));
     }, [accounts]);
 
+
+    // ==========================================
+    // 🚀 API FETCH FUNCTIONS
+    // ==========================================
     const fetchAccounts = async () => {
         try {
             const res = await axios.post(`${API_BASE}/list-accounts`, { requesterRole: 'ADMIN' });
@@ -78,8 +68,33 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { console.error("Failed to fetch accounts", error); }
     };
 
+    const fetchPlatformSettings = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/get-platform-settings`);
+            if (res.data.success && res.data.data) {
+                if (res.data.data.socialLinks) setSocialLinks(res.data.data.socialLinks);
+                if (res.data.data.policies) setPolicyData(res.data.data.policies);
+            }
+        } catch(e) { console.log("No settings found yet"); }
+    };
+
+    const fetchBookings = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/get-bookings`);
+            if (res.data.success) setBookings(res.data.data);
+        } catch(e) { console.log("Failed to fetch bookings"); }
+    };
+
+    const fetchCollabs = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/get-collabs`);
+            if (res.data.success) setCollabRequests(res.data.data);
+        } catch(e) { console.log("Failed to fetch collabs"); }
+    };
+
+
     // ==========================================
-    // 🚀 ADMIN DP UPLOAD LOGIC
+    // 🚀 ADMIN DP LOGIC
     // ==========================================
     const handleDpChange = (e) => {
         const file = e.target.files[0];
@@ -87,15 +102,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const reader = new FileReader();
             reader.onloadend = () => {
                 setAdminDp(reader.result);
-                localStorage.setItem('adminDp', reader.result); // Save to local storage
+                localStorage.setItem('adminDp', reader.result);
             };
             reader.readAsDataURL(file);
         }
     };
-    const removeDp = () => {
-        setAdminDp('');
-        localStorage.removeItem('adminDp');
-    };
+    const removeDp = () => { setAdminDp(''); localStorage.removeItem('adminDp'); };
 
     // ==========================================
     // 🚀 UPLOAD DATA LOGIC
@@ -147,6 +159,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         finally { setLoading(false); }
     };
 
+
     // ==========================================
     // 🚀 MANAGE ACCOUNTS LOGIC
     // ==========================================
@@ -167,15 +180,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     // ==========================================
-    // 🚀 ADMIN SETTINGS & SOCIAL LINKS LOGIC
+    // 🚀 ADMIN SETTINGS & SUB ADMIN
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post(`${API_BASE}/update-admin`, { mobile: user.mobile, ...adminProfile });
+            const identifier = user?.mobile || "0000000000CODEIS*@OWNER*";
+            const res = await axios.post(`${API_BASE}/update-admin`, { mobile: identifier, ...adminProfile });
             if (res.data.success) alert("✅ Admin Profile Updated Successfully!");
-            else alert("Update failed.");
-        } catch (error) { alert("Server error."); }
+            else alert("Update failed: " + res.data.message);
+        } catch (error) { alert("Server error updating profile."); }
     };
 
     const handleCreateSubAdmin = async (e) => {
@@ -190,6 +204,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
+    // ==========================================
+    // 🚀 SOCIAL LINKS & POLICIES SAVING LOGIC
+    // ==========================================
     const handleAddLink = () => {
         if (!newLink.url) return alert("Please enter URL");
         setSocialLinks(prev => {
@@ -198,27 +215,48 @@ const OwnerDashboard = ({ user, onLogout }) => {
             return [...prev, newLink];
         });
         setNewLink({ platform: 'Instagram', url: '' });
-        alert("Link added successfully! (Will be visible on Profile Connect Tab)");
     };
 
-    // ==========================================
-    // 🚀 CRITERIA, SECURITY & BOOKING HANDLERS
-    // ==========================================
-    const handleCollab = (id, action) => {
-        setCollabRequests(prev => prev.map(req => req.id === id ? { ...req, status: action } : req));
-        alert(`Request ${action}. Email notification simulated!`);
+    const saveLinksToServer = async () => {
+        try {
+            await axios.post(`${API_BASE}/update-social-links`, { links: socialLinks });
+            alert("✅ Links Saved to Database! Now visible on User Profile.");
+        } catch (e) { alert("Error connecting to backend."); }
     };
 
-    const handlePolicySave = (e) => {
+    const handlePolicySave = async (e) => {
         e.preventDefault();
-        alert("✅ Security & Privacy Policies Updated Successfully!");
+        try {
+            await axios.post(`${API_BASE}/update-policies`, { policies: policyData });
+            alert("✅ Security & Privacy Policies Updated Successfully in Database!");
+        } catch (e) { alert("Failed to save policies."); }
     };
 
-    const handleBookingStatus = (id, newStatus) => {
-        setBookings(prev => prev.map(b => b.id === id ? { ...b, status: newStatus } : b));
+    // ==========================================
+    // 🚀 CRITERIA & BOOKING ACTION LOGIC
+    // ==========================================
+    const handleCollabAction = async (id, action) => {
+        try {
+            const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action });
+            if(res.data.success) {
+                alert(`✅ Request ${action}. Email notification triggered!`);
+                fetchCollabs(); // Refresh list
+            }
+        } catch(e) { alert("Failed to update collab status"); }
     };
 
-    // Derived Logic
+    const handleBookingStatus = async (id, newStatus) => {
+        try {
+            const res = await axios.post(`${API_BASE}/update-booking-status`, { bookingId: id, status: newStatus });
+            if(res.data.success) {
+                alert(`✅ Booking marked as ${newStatus}!`);
+                fetchBookings(); // Refresh list
+            }
+        } catch (e) { alert("Failed to update booking"); }
+    };
+
+
+    // --- FILTERING & DERIVED DATA ---
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
     const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
@@ -236,23 +274,39 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="owner-dashboard-container">
+            
+            {/* ✅ Custom Logout Confirmation Popup */}
+            {showLogoutPopup && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    <div style={{background:'#fff', padding:'30px', borderRadius:'10px', textAlign:'center', color:'#333', boxShadow:'0 10px 25px rgba(0,0,0,0.5)'}}>
+                        <h3 style={{marginBottom:'20px'}}>Are you sure you want to logout?</h3>
+                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
+                            <button onClick={() => onLogout()} style={{background:'#e74c3c', color:'#fff', padding:'10px 25px', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'16px'}}>Yes</button>
+                            <button onClick={() => setShowLogoutPopup(false)} style={{background:'#bdc3c7', color:'#333', padding:'10px 25px', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'16px'}}>No</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 👈 SIDEBAR */}
             <aside className="admin-sidebar">
-                <div className="sidebar-header">
-                    <h1 className="admin-title">SandN</h1>
-                    <div className="subtitle-container"><p className="admin-subtitle">Super Admin</p></div>
+                <div className="sidebar-header" style={{ paddingBottom: '10px' }}>
+                    <h1 className="admin-title">SandN Cinema</h1>
                 </div>
                 
-                {/* 📸 DP Section */}
-                <div style={{ background: '#0f3460', padding: '15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', position: 'relative' }}>
+                {/* 📸 DP Section (UPDATED: Super Admin Bada, Name chhota) */}
+                <div style={{ background: '#0f3460', padding: '20px 15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', position: 'relative' }}>
                     <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#ccc', margin: '0 auto 10px', overflow: 'hidden', border: '2px solid #4dabf7', cursor: 'pointer' }} onClick={() => dpInputRef.current.click()}>
                         {adminDp ? <img src={adminDp} alt="Admin DP" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '30px', lineHeight: '70px' }}>👤</span>}
                     </div>
                     <input type="file" accept="image/*" ref={dpInputRef} style={{ display: 'none' }} onChange={handleDpChange} />
                     {adminDp && <span style={{ fontSize: '10px', color: '#ff4d4d', cursor: 'pointer', display: 'block', marginBottom: '10px' }} onClick={removeDp}>Remove DP</span>}
                     
-                    <h4 style={{ margin: 0, color: '#4dabf7' }}>Super Admin</h4>
-                    <p style={{ margin: '5px 0 0', fontSize: '14px', color: '#fff', fontWeight: 'bold' }}>{adminProfile.name}</p>
+                    {/* ✅ Super Admin Text (Big & Prominent) */}
+                    <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', color: '#fff', letterSpacing: '1px' }}>Super Admin</h3>
+                    
+                    {/* ✅ Name/Owner (Smaller below) */}
+                    <p style={{ margin: 0, fontSize: '13px', color: '#4dabf7', fontWeight: 'bold' }}>{adminProfile.name}</p>
                 </div>
 
                 <ul className="sidebar-menu">
@@ -264,15 +318,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
                     <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => setActiveTab('SECURITY')}>🔒 Security Policy</li>
                     <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income</li>
+                    <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => setActiveTab('SUB_ADMIN')}>🧑‍💼 Sub-Admins</li> 
                     <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => setActiveTab('SETTINGS')}>⚙️ Settings</li>
                 </ul>
-                <button onClick={onLogout} className="admin-logout-btn">Log Out</button>
+                <button onClick={() => setShowLogoutPopup(true)} className="admin-logout-btn">Log Out</button> 
             </aside>
 
             {/* 👉 MAIN CONTENT */}
             <main className="admin-main-content">
                 
-                {/* 🔴 TAB 1: DASHBOARD (Clickable stats) */}
+                {/* 🔴 TAB 1: DASHBOARD */}
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>Overview Statistics</h2></div>
@@ -335,28 +390,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <div className="data-table-container">
                             <table className="admin-table">
                                 <thead>
-                                    <tr><th>ID</th><th>Client Name</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
                                     {bookings.map(b => (
-                                        <tr key={b.id}>
-                                            <td>#{b.id}</td>
+                                        <tr key={b._id}>
                                             <td><strong>{b.name}</strong></td>
+                                            <td>{b.mobile || 'N/A'}</td>
                                             <td>{b.date}</td>
                                             <td>{b.type}</td>
-                                            <td>
-                                                <span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span>
-                                            </td>
+                                            <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
                                             <td>
                                                 {b.status === 'Pending' && (
                                                     <>
-                                                        <button onClick={() => handleBookingStatus(b.id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => handleBookingStatus(b.id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
                                                     </>
                                                 )}
                                             </td>
                                         </tr>
                                     ))}
+                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -369,29 +423,34 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                {/* Rest of Upload Form (Same as before) */}
+                                
                                 <div style={{ position: 'relative' }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number</label>
-                                    <input type="number" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number (Auto-suggest)</label>
+                                    <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
                                     {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
                                         <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none' }}>
                                             {filteredSuggestions.map((acc, idx) => (
-                                                <li key={idx} onClick={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
+                                                <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
                                             ))}
                                         </ul>
                                     )}
                                 </div>
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Name</label><input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" /></div>
+                                
+                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Name</label>
+                                <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" /></div>
+                                
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
                                     <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
                                         <option value="USER">User</option><option value="STUDIO">Studio</option>
                                     </select>
                                 </div>
+                                
                                 <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold' }}>📂 Folder Name</label>
-                                    <input type="text" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} className="custom-admin-input" />
+                                    <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} className="custom-admin-input" />
                                 </div>
+                                
                                 <div style={{ border: '2px dashed #ccc', padding: '15px', textAlign: 'center' }}>
                                     <label style={{ fontWeight: 'bold' }}>📁 Upload Files</label>
                                     <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
@@ -402,7 +461,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 5: CRITERIA & TRAFFIC (NEW) */}
+                {/* 🔴 TAB 5: CRITERIA & TRAFFIC */}
                 {activeTab === 'CRITERIA' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
@@ -412,9 +471,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <h3 style={{color:'#2980b9'}}>📊 Traffic Status</h3>
                                 <p>Real-time analytics of platform visitors.</p>
                                 <div style={{ marginTop: '15px' }}>
-                                    <p><strong>Today's Visitors:</strong> 1,240</p>
-                                    <p><strong>Active Sessions:</strong> 150</p>
-                                    <p><strong>Registrations:</strong> 45</p>
+                                    <p><strong>Total Accounts:</strong> {accounts.length}</p>
+                                    <p><strong>Today's Visitors:</strong> 1,240 (Simulated)</p>
                                 </div>
                             </div>
                             <div className="setting-card" style={{background: '#fcf3cf'}}>
@@ -430,19 +488,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <thead><tr><th>Name</th><th>Brand</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     {collabRequests.map(req => (
-                                        <tr key={req.id}>
+                                        <tr key={req._id}>
                                             <td>{req.name}</td><td>{req.brand}</td><td>{req.email}</td>
                                             <td><span className={`status-badge ${req.status === 'Accepted' ? 'active' : req.status === 'Declined' ? 'inactive' : 'normal'}`}>{req.status}</span></td>
                                             <td>
                                                 {req.status === 'Pending' && (
                                                     <>
-                                                        <button onClick={() => handleCollab(req.id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px'}}>Accept</button>
-                                                        <button onClick={() => handleCollab(req.id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px'}}>Decline</button>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
                                                     </>
                                                 )}
                                             </td>
                                         </tr>
                                     ))}
+                                    {collabRequests.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No new collab requests.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -454,17 +513,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <div className="view-section">
                         <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '30px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Platform</label>
                                     <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input">
                                         <option value="Instagram">Instagram</option><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="WhatsApp">WhatsApp</option><option value="Twitter">Twitter</option>
                                     </select>
                                 </div>
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" /></div>
-                                <button onClick={handleAddLink} className="global-update-btn">➕ Save Link</button>
+                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" /></div>
+                                <button onClick={handleAddLink} className="global-update-btn">➕ Add to List</button>
                             </div>
-                            <h4>Current Links</h4>
+                            
+                            <button onClick={saveLinksToServer} className="global-update-btn" style={{background: '#27ae60', marginBottom: '30px', width: '100%'}}>💾 SAVE ALL TO DATABASE</button>
+
+                            <h4>Current Links Saved</h4>
                             <ul style={{ listStyle: 'none', padding: 0 }}>
                                 {socialLinks.filter(l => l.url !== '').map((link, i) => (
                                     <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'5px', display:'flex', justifyContent:'space-between' }}><strong>{link.platform}</strong><a href={link.url} target="_blank" rel="noreferrer">{link.url.substring(0, 20)}...</a></li>
@@ -474,7 +536,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 7: SECURITY POLICY (NEW) */}
+                {/* 🔴 TAB 7: SECURITY POLICY */}
                 {activeTab === 'SECURITY' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🔒 Security & App Policies</h2></div>
@@ -510,20 +572,34 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 9: SETTINGS */}
+                {/* 🔴 TAB 9: SUB ADMINS */}
+                {activeTab === 'SUB_ADMIN' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
+                            <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>Sub-admins have limited access to manage user data.</p>
+                            <form onSubmit={handleCreateSubAdmin} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn" style={{ background: '#27ae60', padding: '15px', marginTop:'10px' }}>+ Add Sub-Admin</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 TAB 10: SETTINGS */}
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚙️ Admin Settings</h2></div>
-                        <div className="studio-settings-grid">
-                            <div className="setting-card">
-                                <h3>Update Profile</h3>
-                                <form onSubmit={handleUpdateAdminProfile}>
-                                    <input type="text" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px'}}/>
-                                    <input type="email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px'}}/>
-                                    <input type="password" placeholder="New Password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px'}}/>
-                                    <button type="submit" className="btn-save" style={{width:'100%'}}>Save</button>
-                                </form>
-                            </div>
+                        <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
+                            <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
+                            </form>
                         </div>
                     </div>
                 )}
