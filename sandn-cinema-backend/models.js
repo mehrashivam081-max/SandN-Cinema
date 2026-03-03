@@ -102,10 +102,53 @@ const offerSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+
+// ==========================================
+// 🚀 NAYE SCHEMAS (Database Tables)
+// ==========================================
+
+// --- 6. BOOKING SCHEMA ---
+const bookingSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    mobile: { type: String }, // Optional contact
+    date: { type: String, required: true },
+    type: { type: String, required: true }, // e.g., Wedding, Pre-Wedding, Corporate
+    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
+    createdAt: { type: Date, default: Date.now }
+});
+
+// --- 7. COLLAB REQUEST SCHEMA ---
+const collabRequestSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    brand: { type: String, required: true },
+    email: { type: String, required: true },
+    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
+    createdAt: { type: Date, default: Date.now }
+});
+
+// --- 8. PLATFORM SETTINGS SCHEMA (Policies & Social Links) ---
+const platformSettingSchema = new mongoose.Schema({
+    settingId: { type: String, default: 'GLOBAL', unique: true }, // Ek hi document rahega humesha
+    socialLinks: [{
+        platform: String,
+        url: String
+    }],
+    policies: {
+        terms: { type: String, default: "User content will be safely managed..." },
+        privacy: { type: String, default: "We do not sell data to 3rd parties..." },
+        bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
+    },
+    lastUpdated: { type: Date, default: Date.now }
+});
+
 module.exports = {
     User: mongoose.model('User', userSchema),
     Studio: mongoose.model('Studio', studioSchema),
     Admin: mongoose.model('Admin', adminSchema),
     Content: mongoose.model('Content', contentSchema),
-    Offer: mongoose.model('Offer', offerSchema)
+    Offer: mongoose.model('Offer', offerSchema),
+    // ✅ Exporting new models
+    Booking: mongoose.model('Booking', bookingSchema),
+    CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
+    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema)
 };

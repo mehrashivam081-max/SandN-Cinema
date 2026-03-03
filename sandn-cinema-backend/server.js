@@ -6,7 +6,8 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const { User, Studio, Admin } = require('./models');
+// ✅ Added New Models Here
+const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require('./models');
 
 // ✅ Setup Multer for MULTIPLE File Uploads
 const multer = require('multer');
@@ -295,10 +296,10 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 if (waResponse.data && waResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent via WhatsApp." });
                 } else {
-                    return res.json({ success: false, message: "WhatsApp service is currently unavailable." });
+                    return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (wsErr) { 
-                return res.json({ success: false, message: "WhatsApp service is currently unavailable." });
+                return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
         else {
@@ -307,10 +308,10 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 if (smsResponse.data && smsResponse.data.return === true) {
                     return res.json({ success: true, message: "OTP Sent via Text SMS." });
                 } else {
-                    return res.json({ success: false, message: "SMS service is currently unavailable." });
+                    return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
             } catch (smsErr) { 
-                return res.json({ success: false, message: "SMS service is currently unavailable." });
+                return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
@@ -453,21 +454,25 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC 
+// ✅ 8. UPLOAD LOGIC (BUG FIXED: MONGOOSE STRICT SCHEMA BYPASS)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { type, name, location, addedBy, folderName } = req.body; 
+    const { type, name, location, addedBy, folderName } = req.body; // folderName added
     const files = req.files; 
 
+    // Agar folder name nahi bheja, toh default 'Stranger Photography' use hoga
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
     try {
-        const existingAccount = await findAccount(mobile); 
+        const existingAccount = await findAccount(mobile); // General check for upload
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
+        // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
             let currentData = existingAccount.data.uploadedData || [];
+            
+            // Backup Fix: Agar purana data sirf strings ki array me tha, use objects me convert karo
             if (currentData.length > 0 && typeof currentData[0] === 'string') {
                 currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
             }
@@ -475,8 +480,10 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
+                // Folder exist karta hai -> usme files daal do
                 currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
             } else {
+                // Naya folder banao
                 currentData.push({
                     folderName: finalFolderName,
                     files: filePaths,
@@ -484,16 +491,19 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
                 });
             }
 
+            // ✅ MOST IMPORTANT FIX: Use updateOne to bypass mongoose schema crash for old accounts
             if (existingAccount.type === 'STUDIO') {
                 await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             } else {
                 await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             }
 
+            // Trigger Notification
             sendUploadNotification(mobile, existingAccount.data.email, existingAccount.data.name || existingAccount.data.ownerName || name);
             return res.json({ success: true, message: `Data appended to folder '${finalFolderName}' & Notification sent!` });
         }
 
+        // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
         const dummyEmail = `dummy_${mobile}@sandn.com`;
         
         const folderStructure = [{
@@ -502,7 +512,15 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             isDefault: finalFolderName === 'Stranger Photography'
         }];
 
-        const newUser = { mobile, password: "temp123", email: dummyEmail, role: type, location: location || "", addedBy: addedBy || "ADMIN", uploadedData: folderStructure };
+        const newUser = {
+            mobile,
+            password: "temp123", 
+            email: dummyEmail, 
+            role: type,
+            location: location || "",
+            addedBy: addedBy || "ADMIN", 
+            uploadedData: folderStructure 
+        };
 
         if (type === 'STUDIO') {
             await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false, adhaarNumber: "Pending" });
@@ -534,7 +552,9 @@ app.post('/api/auth/list-accounts', async (req, res) => {
         } else {
             res.json({ success: false, message: "Unauthorized access" });
         }
-    } catch (error) { res.status(500).json({ success: false, message: "Failed to fetch list" }); }
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to fetch list" });
+    }
 });
 
 // 10. Delete an Account
@@ -542,20 +562,29 @@ app.post('/api/auth/delete-account', async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
     const { targetRole } = req.body;
     try {
-        if (targetRole === 'STUDIO') await Studio.findOneAndDelete({ mobile: targetMobile });
-        else if (targetRole === 'ADMIN') await Admin.findOneAndDelete({ mobile: targetMobile });
-        else await User.findOneAndDelete({ mobile: targetMobile });
+        if (targetRole === 'STUDIO') {
+            await Studio.findOneAndDelete({ mobile: targetMobile });
+        } else if (targetRole === 'ADMIN') {
+            await Admin.findOneAndDelete({ mobile: targetMobile });
+        } else {
+            await User.findOneAndDelete({ mobile: targetMobile });
+        }
         res.json({ success: true, message: "Account deleted successfully!" });
-    } catch (error) { res.status(500).json({ success: false, message: "Failed to delete account" }); }
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to delete account" });
+    }
 });
 
 // 11. Search Account
 app.post('/api/auth/search-account', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
-    const { roleFilter } = req.body; 
+    const { roleFilter } = req.body; // ✅ Added Filter
     const account = await findAccount(mobile, roleFilter);
-    if (account) res.json({ success: true, data: account.data });
-    else res.json({ success: false, message: "Account not found" });
+    if (account) {
+        res.json({ success: true, data: account.data });
+    } else {
+        res.json({ success: false, message: "Account not found" });
+    }
 });
 
 
@@ -572,8 +601,12 @@ app.post('/api/auth/update-studio-approval', async (req, res) => {
             studio.isFeedApproved = req.body.isFeedApproved;
             await studio.save();
             res.json({ success: true, message: req.body.isFeedApproved ? "Studio Approved for Feed!" : "Studio Feed Access Revoked!" });
-        } else res.json({ success: false, message: "Studio not found" });
-    } catch (e) { res.status(500).json({ success: false, message: "Server error updating approval." }); }
+        } else {
+            res.json({ success: false, message: "Studio not found" });
+        }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server error updating approval." }); 
+    }
 });
 
 // ✅ 13. Update Admin Profile (FIXED: Handling Code correctly)
@@ -614,7 +647,9 @@ app.post('/api/auth/add-subadmin', async (req, res) => {
         
         await Admin.create({ name, mobile: cleanMobile, email, password, role: 'ADMIN' });
         res.json({ success: true, message: "Sub-Admin created successfully." });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: e.message }); 
+    }
 });
 
 // 15. Update Studio Profile
@@ -630,22 +665,29 @@ app.post('/api/auth/update-studio-profile', async (req, res) => {
             if(req.body.location) studio.location = req.body.location;
             await studio.save();
             res.json({ success: true, message: "Studio Profile Updated Successfully!" });
-        } else res.json({ success: false, message: "Studio not found" });
-    } catch (e) { res.status(500).json({ success: false, message: "Server error updating profile." }); }
+        } else {
+            res.json({ success: false, message: "Studio not found" });
+        }
+    } catch (e) { 
+        res.status(500).json({ success: false, message: "Server error updating profile." }); 
+    }
 });
 
+
 // ==========================================
-// ✅ 16. SOCIAL LINKS LOGIC (NEW)
+// ✅ 16. SOCIAL LINKS LOGIC 
 // ==========================================
 
 // Save Links
 app.post('/api/auth/update-social-links', async (req, res) => {
     try {
         const { links } = req.body;
-        let admin = await Admin.findOne(); // Attach to main admin
-        if (!admin) admin = await Admin.create({ mobile: "9999999999", name: "Super Admin", role: "ADMIN" });
-        
-        await Admin.updateOne({ _id: admin._id }, { $set: { socialLinks: links } }, { strict: false });
+        // Upsert setting document
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { $set: { socialLinks: links, lastUpdated: Date.now() } }, 
+            { upsert: true }
+        );
         res.json({ success: true, message: "Links updated successfully!" });
     } catch (e) {
         console.error(e);
@@ -653,19 +695,125 @@ app.post('/api/auth/update-social-links', async (req, res) => {
     }
 });
 
-// Fetch Links
-app.get('/api/auth/get-social-links', async (req, res) => {
+// Fetch Links & Policies
+app.get('/api/auth/get-platform-settings', async (req, res) => {
     try {
-        const admin = await Admin.findOne().lean(); // Lean lets us read strict:false fields
-        if (admin && admin.socialLinks) {
-            res.json({ success: true, data: admin.socialLinks });
+        const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+        if (settings) {
+            res.json({ success: true, data: settings });
         } else {
-            res.json({ success: true, data: [] });
+            res.json({ success: true, data: null }); // Default fallback on frontend
         }
     } catch (e) {
-        res.status(500).json({ success: false, message: "Failed to fetch links." });
+        res.status(500).json({ success: false, message: "Failed to fetch settings." });
     }
 });
+
+
+// ==========================================
+// ✅ 17. POLICIES LOGIC 
+// ==========================================
+
+// Save Policies
+app.post('/api/auth/update-policies', async (req, res) => {
+    try {
+        const { policies } = req.body;
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { $set: { policies: policies, lastUpdated: Date.now() } }, 
+            { upsert: true }
+        );
+        res.json({ success: true, message: "Policies updated successfully!" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Failed to save policies." });
+    }
+});
+
+
+// ==========================================
+// ✅ 18. DIRECT BOOKINGS LOGIC 
+// ==========================================
+
+// Create a new Booking
+app.post('/api/auth/create-booking', async (req, res) => {
+    try {
+        const { name, mobile, date, type } = req.body;
+        const newBooking = await Booking.create({ name, mobile, date, type });
+        res.json({ success: true, message: "Booking received successfully!", data: newBooking });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to create booking." });
+    }
+});
+
+// Fetch all Bookings for Admin
+app.get('/api/auth/get-bookings', async (req, res) => {
+    try {
+        const bookings = await Booking.find().sort({ createdAt: -1 }); // Nayi upar aayengi
+        res.json({ success: true, data: bookings });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch bookings." });
+    }
+});
+
+// Update Booking Status
+app.post('/api/auth/update-booking-status', async (req, res) => {
+    try {
+        const { bookingId, status } = req.body;
+        await Booking.findByIdAndUpdate(bookingId, { status });
+        res.json({ success: true, message: `Booking marked as ${status}!` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to update booking." });
+    }
+});
+
+
+// ==========================================
+// ✅ 19. COLLAB REQUESTS LOGIC 
+// ==========================================
+
+// Create a Collab Request
+app.post('/api/auth/create-collab', async (req, res) => {
+    try {
+        const { name, brand, email } = req.body;
+        const newCollab = await CollabRequest.create({ name, brand, email });
+        res.json({ success: true, message: "Request sent successfully!", data: newCollab });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to submit request." });
+    }
+});
+
+// Fetch all Collabs for Admin
+app.get('/api/auth/get-collabs', async (req, res) => {
+    try {
+        const collabs = await CollabRequest.find().sort({ createdAt: -1 }); 
+        res.json({ success: true, data: collabs });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch collabs." });
+    }
+});
+
+// Update Collab Status
+app.post('/api/auth/update-collab-status', async (req, res) => {
+    try {
+        const { collabId, status } = req.body;
+        const collab = await CollabRequest.findByIdAndUpdate(collabId, { status }, { new: true });
+        
+        // Simulating Email Notification
+        if (collab && collab.email && status !== 'Pending') {
+            const subject = status === 'Accepted' ? "Collab Request Approved!" : "Collab Request Update";
+            const msg = status === 'Accepted' ? "We are excited to work with you." : "Sorry, we can't proceed right now.";
+            try {
+                await sendBrevoEmail(collab.email, subject, `<p>Hi ${collab.name},</p><p>${msg}</p>`);
+            } catch(err) { console.log("Email failed for collab, but DB updated."); }
+        }
+
+        res.json({ success: true, message: `Collab marked as ${status}!` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to update collab." });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
