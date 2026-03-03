@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './MainContent.css';
 import BookingForm from './BookingForm';
@@ -14,6 +14,7 @@ const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
     const [activeTab, setActiveTab] = useState('home'); 
     const [bookOpen, setBookOpen] = useState(false);
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
     
     // Search/Auth States
     const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, NOT_REG
@@ -22,13 +23,23 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Swipe Handling
+    // Responsive Desktop Detection
+    useEffect(() => {
+        const handleResize = () => {
+            setIsDesktop(window.innerWidth > 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Swipe Handling (For Mobile only)
     const touchStartX = useRef(0);
     const touchEndX = useRef(0);
 
     const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; };
     const handleTouchMove = (e) => { touchEndX.current = e.targetTouches[0].clientX; };
     const handleTouchEnd = () => {
+        if (isDesktop) return; // Disable swipe on desktop
         const swipeDistance = touchStartX.current - touchEndX.current;
         const threshold = 50;
         if (swipeDistance > threshold) {
@@ -46,7 +57,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
         setLoading(true); setError('');
         
         try {
-            // ✅ FIX: Removed extra '/auth' because API_BASE already has it
             const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
             
             if (res.data.success) { 
@@ -69,7 +79,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
     const handleVerify = async () => {
         setLoading(true); setError('');
         try {
-            // ✅ FIX: Removed extra '/auth'
             const res = await axios.post(`${API_BASE}/login-otp`, { mobile, otp });
             
             if (res.data.success) {
@@ -108,7 +117,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                     <>
                         <h3 style={{color: '#ff4d4d'}}>Number Not Registered</h3>
                         <p>This mobile number is not associated with any account.</p>
-                        {/* ✅ FIX: Added window.location fallback if onSignupClick missing */}
                         <button className="action-btn" onClick={onSignupClick || (() => window.location.href='/signup')}>Create New Account</button>
                         <button className="link-btn" onClick={()=>setSearchStage('INPUT')}>Try Different Number</button>
                     </>
@@ -138,28 +146,53 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
 
     return (
         <div 
-            className="main-content-wrapper"
+            className={`main-content-wrapper ${isDesktop ? 'desktop-view' : 'mobile-view'}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
+            {/* ✅ DESKTOP TOP NAVIGATION TABS */}
+            {isDesktop && (
+                <div className="desktop-top-nav">
+                    <button className={`d-nav-btn ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>🏠 Home</button>
+                    <button className={`d-nav-btn ${activeTab === 'trending' ? 'active' : ''}`} onClick={() => setActiveTab('trending')}>🔥 Trending</button>
+                    <button className={`d-nav-btn ${activeTab === 'viral' ? 'active' : ''}`} onClick={() => setActiveTab('viral')}>🚀 Viral</button>
+                </div>
+            )}
+
+            {/* VIEWS */}
             {activeTab === 'trending' && <TrendingFeed type="trending" onClose={()=>setActiveTab('home')} />}
             {activeTab === 'viral' && <TrendingFeed type="viral" onClose={()=>setActiveTab('home')} />}
             
             {activeTab === 'home' && (
                 <>
-                    {user ? renderUserDashboard() : renderSearchFlow()}
-
-                    <div className="nav-dock-3d">
-                        <button className={`nav-tab ${activeTab==='trending'?'active':''}`} onClick={()=>setActiveTab('trending')}>🔥 Trending</button>
-                        <div className="book-btn-wrapper">
-                            <button className="book-now-3d" onClick={() => setBookOpen(true)}>BOOK<br/>NOW</button>
-                        </div>
-                        <button className={`nav-tab ${activeTab==='viral'?'active':''}`} onClick={()=>setActiveTab('viral')}>🚀 Viral</button>
+                    <div className="home-content-container">
+                        {user ? renderUserDashboard() : renderSearchFlow()}
                     </div>
+
+                    {/* ✅ MOBILE BOTTOM DOCK (Hidden on Desktop) */}
+                    {!isDesktop && (
+                        <div className="nav-dock-3d">
+                            <button className={`nav-tab ${activeTab==='trending'?'active':''}`} onClick={()=>setActiveTab('trending')}>🔥 Trending</button>
+                            <div className="book-btn-wrapper">
+                                <button className="book-now-3d" onClick={() => setBookOpen(true)}>BOOK<br/>NOW</button>
+                            </div>
+                            <button className={`nav-tab ${activeTab==='viral'?'active':''}`} onClick={()=>setActiveTab('viral')}>🚀 Viral</button>
+                        </div>
+                    )}
+                    
+                    {/* ✅ DESKTOP FLOATING BOOK BUTTON (If Desktop, it floats on bottom right instead of dock) */}
+                    {isDesktop && (
+                        <button className="desktop-floating-book-btn" onClick={() => setBookOpen(true)}>
+                            📅 BOOK NOW
+                        </button>
+                    )}
                 </>
             )}
-             {bookOpen && <BookingForm onClose={() => setBookOpen(false)} />}
+
+            {/* ✅ BOOKING FORM COMPONENT - Connected perfectly */}
+            {bookOpen && <BookingForm onClose={() => setBookOpen(false)} />}
+            
         </div>
     );
 };

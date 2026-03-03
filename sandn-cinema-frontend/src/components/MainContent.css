@@ -92,3 +92,72 @@
     .visual-panel-3d { justify-content: flex-start; padding-left: 20px; flex: 1; }
     .magnet-3d { width: 400px; }
 }
+
+/* ✅ DESKTOP SPECIFIC LAYOUT STYLES */
+.desktop-view {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding-top: 60px; /* Space for top nav */
+}
+
+/* Top Nav for Desktop */
+.desktop-top-nav {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 10px 30px;
+    border-radius: 50px;
+    z-index: 100;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.d-nav-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 5px 15px;
+    border-radius: 20px;
+    transition: 0.3s;
+}
+
+.d-nav-btn:hover {
+    color: #e50914;
+}
+
+.d-nav-btn.active {
+    background: rgba(229, 9, 20, 0.2);
+    color: #e50914;
+    box-shadow: 0 0 10px rgba(229, 9, 20, 0.4);
+}
+
+/* Floating Book Button for Desktop */
+.desktop-floating-book-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: linear-gradient(135deg, #e50914, #b81d24);
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(229, 9, 20, 0.4);
+    transition: transform 0.3s, box-shadow 0.3s;
+    z-index: 100;
+}
+
+.desktop-floating-book-btn:hover {
+    transform: scale(1.05) translateY(-5px);
+    box-shadow: 0 15px 25px rgba(229, 9, 20, 0.6);
+}
