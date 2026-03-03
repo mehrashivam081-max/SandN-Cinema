@@ -57,11 +57,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
         setLoading(true); setError('');
         try {
-            // ✅ 1. SECURITY CHECK: Check if user actually exists in DB before sending any OTP
+            // ✅ 1. STRICT ROLE-BASED SECURITY CHECK (User vs Studio)
             if (activeTab !== 'code') {
-                const searchRes = await axios.post(`${API_BASE}/search-account`, { mobile: inputValue.trim() });
+                const searchRes = await axios.post(`${API_BASE}/search-account`, { 
+                    mobile: inputValue.trim(),
+                    roleFilter: activeTab.toUpperCase() // Bhejo 'USER' ya 'STUDIO'
+                });
+                
                 if (!searchRes.data.success) {
-                    setError("Not Registered! Please ask Admin to add you or Signup.");
+                    setError(`Not Registered as ${activeTab.toUpperCase()}! Please ask Admin to add you or Signup.`);
                     setLoading(false);
                     return;
                 }
@@ -70,7 +74,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             // ✅ 2. ROUTING LOGIC: Firebase for SMS, Backend for WA/Email
             if (otpMethod === 'mobile' && activeTab !== 'code') {
                 // 🚀 Send SMS via FIREBASE
-                const formattedMobile = "+91" + inputValue.trim(); // Added Indian Code (+91)
+                const formattedMobile = "+91" + inputValue.trim(); 
                 const appVerifier = window.recaptchaVerifier;
                 
                 const confirmation = await signInWithPhoneNumber(auth, formattedMobile, appVerifier);
@@ -81,7 +85,8 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 // 🚀 Send WA / Email / Admin OTP via BACKEND
                 const res = await axios.post(`${API_BASE}/check-send-otp`, { 
                     mobile: inputValue.trim(),
-                    sendVia: otpMethod 
+                    sendVia: otpMethod,
+                    roleFilter: activeTab.toUpperCase() // Yaha bhi bhej diya taaki email/wa ussi acc se uthe
                 });
                 
                 if (res.data.success) {
@@ -111,14 +116,21 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 await confirmationResult.confirm(otp);
                 
                 // If success, check backend if password is 'temp123'
-                const searchRes = await axios.post(`${API_BASE}/search-account`, { mobile: inputValue.trim() });
+                const searchRes = await axios.post(`${API_BASE}/search-account`, { 
+                    mobile: inputValue.trim(),
+                    roleFilter: activeTab.toUpperCase() // Role filter zaroori hai
+                });
                 const userData = searchRes.data.data;
                 if (!userData.password || userData.password === "temp123") {
                     isNewUser = true;
                 }
             } else {
                 // 🚀 Verify BACKEND OTP
-                const res = await axios.post(`${API_BASE}/verify-otp`, { mobile: inputValue, otp });
+                const res = await axios.post(`${API_BASE}/verify-otp`, { 
+                    mobile: inputValue, 
+                    otp,
+                    roleFilter: activeTab.toUpperCase() // Role filter zaroori hai
+                });
                 if (res.data.success) {
                     isNewUser = res.data.isNewUser;
                 } else {
@@ -156,7 +168,11 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         }
 
         try {
-            const res = await axios.post(`${API_BASE}/login`, { mobile: inputValue.trim(), password: cleanPassword });
+            const res = await axios.post(`${API_BASE}/login`, { 
+                mobile: inputValue.trim(), 
+                password: cleanPassword,
+                roleFilter: activeTab.toUpperCase() // Strict Role Login
+            });
             if (res.data.success) {
                 localStorage.setItem('user', JSON.stringify(res.data.user));
                 sessionStorage.clear(); 
@@ -179,7 +195,8 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             const res = await axios.post(`${API_BASE}/create-password`, { 
                 mobile: inputValue.trim(), 
                 email: newEmail.trim(),
-                password: password.trim() 
+                password: password.trim(),
+                roleFilter: activeTab.toUpperCase() // Role Filter
             });
 
             if (res.data.success) {

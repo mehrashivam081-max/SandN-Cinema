@@ -9,14 +9,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('DASHBOARD');
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState([]);
-    const [filterRole, setFilterRole] = useState('ALL'); // ✅ NEW: Filter State
+    const [filterRole, setFilterRole] = useState('ALL'); 
 
     // --- UPLOAD DATA STATES ---
-    // ✅ ADDED folderName here
     const [formData, setFormData] = useState({ type: 'USER', name: '', mobile: '', folderName: '', files: [] });
     const [previews, setPreviews] = useState([]);
     
-    // Auto-Suggest Toggles
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
 
@@ -24,7 +22,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || '', email: user?.email || '', password: user?.password || '' });
     const [subAdmin, setSubAdmin] = useState({ name: '', mobile: '', email: '', password: '' });
 
-    // --- ✅ INCOME MOCK DATA (You can link this to backend later) ---
+    // --- ✅ SOCIAL LINKS STATE (New Feature) ---
+    const [socialLinks, setSocialLinks] = useState([
+        { platform: 'Instagram', url: '' },
+        { platform: 'YouTube', url: '' },
+        { platform: 'Facebook', url: '' },
+        { platform: 'WhatsApp', url: '' },
+        { platform: 'Twitter', url: '' }
+    ]);
+    const [newLink, setNewLink] = useState({ platform: 'Instagram', url: '' });
+
     const [incomeData, setIncomeData] = useState({
         total: 125000,
         transactions: [
@@ -66,7 +73,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowSuggestions(false);
     };
 
-    // ✅ NAYA FOLDER CLICK HANDLER
     const handleFolderSuggestionClick = (folderName) => {
         setFormData({ ...formData, folderName: folderName });
         setShowFolderSuggestions(false);
@@ -80,7 +86,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         data.append('type', formData.type);
         data.append('name', formData.name);
         data.append('mobile', formData.mobile);
-        data.append('folderName', formData.folderName); // ✅ Folder name sent to backend
+        data.append('folderName', formData.folderName);
         data.append('addedBy', 'ADMIN'); 
         formData.files.forEach(file => data.append('mediaFiles', file));
 
@@ -88,7 +94,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const res = await axios.post(`${API_BASE}/admin-add-user`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data.success) {
                 alert(`✅ Success: ${res.data.message}`);
-                // ✅ Form reset with folderName
                 setFormData({ type: 'USER', name: '', mobile: '', folderName: '', files: [] }); 
                 setPreviews([]); 
                 fetchAccounts();
@@ -108,9 +113,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Error deleting account."); }
     };
 
-    // ✅ FIXED PENDING BUG: Optimistic UI Update added here
     const toggleStudioApproval = async (mobile, currentStatus) => {
-        // Optimistic UI Update: Turant status change karo UI mein
         setAccounts(prevAccounts => 
             prevAccounts.map(acc => 
                 acc.mobile === mobile ? { ...acc, isFeedApproved: !currentStatus } : acc
@@ -119,16 +122,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
         try {
             const res = await axios.post(`${API_BASE}/update-studio-approval`, { mobile, isFeedApproved: !currentStatus });
-            if (res.data.success) {
-                // Background me fetch kar lo taaki data sync rahe, alert hta diya for smooth experience
-                fetchAccounts(); 
-            } else {
-                // Agar fail hua, toh purana status wapas le aao
+            if (!res.data.success) {
                 fetchAccounts();
                 alert("Failed to update approval on server.");
             }
         } catch (error) { 
-            fetchAccounts(); // Revert back on error
+            fetchAccounts(); 
             alert("Error connecting to server."); 
         }
     };
@@ -157,21 +156,33 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
-    // ✅ Filtering Logic
+    // ✅ Naya Logic: Social Links Handle Karna
+    const handleAddLink = () => {
+        if (!newLink.url) return alert("Please enter URL");
+        
+        setSocialLinks(prev => {
+            const exists = prev.find(link => link.platform === newLink.platform);
+            if (exists) {
+                return prev.map(link => link.platform === newLink.platform ? { ...link, url: newLink.url } : link);
+            }
+            return [...prev, newLink];
+        });
+        setNewLink({ platform: 'Instagram', url: '' });
+        alert("Link added successfully! (Will be visible on Profile Connect Tab)");
+    };
+
+    // Filtering Logic
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
     const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
 
-    // ✅ Logic for FOLDER Auto-Suggest
     const selectedAccount = accounts.find(acc => acc.mobile === formData.mobile);
     let existingFolders = [];
     if (selectedAccount && selectedAccount.uploadedData) {
-        // Backend now sends an array of objects: [{ folderName: "...", files: [...] }]
         existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
     }
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
-    // Derived Stats
     const totalUsers = accounts.filter(a => a.role === 'USER').length;
     const totalStudios = accounts.filter(a => a.role === 'STUDIO').length;
     const totalAdmins = accounts.filter(a => a.role === 'ADMIN').length;
@@ -185,7 +196,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <div className="subtitle-container"><p className="admin-subtitle">Super Admin</p></div>
                 </div>
                 
-                {/* Admin Top Details */}
                 <div style={{ background: '#0f3460', padding: '15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>
                     <h4 style={{ margin: 0, color: '#4dabf7' }}>Hello, {user?.name || 'Admin'}</h4>
                     <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#aeb6bf' }}>{user?.mobile}</p>
@@ -194,8 +204,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 <ul className="sidebar-menu">
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard Overview</li>
                     <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
-                    <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income & Revenue</li> {/* ✅ NEW TAB */}
+                    <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income & Revenue</li>
                     <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Client Data</li>
+                    {/* ✅ Naya Social Links Tab */}
+                    <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
                     <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => setActiveTab('SETTINGS')}>⚙️ Admin Settings</li>
                 </ul>
                 <button onClick={onLogout} className="admin-logout-btn">Log Out</button>
@@ -236,7 +248,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <h2>📋 Manage Users & Studios</h2>
                         </div>
                         
-                        {/* ✅ FILTER TABS */}
                         <div className="admin-filter-tabs">
                             <button className={filterRole === 'ALL' ? 'active' : ''} onClick={() => setFilterRole('ALL')}>All Accounts</button>
                             <button className={filterRole === 'USER' ? 'active' : ''} onClick={() => setFilterRole('USER')}>Users Only</button>
@@ -251,7 +262,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <th>Role</th>
                                         <th>Name</th>
                                         <th>Mobile</th>
-                                        <th>Feed Approval (Studios)</th>
+                                        <th>Feed Approval</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
@@ -288,7 +299,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: INCOME & REVENUE */}
+                {/* 🔴 TAB 3: INCOME */}
                 {activeTab === 'INCOME' && (
                     <div className="view-section">
                         <div className="section-header"><h2>💰 Financial Overview</h2></div>
@@ -367,7 +378,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </select>
                                 </div>
 
-                                {/* ✅ FOLDER NAME INPUT WITH AUTO-SUGGEST */}
                                 <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name (Optional)</label>
                                     <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to see existing folders for this user. Leave blank for "Stranger Photography".</p>
@@ -397,7 +407,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 </div>
 
                                 <div style={{ border: '2px dashed #ccc', padding: '15px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
-                                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Upload Multiple Files (Images/Videos)</label>
+                                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Upload Multiple Files</label>
                                     <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />
                                     {previews.length > 0 && (
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '15px', justifyContent: 'center' }}>
@@ -417,52 +427,64 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 5: ADMIN SETTINGS (Profile & Sub-Admins) */}
+                {/* 🔴 TAB 5: SOCIAL LINKS (NEW) */}
+                {activeTab === 'SOCIAL' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
+                            <p style={{fontSize:'12px', color:'#666', marginBottom:'20px'}}>Add links to be shown in the Profile Connect section.</p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '30px' }}>
+                                <div>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Platform</label>
+                                    <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input">
+                                        <option value="Instagram">Instagram</option>
+                                        <option value="YouTube">YouTube</option>
+                                        <option value="Facebook">Facebook</option>
+                                        <option value="WhatsApp">WhatsApp</option>
+                                        <option value="Twitter">Twitter</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label>
+                                    <input type="text" placeholder="Paste link here..." value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" />
+                                </div>
+                                <button onClick={handleAddLink} className="global-update-btn" style={{ width: '100%', padding: '15px' }}>➕ Add / Update Link</button>
+                            </div>
+
+                            <h4>Current Links Saved</h4>
+                            <ul style={{ listStyle: 'none', padding: 0 }}>
+                                {socialLinks.filter(l => l.url !== '').map((link, i) => (
+                                    <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'10px', borderRadius:'5px', display:'flex', justifyContent:'space-between' }}>
+                                        <strong>{link.platform}</strong>
+                                        <a href={link.url} target="_blank" rel="noreferrer" style={{ color: '#3498db' }}>{link.url.substring(0, 30)}...</a>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 TAB 6: SETTINGS */}
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>⚙️ Admin Settings</h2></div>
                         <div className="studio-settings-grid">
-                            {/* Edit Profile */}
                             <div className="setting-card">
                                 <h3>Update My Profile</h3>
                                 <form onSubmit={handleUpdateAdminProfile}>
-                                    <div className="form-group" style={{ marginBottom: '10px' }}>
-                                        <label>Admin Name</label>
-                                        <input type="text" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <div className="form-group" style={{ marginBottom: '10px' }}>
-                                        <label>Email Address</label>
-                                        <input type="email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <div className="form-group" style={{ marginBottom: '15px' }}>
-                                        <label>New Password</label>
-                                        <input type="password" placeholder="Leave blank to keep current" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" />
-                                    </div>
+                                    <div className="form-group" style={{ marginBottom: '10px' }}><label>Admin Name</label><input type="text" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input" /></div>
+                                    <div className="form-group" style={{ marginBottom: '10px' }}><label>Email Address</label><input type="email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                    <div className="form-group" style={{ marginBottom: '15px' }}><label>New Password</label><input type="password" placeholder="Leave blank to keep current" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
                                     <button type="submit" className="btn-save" style={{ width: '100%' }}>Save Profile</button>
                                 </form>
                             </div>
-
-                            {/* Create Sub-Admin */}
                             <div className="setting-card">
                                 <h3>Create Sub-Admin</h3>
-                                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Sub-admins can manage accounts and uploads.</p>
                                 <form onSubmit={handleCreateSubAdmin}>
-                                    <div className="form-group" style={{ marginBottom: '10px' }}>
-                                        <label>Name</label>
-                                        <input type="text" required placeholder="Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <div className="form-group" style={{ marginBottom: '10px' }}>
-                                        <label>Mobile Number</label>
-                                        <input type="number" required placeholder="10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <div className="form-group" style={{ marginBottom: '10px' }}>
-                                        <label>Email (Optional)</label>
-                                        <input type="email" placeholder="Email Address" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <div className="form-group" style={{ marginBottom: '15px' }}>
-                                        <label>Password</label>
-                                        <input type="text" required placeholder="Set Password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" />
-                                    </div>
+                                    <div className="form-group" style={{ marginBottom: '10px' }}><label>Name</label><input type="text" required placeholder="Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" /></div>
+                                    <div className="form-group" style={{ marginBottom: '10px' }}><label>Mobile</label><input type="number" required placeholder="10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" /></div>
+                                    <div className="form-group" style={{ marginBottom: '15px' }}><label>Password</label><input type="text" required placeholder="Set Password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" /></div>
                                     <button type="submit" className="btn-save" style={{ width: '100%', background: '#27ae60' }}>+ Add Sub-Admin</button>
                                 </form>
                             </div>

@@ -15,6 +15,9 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
     const [careerInterest, setCareerInterest] = useState(false);
     const [userRating, setUserRating] = useState(0); 
 
+    // ✅ State for Accounts Dropdown
+    const [isAccountsOpen, setIsAccountsOpen] = useState(false);
+
     // ✅ Ref to control scroll position
     const sidebarContentRef = useRef(null);
 
@@ -33,14 +36,15 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         address: "Vijay Nagar, Indore, India"
     };
 
-    const socialLinks = [
+    // ✅ Social Links (Will be dynamic later from DB, for now static dummy to test UI)
+    const [socialLinks, setSocialLinks] = useState([
         { id: 'insta', name: 'Instagram', icon: '📸', url: '#', color: '#E1306C', handle: '@sandn_cinema' },
         { id: 'yt', name: 'YouTube', icon: '▶️', url: '#', color: '#FF0000', handle: 'SandN Films' },
         { id: 'fb', name: 'Facebook', icon: '📘', url: '#', color: '#1877F2', handle: 'SandN Official' },
         { id: 'wa', name: 'WhatsApp', icon: '💬', url: '#', color: '#25D366', handle: 'Chat with us' },
         { id: 'twitter', name: 'Twitter', icon: '🐦', url: '#', color: '#1DA1F2', handle: '@sandn_tweets' },
         { id: 'mail', name: 'Email', icon: '✉️', url: '#', color: '#EA4335', handle: 'Mail Us' }
-    ];
+    ]);
 
     const ourBestPoints = [
         { icon: '🎥', title: 'Cinematic Quality', desc: 'We use high-end 4K cameras & drones for premium output.' },
@@ -72,6 +76,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             setCareerInterest(false);
             setCareerSubTab('short');
             setUserRating(0); 
+            setIsAccountsOpen(false); // Reset dropdown
         } else {
             // ✅ Scroll Memory Reset (Har baar top se khulega)
             if (sidebarContentRef.current) {
@@ -106,10 +111,9 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
     const formatNum = (num) => num.toLocaleString('en-IN');
 
-    // ✅ SHIFTED ITEMS: 4 items removed from here and moved to Profile Actions
+    // ✅ REMOVED 'Accounts' FROM MENU ITEMS list to handle it explicitly
     const menuItems = [
         { id: "Services", label: "Services & Portfolio", icon: "🛠️" },
-        { id: "Accounts", label: "Accounts (Login/Signup)", icon: "👤" },
         { id: "Recovery", label: "Recovery (Forgot Pass)", icon: "🔄" },
         { id: "Traffic", label: "Traffic Status", icon: "📊" },
         { id: "Advertisement", label: "Business & Ads", icon: "📢" },
@@ -118,7 +122,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: "How do we best for you", label: "How do we best for you", icon: "🤝" }
     ];
 
-    // ✅ NEW PROFILE ACTIONS ROW
+    // ✅ PROFILE ACTIONS ROW
     const profileActions = [
         { id: "About us", label: "About", icon: "🏢" },
         { id: "Customer Care", label: "Support", icon: "🎧" },
@@ -131,9 +135,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         if (itemId === "Services") {
             onClose();
             onOpenService();
-        } else if (itemId === "Accounts") {
-            onClose();
-            onOpenAuth();
         } else if (itemId === "Recovery") {
             onClose();
             onOpenRecovery();
@@ -246,8 +247,9 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                         <p className="connect-desc">Check out our latest shoots & BTS on social media.</p>
                         
                         <div className="social-grid">
+                            {/* ✅ Updated to map from state instead of static array */}
                             {socialLinks.map((link) => (
-                                <a key={link.id} href={link.url} className="social-card" style={{borderColor: link.color}}>
+                                <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="social-card" style={{borderColor: link.color}}>
                                     <span className="social-icon">{link.icon}</span>
                                     <span className="social-name" style={{color: link.color}}>{link.name}</span>
                                 </a>
@@ -413,6 +415,35 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     
                     {/* Remaining Menu List */}
                     <ul className="profile-menu-list" style={{marginTop: '15px'}}>
+                        
+                        {/* ✅ EXPLICIT ACCOUNTS DROPDOWN ITEM */}
+                        <li className="profile-menu-item" style={{flexDirection: 'column', alignItems: 'flex-start'}} onClick={() => setIsAccountsOpen(!isAccountsOpen)}>
+                            <div style={{display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center'}}>
+                                <div className="menu-left-group">
+                                    <span className="menu-icon">👤</span>
+                                    <span className="menu-label">Accounts (Login/Signup)</span>
+                                </div>
+                                <span className="menu-arrow" style={{ transform: isAccountsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: '0.3s' }}>›</span>
+                            </div>
+                            
+                            {/* Dropdown Options */}
+                            {isAccountsOpen && (
+                                <div className="accounts-dropdown" style={{width: '100%', marginTop: '10px', paddingLeft: '35px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                    <div 
+                                        onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); }} 
+                                        style={{padding: '8px 12px', background: '#f5f5f5', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
+                                        🔑 Login
+                                    </div>
+                                    <div 
+                                        onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); /* Later update to open signup directly if needed */ }} 
+                                        style={{padding: '8px 12px', background: '#f5f5f5', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
+                                        📝 Create Account
+                                    </div>
+                                </div>
+                            )}
+                        </li>
+
+                        {/* Other Standard Items */}
                         {menuItems.map((item, index) => (
                             <li key={index} className="profile-menu-item" onClick={() => handleMenuClick(item.id)}>
                                 <div className="menu-left-group"><span className="menu-icon">{item.icon}</span><span className="menu-label">{item.label}</span></div>
