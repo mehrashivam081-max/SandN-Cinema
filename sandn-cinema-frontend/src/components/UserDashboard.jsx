@@ -32,13 +32,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- REWARD ANIMATION STATE ---
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
-    // Default Folder fallback
+    // ✅ DEFAULT FOLDER FALLBACK (STRICT)
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true };
 
     // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
     useEffect(() => {
         const fetchRealTimeData = async () => {
-            // ✅ Crash Fix: Agar user mobile nahi hai toh API hit mat karo
             if (!user?.mobile) return; 
 
             setLoading(true);
@@ -56,13 +55,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     if(dbData.wallet) setWallet(dbData.wallet);
                     
                     const fetchedFolders = dbData.uploadedData || [];
-                    const filteredFolders = fetchedFolders.filter(f => f.folderName !== 'Stranger Photography');
                     
-                    // Ensure Stranger Photography is always first
-                    const backendDefault = fetchedFolders.find(f => f.folderName === 'Stranger Photography');
-                    const mergedDefault = backendDefault ? { ...DEFAULT_FOLDER, files: backendDefault.files } : DEFAULT_FOLDER;
+                    // ✅ FIXED LOGIC: Extract and sort out Stranger Photography
+                    const customFolders = fetchedFolders.filter(f => f.folderName.toLowerCase() !== 'stranger photography');
+                    const backendDefaultFolder = fetchedFolders.find(f => f.folderName.toLowerCase() === 'stranger photography');
                     
-                    setFolders([mergedDefault, ...filteredFolders]);
+                    const finalDefaultFolder = backendDefaultFolder 
+                        ? { ...DEFAULT_FOLDER, files: backendDefaultFolder.files } 
+                        : DEFAULT_FOLDER;
+                    
+                    // Put default first, then the rest
+                    setFolders([finalDefaultFolder, ...customFolders]);
 
                     // Update LocalStorage silently
                     localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
@@ -86,13 +89,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         if (rewardResult.rewardAdded) {
             setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: rewardResult.currentStreak });
             setWallet(rewardResult);
-            setTimeout(() => setRewardPopup({ show: false }), 4000); // Hide after 4s
+            setTimeout(() => setRewardPopup({ show: false }), 4000); 
         } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
             setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
             setWallet(rewardResult);
             setTimeout(() => setRewardPopup({ show: false }), 4000);
         }
-    }, [user?.mobile]); // ✅ Safe dependency
+    }, [user?.mobile]); 
 
     // --- HELPERS ---
     const isVideo = (filePath) => {
@@ -168,7 +171,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             <div className="profile-card-vip">
                 <div className="dp-section">
                     <div className="dp-circle">
-                        {/* ✅ Crash Fix: Safe character extraction */}
                         {profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}
                     </div>
                     {editProfileMode && (
@@ -206,6 +208,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // 🔴 HOME TAB
     const renderHomeTab = () => {
         if (activeFolder) {
+            // ✅ ALL/PHOTO/VIDEO FILTERING LOGIC
             const displayedMedia = (activeFolder.files || []).filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
                 if (mediaFilter === 'VIDEOS') return isVideo(item);
@@ -215,12 +218,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folder-gallery-view">
                     <div className="folder-header-nav">
-                        <button onClick={() => setActiveFolder(null)} className="back-btn">⬅ Back to Folders</button>
+                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Folders</button>
                         <h3>{activeFolder.folderName}</h3>
                     </div>
 
+                    {/* ✅ FILTER BUTTONS */}
                     <div className="filter-group-vip">
-                        <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All Items</button>
                         <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos</button>
                         <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos</button>
                     </div>
@@ -237,6 +241,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
+        // ✅ DEFAULT FOLDERS GRID
         return (
             <div className="folders-view">
                 <div className="welcome-banner">
@@ -290,9 +295,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 {renderContent()}
             </main>
 
-            {/* 🔴 BOTTOM NAVIGATION BAR UPDATED WITH HISTORY TAB */}
+            {/* 🔴 BOTTOM NAVIGATION BAR */}
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); }}>
+                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setMediaFilter('ALL'); }}>
                     🏠<span>Home</span>
                 </button>
                 <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
@@ -305,7 +310,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     📜<span>History</span>
                 </button>
                 <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
-                    {/* ✅ Crash Fix: Ensure split doesn't fail if editName is empty */}
                     👤<span>{(editName || 'User').split(' ')[0]}</span>
                 </button>
             </nav>
