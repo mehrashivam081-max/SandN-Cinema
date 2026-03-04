@@ -10,7 +10,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- UI STATES ---
     const [currentTab, setCurrentTab] = useState('HOME'); // HOME, SERVICES, BOOKINGS, PROFILE
     const [loading, setLoading] = useState(true);
+    
+    // --- USER SYNCED DATA (REAL-TIME) ---
+    // Ab hum data ko local state se badal kar DB se sync karenge
+    const [syncUser, setSyncUser] = useState(user);
     const [wallet, setWallet] = useState(user?.wallet || { coins: 0, currentStreak: 0 });
+    const [editName, setEditName] = useState(user?.name || '');
     
     // --- FOLDER & MEDIA STATES ---
     const [folders, setFolders] = useState([]);
@@ -20,40 +25,57 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- PROFILE STATES ---
     const [profileImage, setProfileImage] = useState(user?.profileImage || null);
     const [editProfileMode, setEditProfileMode] = useState(false);
-    const [editName, setEditName] = useState(user?.name || '');
 
-    // Default Folder (Stranger Photography)
+    // Default Folder (Stranger Photography) fallback
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true };
 
+    // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
     useEffect(() => {
-        // Daily Reward Logic
+        const fetchRealTimeData = async () => {
+            setLoading(true);
+            try {
+                // Humesha real database hit hoga latest update lene ke liye
+                const res = await axios.post(`${API_BASE}/search-account`, { 
+                    mobile: user.mobile,
+                    roleFilter: 'USER' 
+                });
+                
+                if (res.data.success) {
+                    const dbData = res.data.data;
+                    setSyncUser(dbData);
+                    setEditName(dbData.name || '');
+                    
+                    // Folders update directly from DB
+                    const fetchedFolders = dbData.uploadedData || [];
+                    if(fetchedFolders.length > 0) {
+                        setFolders(fetchedFolders);
+                    } else {
+                        setFolders([DEFAULT_FOLDER]);
+                    }
+
+                    // Update LocalStorage in background taaki reload fast ho
+                    localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
+                } else {
+                    setFolders([DEFAULT_FOLDER]);
+                }
+            } catch (error) {
+                console.error("Fetch error:", error);
+                setFolders([DEFAULT_FOLDER]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRealTimeData();
+        
+        // Daily Reward Logic Check
         const currentUserData = userData || user || {};
         const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         if (rewardResult.rewardAdded) {
             alert(`Daily Reward: +1 Coin! Streak: ${rewardResult.currentStreak} Days.`);
             setWallet(rewardResult);
         }
-        fetchMyData();
-    }, []);
-
-    // Fetch Data (Now expecting Folders from Backend)
-    const fetchMyData = async () => {
-        try {
-            const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
-            if (res.data.success) {
-                // Backend se uploadedData ab objects ka array aayega: [{ folderName: 'Wedding', files: [...] }]
-                const fetchedFolders = res.data.data.uploadedData || [];
-                setFolders([DEFAULT_FOLDER, ...fetchedFolders]);
-            } else {
-                setFolders([DEFAULT_FOLDER]);
-            }
-        } catch (error) {
-            console.error("Fetch error:", error);
-            setFolders([DEFAULT_FOLDER]);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [user.mobile]); // Dependency sirf mobile number hai taaki ek baar chal ke latest utha le
 
     // --- HELPERS ---
     const isVideo = (filePath) => filePath.match(/\.(mp4|webm|ogg|mov)$/i);
@@ -62,15 +84,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- PROFILE HANDLERS ---
     const handleDPChange = (e) => {
         const file = e.target.files[0];
-        if (file) setProfileImage(URL.createObjectURL(file)); // Note: Real app needs API upload here
+        if (file) setProfileImage(URL.createObjectURL(file)); 
     };
 
     const handleRemoveDP = () => setProfileImage(null);
 
     const handleSaveProfile = () => {
+        // Future Scope: Yahan ek API hogi `/api/auth/update-user-profile` 
+        // par abhi ke liye hum UI update karke dikha rahe hain
         alert("Profile Updated Successfully!");
         setEditProfileMode(false);
-        // Add backend update logic here later
+        const updatedLocalUser = { ...syncUser, name: editName };
+        setSyncUser(updatedLocalUser);
+        localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
     // --- RENDER TABS ---
@@ -100,7 +126,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                 <div className="profile-details">
                     <label>Registered Mobile No.</label>
-                    <input type="text" value={user.mobile} disabled className="vip-input disabled" />
+                    <input type="text" value={syncUser.mobile} disabled className="vip-input disabled" />
 
                     <label>Full Name</label>
                     <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={!editProfileMode} className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
@@ -143,7 +169,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => (
                             <div key={idx} className="gallery-item-vip">
                                 {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
-                                <div className="media-overlay-vip"><a href={getCleanUrl(filePath)} download target="_blank" className="download-btn-vip">⬇ Download</a></div>
+                                <div className="media-overlay-vip"><a href={getCleanUrl(filePath)} download target="_blank" rel="noreferrer" className="download-btn-vip">⬇ Download</a></div>
                             </div>
                         )) : <div className="no-data-vip">Folder is empty.</div>}
                     </div>
@@ -159,7 +185,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <p>Select a folder to view your curated albums.</p>
                 </div>
                 
-                {loading ? <div className="loading-state-vip">Loading Folders...</div> : (
+                {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid">
                         {folders.map((folder, index) => (
                             <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)}>

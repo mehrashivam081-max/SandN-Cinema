@@ -45,13 +45,35 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const calculatedTotal = accounts.length * 1500; 
     const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
-    // 🟢 INITIAL FETCH
+    // 🟢 INITIAL FETCH & ADMIN SYNC
     useEffect(() => {
         fetchAccounts();
         fetchPlatformSettings(); // Fetch Social Links & Policies
         fetchBookings();         // Fetch Bookings
         fetchCollabs();          // Fetch Collabs
-    }, []);
+
+        // ✅ LATEST ADMIN DATA FETCH ON RELOAD (Refresh Fix)
+        const syncAdminData = async () => {
+            try {
+                const res = await axios.post(`${API_BASE}/search-account`, { 
+                    mobile: user?.mobile || "0000000000CODEIS*@OWNER*",
+                    roleFilter: "ADMIN"
+                });
+                if (res.data.success) {
+                    const latestData = res.data.data;
+                    setAdminProfile({
+                        name: latestData.name || 'Owner',
+                        email: latestData.email || '',
+                        password: ''
+                    });
+                    // LocalStorage update so refresh shows correct name instantly
+                    const updatedUser = { ...user, name: latestData.name };
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                }
+            } catch (e) { console.log("Sync failed", e); }
+        };
+        syncAdminData();
+    }, [user]);
 
     useEffect(() => {
         setIncomeData(prev => ({ ...prev, total: accounts.length * 1500 }));
@@ -138,6 +160,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
+        
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm(`Are you sure you want to upload data for ${formData.name || formData.mobile}?`)) return;
+
         setLoading(true);
         const data = new FormData();
         data.append('type', formData.type);
@@ -164,7 +190,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 MANAGE ACCOUNTS LOGIC
     // ==========================================
     const handleDelete = async (mobile, role) => {
-        if (!window.confirm(`Are you sure you want to delete this ${role}?`)) return;
+        // ✅ CONFIRMATION POPUP (STRICTER)
+        if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete this ${role}?`)) return;
         try {
             const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role });
             if (res.data.success) { alert("🗑️ Account deleted!"); fetchAccounts(); }
@@ -172,6 +199,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const toggleStudioApproval = async (mobile, currentStatus) => {
+        // ✅ CONFIRMATION POPUP
+        const actionText = currentStatus ? "REVOKE" : "APPROVE";
+        if (!window.confirm(`Are you sure you want to ${actionText} feed access for this Studio?`)) return;
+
         setAccounts(prevAccounts => prevAccounts.map(acc => acc.mobile === mobile ? { ...acc, isFeedApproved: !currentStatus } : acc));
         try {
             const res = await axios.post(`${API_BASE}/update-studio-approval`, { mobile, isFeedApproved: !currentStatus });
@@ -184,16 +215,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
         e.preventDefault();
+        
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm("Are you sure you want to save these profile changes?")) return;
+
         try {
             const identifier = user?.mobile || "0000000000CODEIS*@OWNER*";
             const res = await axios.post(`${API_BASE}/update-admin`, { mobile: identifier, ...adminProfile });
-            if (res.data.success) alert("✅ Admin Profile Updated Successfully!");
+            if (res.data.success) {
+                alert("✅ Admin Profile Updated Successfully!");
+                // ✅ UPDATE LOCAL STORAGE SO NAME STAYS ON REFRESH
+                const updatedUser = { ...user, name: adminProfile.name };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
             else alert("Update failed: " + res.data.message);
         } catch (error) { alert("Server error updating profile."); }
     };
 
     const handleCreateSubAdmin = async (e) => {
         e.preventDefault();
+        
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm(`Create new Sub-Admin: ${subAdmin.name}?`)) return;
+
         try {
             const res = await axios.post(`${API_BASE}/add-subadmin`, subAdmin);
             if (res.data.success) {
@@ -218,6 +262,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const saveLinksToServer = async () => {
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm("Are you sure you want to update Social Links on the platform?")) return;
+
         try {
             await axios.post(`${API_BASE}/update-social-links`, { links: socialLinks });
             alert("✅ Links Saved to Database! Now visible on User Profile.");
@@ -226,6 +273,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const handlePolicySave = async (e) => {
         e.preventDefault();
+        
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm("Are you sure you want to update Platform Policies?")) return;
+
         try {
             await axios.post(`${API_BASE}/update-policies`, { policies: policyData });
             alert("✅ Security & Privacy Policies Updated Successfully in Database!");
@@ -236,6 +287,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 CRITERIA & BOOKING ACTION LOGIC
     // ==========================================
     const handleCollabAction = async (id, action) => {
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm(`Are you sure you want to ${action} this collaboration request?`)) return;
+
         try {
             const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action });
             if(res.data.success) {
@@ -246,6 +300,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const handleBookingStatus = async (id, newStatus) => {
+        // ✅ CONFIRMATION POPUP
+        if (!window.confirm(`Are you sure you want to ${newStatus} this booking?`)) return;
+
         try {
             const res = await axios.post(`${API_BASE}/update-booking-status`, { bookingId: id, status: newStatus });
             if(res.data.success) {
