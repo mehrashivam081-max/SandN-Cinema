@@ -107,7 +107,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         const formData = new FormData();
         
         if (isFeed) {
-            // Uploading to Public Feed Folder
+            // ✅ Uploading to Public Feed Folder
             formData.append('mobile', studioProfile.mobile);
             formData.append('name', studioProfile.studioName);
             formData.append('type', 'STUDIO');
@@ -190,9 +190,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>👥 My Clients</li>
                     <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Client Data</li>
                     
-                    {/* ✅ FEED TAB (Admin se approve hone par hi dikhega) */}
+                    {/* ✅ NEW FEED MANAGEMENT TAB (Admin se approve hone par hi dikhega) */}
                     {studioProfile.isFeedApproved && (
-                        <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => setActiveTab('FEED')}>🌟 Public Feed Upload</li>
+                        <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => setActiveTab('FEED')}>🌟 Feed Management</li>
                     )}
 
                     <li className={activeTab === 'REVENUE' ? 'active' : ''} onClick={() => setActiveTab('REVENUE')}>💰 Revenue</li>
@@ -308,20 +308,26 @@ const StudioDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: UPLOAD TO FEED (Only if Approved) */}
+                {/* 🔴 TAB 3: FEED MANAGEMENT (NEW TAB for Approved Studios) */}
                 {activeTab === 'FEED' && studioProfile.isFeedApproved && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🌟 Public Feed Upload</h2></div>
+                        <div className="section-header"><h2>🌟 Feed Management</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto', textAlign:'center' }}>
-                            <p style={{color:'#555', marginBottom:'20px'}}>Upload your best shots here to be featured on SandN Cinema's public trending page!</p>
-                            
-                            <div style={{ border: '2px dashed #d4af37', padding: '30px', borderRadius: '10px', background: '#fffdf5' }}>
-                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', fontSize:'18px', color: '#8e6b1e' }}>📸 Select Content for Feed</label>
-                                <input id="feed-input-field" type="file" multiple accept="image/*,video/*" onChange={handleFeedFileChange} />
+                            <div style={{background: '#fffdf5', border: '1px solid #f1c40f', padding: '20px', borderRadius: '10px', marginBottom: '25px'}}>
+                                <h3 style={{color: '#d4ac0d', marginTop: 0}}>Grow Your Audience</h3>
+                                <p style={{color:'#555', fontSize: '14px', lineHeight: '1.5'}}>
+                                    Upload your best shots (images or short 1-min clips) here. These will be randomly featured on SandN Cinema's main public trending page!
+                                </p>
                             </div>
                             
-                            <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background:'#d4af37', color:'#000', fontSize: '16px' }}>
-                                {loading ? 'Publishing to Feed...' : '🔥 Publish to Feed'}
+                            <div style={{ border: '2px dashed #d4af37', padding: '30px', borderRadius: '10px', background: '#fafafa' }}>
+                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', fontSize:'18px', color: '#8e6b1e' }}>📸 Select Feed Content</label>
+                                <input id="feed-input-field" type="file" multiple accept="image/*,video/mp4,video/mov" onChange={handleFeedFileChange} style={{marginTop: '10px'}}/>
+                                <p style={{fontSize: '11px', color: '#888', marginTop: '10px'}}>Max video duration: 1 min.</p>
+                            </div>
+                            
+                            <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background:'linear-gradient(135deg, #d4af37, #f1c40f)', color:'#000', fontSize: '16px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 15px rgba(212, 175, 55, 0.4)' }}>
+                                {loading ? 'Uploading to Server...' : '🔥 Upload to Global Feed'}
                             </button>
                         </div>
                     </div>
