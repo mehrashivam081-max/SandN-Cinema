@@ -592,14 +592,18 @@ app.post('/api/auth/search-account', async (req, res) => {
 // ✅ ADMIN SPECIFIC LOGIC
 // ==========================================
 
-// 12. Update Studio Feed Approval
+// 12. Update Studio Feed Approval (FIXED: Bypassing Schema Strict Mode)
 app.post('/api/auth/update-studio-approval', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
-        const studio = await Studio.findOne({ mobile });
-        if(studio) {
-            studio.isFeedApproved = req.body.isFeedApproved;
-            await studio.save();
+        // ✅ strict: false use kiya taaki database bina column banaye use force-save kar le
+        const result = await Studio.updateOne(
+            { mobile }, 
+            { $set: { isFeedApproved: req.body.isFeedApproved } }, 
+            { strict: false }
+        );
+        
+        if(result.modifiedCount > 0 || result.matchedCount > 0) {
             res.json({ success: true, message: req.body.isFeedApproved ? "Studio Approved for Feed!" : "Studio Feed Access Revoked!" });
         } else {
             res.json({ success: false, message: "Studio not found" });
