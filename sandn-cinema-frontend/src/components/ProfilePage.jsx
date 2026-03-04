@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import './ProfilePage.css';
 import profileImg from '../assets/sandn-logo.jpg'; 
+
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecovery }) => {
     
@@ -36,22 +39,13 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         address: "Vijay Nagar, Indore, India"
     };
 
-    // ✅ Social Links (Will be dynamic later from DB, for now static dummy to test UI)
-    const [socialLinks, setSocialLinks] = useState([
-        { id: 'insta', name: 'Instagram', icon: '📸', url: '#', color: '#E1306C', handle: '@sandn_cinema' },
-        { id: 'yt', name: 'YouTube', icon: '▶️', url: '#', color: '#FF0000', handle: 'SandN Films' },
-        { id: 'fb', name: 'Facebook', icon: '📘', url: '#', color: '#1877F2', handle: 'SandN Official' },
-        { id: 'wa', name: 'WhatsApp', icon: '💬', url: '#', color: '#25D366', handle: 'Chat with us' },
-        { id: 'twitter', name: 'Twitter', icon: '🐦', url: '#', color: '#1DA1F2', handle: '@sandn_tweets' },
-        { id: 'mail', name: 'Email', icon: '✉️', url: '#', color: '#EA4335', handle: 'Mail Us' }
-    ]);
-
-    const ourBestPoints = [
-        { icon: '🎥', title: 'Cinematic Quality', desc: 'We use high-end 4K cameras & drones for premium output.' },
-        { icon: '🎨', title: 'Creative Editing', desc: 'Our editors turn raw footage into magical stories.' },
-        { icon: '⚡', title: 'Fast Delivery', desc: 'Get your edited photos & videos within the promised timeline.' },
-        { icon: '🤵', title: 'Pro Team', desc: 'Experienced photographers who know the perfect angles.' }
-    ];
+    // ✅ DYNAMIC DATA STATES (Fetched from DB)
+    const [socialLinks, setSocialLinks] = useState([]);
+    const [policyData, setPolicyData] = useState({
+        terms: "Loading...",
+        privacy: "Loading...",
+        bestForYou: "Loading..."
+    });
 
     const activeVacancies = [
         { id: 1, role: "Video Editor", type: "Long Term", time: "Full Time (10-7)", salary: "₹20k - ₹35k", urgent: true },
@@ -64,11 +58,49 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         tab3: { label: "Till Now", visitors: 845100, registered: 24108 }
     });
 
-    const timerRef = useRef(null); 
-
     // --- EFFECTS ---
+
+    // ✅ FETCH REAL DATA FROM BACKEND WHEN SIDEBAR OPENS
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            const fetchDynamicData = async () => {
+                try {
+                    const res = await axios.get(`${API_BASE}/get-platform-settings`);
+                    if (res.data.success && res.data.data) {
+                        if (res.data.data.socialLinks) {
+                            // Backend icon map
+                            const iconMap = {
+                                'Instagram': { icon: '📸', color: '#E1306C' },
+                                'YouTube': { icon: '▶️', color: '#FF0000' },
+                                'Facebook': { icon: '📘', color: '#1877F2' },
+                                'WhatsApp': { icon: '💬', color: '#25D366' },
+                                'Twitter': { icon: '🐦', color: '#1DA1F2' }
+                            };
+                            
+                            // Filter empty URLs and map UI properties
+                            const validLinks = res.data.data.socialLinks
+                                .filter(link => link.url && link.url.trim() !== '')
+                                .map(link => ({
+                                    ...link,
+                                    icon: iconMap[link.platform]?.icon || '🌐',
+                                    color: iconMap[link.platform]?.color || '#333'
+                                }));
+                            
+                            setSocialLinks(validLinks);
+                        }
+                        if (res.data.data.policies) {
+                            setPolicyData(res.data.data.policies);
+                        }
+                    }
+                } catch(e) { console.log("Failed to fetch settings", e); }
+            };
+            fetchDynamicData();
+            
+            // Scroll memory reset
+            if (sidebarContentRef.current) sidebarContentRef.current.scrollTop = 0;
+            document.body.style.overflow = 'hidden';
+        } else {
+            // Reset states when closed
             setActivePopup(null);
             setIsFullView(false);
             setPopupTab('tab1'); 
@@ -76,14 +108,12 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             setCareerInterest(false);
             setCareerSubTab('short');
             setUserRating(0); 
-            setIsAccountsOpen(false); // Reset dropdown
-        } else {
-            // ✅ Scroll Memory Reset (Har baar top se khulega)
-            if (sidebarContentRef.current) {
-                sidebarContentRef.current.scrollTop = 0;
-            }
+            setIsAccountsOpen(false); 
+            document.body.style.overflow = 'unset';
         }
+        return () => { document.body.style.overflow = 'unset'; };
     }, [isOpen]);
+
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -98,20 +128,9 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen]);
 
     const formatNum = (num) => num.toLocaleString('en-IN');
 
-    // ✅ REMOVED 'Accounts' FROM MENU ITEMS list to handle it explicitly
     const menuItems = [
         { id: "Services", label: "Services & Portfolio", icon: "🛠️" },
         { id: "Recovery", label: "Recovery (Forgot Pass)", icon: "🔄" },
@@ -122,7 +141,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: "How do we best for you", label: "How do we best for you", icon: "🤝" }
     ];
 
-    // ✅ PROFILE ACTIONS ROW
     const profileActions = [
         { id: "About us", label: "About", icon: "🏢" },
         { id: "Customer Care", label: "Support", icon: "🎧" },
@@ -198,14 +216,8 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                 return (
                     <div className="popup-inner-box best-box">
                         <h3>Why Choose SandN?</h3>
-                        <div className="usp-grid">
-                            {ourBestPoints.map((point, index) => (
-                                <div key={index} className="usp-card">
-                                    <div className="usp-icon">{point.icon}</div>
-                                    <h4>{point.title}</h4>
-                                    <p>{point.desc}</p>
-                                </div>
-                            ))}
+                        <div style={{marginTop: '15px', background:'#f9f9f9', padding:'15px', borderRadius:'8px', whiteSpace:'pre-line', fontSize:'14px', lineHeight:'1.6', color:'#444'}}>
+                            {policyData.bestForYou}
                         </div>
                     </div>
                 );
@@ -247,13 +259,16 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                         <p className="connect-desc">Check out our latest shoots & BTS on social media.</p>
                         
                         <div className="social-grid">
-                            {/* ✅ Updated to map from state instead of static array */}
-                            {socialLinks.map((link) => (
-                                <a key={link.id} href={link.url} target="_blank" rel="noreferrer" className="social-card" style={{borderColor: link.color}}>
-                                    <span className="social-icon">{link.icon}</span>
-                                    <span className="social-name" style={{color: link.color}}>{link.name}</span>
-                                </a>
-                            ))}
+                            {socialLinks.length > 0 ? (
+                                socialLinks.map((link, idx) => (
+                                    <a key={idx} href={link.url} target="_blank" rel="noreferrer" className="social-card" style={{borderColor: link.color}}>
+                                        <span className="social-icon">{link.icon}</span>
+                                        <span className="social-name" style={{color: link.color}}>{link.platform}</span>
+                                    </a>
+                                ))
+                            ) : (
+                                <p style={{color: '#888', fontSize: '13px', textAlign: 'center', width: '100%'}}>No social links added yet.</p>
+                            )}
                         </div>
                     </div>
                 );
@@ -262,31 +277,17 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                 return (
                     <>
                         <div className="popup-tabs">
-                            <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Security</button>
-                            <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Privacy</button>
+                            <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Terms & Conditions</button>
+                            <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Privacy Policy</button>
                         </div>
                         <div className="popup-inner-box security-box">
                             {popupTab === 'tab1' ? (
-                                <div className="policy-content">
-                                    <div className="policy-item">
-                                        <span className="p-icon">🔒</span>
-                                        <p><strong>Media Safety:</strong> Your photos & raw footage are stored on encrypted servers.</p>
-                                    </div>
-                                    <div className="policy-item">
-                                        <span className="p-icon">🛡️</span>
-                                        <p><strong>Secure Account:</strong> Only you can access your booking history via OTP.</p>
-                                    </div>
+                                <div className="policy-content" style={{whiteSpace:'pre-line', fontSize:'13px', lineHeight:'1.6', color:'#555'}}>
+                                    {policyData.terms}
                                 </div>
                             ) : (
-                                <div className="policy-content">
-                                    <div className="policy-item">
-                                        <span className="p-icon">👁️</span>
-                                        <p><strong>Copyright Policy:</strong> We respect your IP. Your content is never used without permission.</p>
-                                    </div>
-                                    <div className="policy-item">
-                                        <span className="p-icon">📄</span>
-                                        <p><strong>Data Privacy:</strong> We do not share your contact info with third-party agencies.</p>
-                                    </div>
+                                <div className="policy-content" style={{whiteSpace:'pre-line', fontSize:'13px', lineHeight:'1.6', color:'#555'}}>
+                                    {policyData.privacy}
                                 </div>
                             )}
                         </div>
@@ -363,7 +364,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             <div className={`sidebar-backdrop ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
             <div className={`profile-sidebar-container ${isOpen ? 'slide-in' : ''}`}>
                 
-                {/* ✅ DP Full Screen Layout Fix */}
                 {isFullView && (
                     <div className="full-image-overlay" onClick={() => setIsFullView(false)} style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100dvh', background: 'rgba(0,0,0,0.95)', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
                         <img src={profileImg} alt="Full Profile" className="full-screen-img" style={{width: '100%', maxWidth: '500px', height: 'auto', maxHeight: '80vh', objectFit: 'contain'}} />
@@ -371,7 +371,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     </div>
                 )}
 
-                {/* ✅ Popup Wrapper for Perfect Center Alignment */}
                 {activePopup && (
                     <div className="popup-overlay-fixed" onClick={closePopup} style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)'}}>
                         <div className="custom-popup-box" onClick={(e) => e.stopPropagation()}>
@@ -388,20 +387,15 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
                 <div className="sidebar-header-row"><button className="sidebar-close-btn" onClick={onClose}>✕</button></div>
                 
-                {/* ✅ Added ref for scrolling reset */}
                 <div className="sidebar-content" ref={sidebarContentRef} style={{flexGrow: 1, overflowY: 'auto'}}>
-                    {/* DP Section */}
                     <div className="dp-section">
-                        {/* ✅ Profile DP Click to Open Full View */}
                         <div className="profile-img-container" onClick={() => setIsFullView(true)} style={{cursor: 'pointer'}}>
                             <img src={profileImg} alt="DP" className="profile-dp" />
                         </div>
                     </div>
                     
-                    {/* Name */}
                     <div className="profile-header-text">SandN Cinema</div>
 
-                    {/* PROFILE ACTIONS ROW (Icons below name) */}
                     <div className="profile-actions-row">
                         {profileActions.map(action => (
                             <div key={action.id} className="profile-action-btn" onClick={() => handleMenuClick(action.id)}>
@@ -413,10 +407,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     
                     <div className="header-underline" style={{marginTop: '0px'}}></div>
                     
-                    {/* Remaining Menu List */}
                     <ul className="profile-menu-list" style={{marginTop: '15px'}}>
-                        
-                        {/* ✅ EXPLICIT ACCOUNTS DROPDOWN ITEM */}
                         <li className="profile-menu-item" style={{flexDirection: 'column', alignItems: 'flex-start'}} onClick={() => setIsAccountsOpen(!isAccountsOpen)}>
                             <div style={{display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center'}}>
                                 <div className="menu-left-group">
@@ -426,7 +417,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                                 <span className="menu-arrow" style={{ transform: isAccountsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: '0.3s' }}>›</span>
                             </div>
                             
-                            {/* Dropdown Options */}
                             {isAccountsOpen && (
                                 <div className="accounts-dropdown" style={{width: '100%', marginTop: '10px', paddingLeft: '35px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
                                     <div 
@@ -435,7 +425,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                                         🔑 Login
                                     </div>
                                     <div 
-                                        onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); /* Later update to open signup directly if needed */ }} 
+                                        onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); }} 
                                         style={{padding: '8px 12px', background: '#f5f5f5', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
                                         📝 Create Account
                                     </div>
@@ -443,7 +433,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                             )}
                         </li>
 
-                        {/* Other Standard Items */}
                         {menuItems.map((item, index) => (
                             <li key={index} className="profile-menu-item" onClick={() => handleMenuClick(item.id)}>
                                 <div className="menu-left-group"><span className="menu-icon">{item.icon}</span><span className="menu-label">{item.label}</span></div>
