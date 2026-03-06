@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// Hum yahan wahi purani CSS classes use kar rahe hain taaki layout Admin jaisa hi aaye
 import './StudioDashboard.css'; 
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
@@ -13,15 +12,18 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [studioProfile, setStudioProfile] = useState(user);
     const [clientMobile, setClientMobile] = useState('');
     const [clientName, setClientName] = useState('');
+    const [clientEmail, setClientEmail] = useState(''); // ✅ NEW: Added Email for Notification
     const [files, setFiles] = useState([]);
     const [feedFiles, setFeedFiles] = useState([]); 
     const [clients, setClients] = useState([]); 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
 
-    // --- FOLDER STATES ---
+    // --- FOLDER & FILE COUNTER STATES (NEW) ---
     const [folderName, setFolderName] = useState('');
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+    const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
+    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); // ✅ Counter State
 
     // --- PROFILE EDIT STATES ---
     const [profileEdit, setProfileEdit] = useState({
@@ -94,9 +96,38 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // --- 3. UPLOAD LOGIC ---
-    const handleFileChange = (e) => setFiles(e.target.files);
-    const handleFeedFileChange = (e) => setFeedFiles(e.target.files);
+    // --- 3. UPLOAD LOGIC & COUNTERS ---
+    const handleFileChange = (e) => {
+        const selectedFiles = Array.from(e.target.files);
+        setFiles(selectedFiles);
+        // ✅ Count Photos and Videos separately
+        const photos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
+        const videos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
+        setFileStats(prev => ({ ...prev, photos, videos }));
+    };
+
+    const handleFeedFileChange = (e) => {
+        const selectedFiles = Array.from(e.target.files);
+        setFeedFiles(selectedFiles);
+        // ✅ Count Feed Content separately
+        const feedPhotos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
+        const feedVideos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
+        setFileStats(prev => ({ ...prev, feedPhotos, feedVideos }));
+    };
+
+    // ✅ MOBILE AUTO-FILL LOGIC
+    const handleMobileChange = (e) => {
+        const val = e.target.value;
+        setClientMobile(val);
+        setShowMobileSuggestions(true);
+
+        // Auto-fill silently if exactly 10 digits match an existing client
+        const exactMatch = clients.find(c => c.mobile === val);
+        if (exactMatch) {
+            setClientName(exactMatch.name || exactMatch.studioName || '');
+            setClientEmail(exactMatch.email || ''); // Ensure email is picked up if available
+        }
+    };
 
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
@@ -104,39 +135,40 @@ const StudioDashboard = ({ user, onLogout }) => {
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
         setLoading(true);
-        const formData = new FormData();
+        const formDataPayload = new FormData();
         
         if (isFeed) {
-            // ✅ Uploading to Public Feed Folder
-            formData.append('mobile', studioProfile.mobile);
-            formData.append('name', studioProfile.studioName);
-            formData.append('type', 'STUDIO');
-            formData.append('folderName', 'Public Feed Content'); 
+            formDataPayload.append('mobile', studioProfile.mobile);
+            formDataPayload.append('name', studioProfile.studioName);
+            formDataPayload.append('type', 'STUDIO');
+            formDataPayload.append('folderName', 'Public Feed Content'); 
         } else {
-            // Regular Client Upload
-            formData.append('mobile', clientMobile);
-            formData.append('name', clientName || 'Client');
-            formData.append('type', 'USER');
-            formData.append('folderName', folderName); 
+            formDataPayload.append('mobile', clientMobile);
+            formDataPayload.append('name', clientName || 'Client');
+            formDataPayload.append('type', 'USER');
+            formDataPayload.append('folderName', folderName);
+            formDataPayload.append('email', clientEmail); // ✅ Pass Email for Notification
         }
         
-        formData.append('addedBy', user.mobile); 
+        formDataPayload.append('addedBy', user.mobile); 
 
         for (let i = 0; i < currentFiles.length; i++) {
-            formData.append('mediaFiles', currentFiles[i]);
+            formDataPayload.append('mediaFiles', currentFiles[i]);
         }
 
         try {
-            const res = await axios.post(`${API_BASE}/admin-add-user`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const res = await axios.post(`${API_BASE}/admin-add-user`, formDataPayload, { headers: { 'Content-Type': 'multipart/form-data' } });
 
             if (res.data.success) {
-                alert(`✅ Success: ${res.data.message}`);
+                alert(`✅ Success: ${res.data.message}\n📩 Notification sent to Client on Email & WhatsApp!`);
                 if (isFeed) {
                     setFeedFiles([]);
                     document.getElementById('feed-input-field').value = '';
+                    setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                 } else {
-                    setClientMobile(''); setClientName(''); setFolderName(''); setFiles([]);
+                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); setFiles([]);
                     document.getElementById('file-input-field').value = '';
+                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
                 }
                 fetchClients();
             } else { alert(`❌ Error: ${res.data.message}`); }
@@ -156,7 +188,8 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
-    // ✅ FOLDER AUTO-SUGGEST LOGIC
+    // ✅ DYNAMIC SUGGESTIONS
+    const filteredMobileSuggestions = clients.filter(c => c.mobile && c.mobile.includes(clientMobile));
     const selectedClient = clients.find(c => c.mobile === clientMobile);
     let existingFolders = [];
     if (selectedClient && selectedClient.uploadedData) {
@@ -166,21 +199,17 @@ const StudioDashboard = ({ user, onLogout }) => {
 
 
     return (
-        // ✅ Admin Panel jaisa Layout Structure
         <div className="owner-dashboard-container"> 
             
-            {/* 👈 SIDEBAR */}
             <aside className="admin-sidebar">
                 <div className="sidebar-header">
                     <h1 className="admin-title">Studio Panel</h1>
                 </div>
                 
-                {/* Studio Info Card in Sidebar */}
                 <div style={{ background: '#0f3460', padding: '15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>
                     <h4 style={{ margin: 0, color: '#4dabf7' }}>{studioProfile.studioName || user.ownerName}</h4>
                     <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#aeb6bf' }}>{studioProfile.mobile}</p>
                     
-                    {/* ✅ Verification Badge (Green if Approved) */}
                     {studioProfile.isFeedApproved && (
                         <span style={{ display:'inline-block', marginTop:'10px', background:'#2ecc71', color:'#fff', fontSize:'11px', padding:'3px 8px', borderRadius:'10px', fontWeight: 'bold' }}>✓ Verified Creator</span>
                     )}
@@ -190,7 +219,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>👥 My Clients</li>
                     <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Client Data</li>
                     
-                    {/* ✅ NEW FEED MANAGEMENT TAB (Admin se approve hone par hi dikhega) */}
                     {studioProfile.isFeedApproved && (
                         <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => setActiveTab('FEED')}>🌟 Feed Management</li>
                     )}
@@ -201,7 +229,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                 <button onClick={onLogout} className="admin-logout-btn">Log Out</button>
             </aside>
 
-            {/* 👉 MAIN CONTENT (TABS) */}
             <main className="admin-main-content">
 
                 {/* 🔴 TAB 1: CLIENTS DASHBOARD */}
@@ -227,7 +254,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <tbody>
                                     {clients.length > 0 ? (
                                         clients.map((client, idx) => {
-                                            // Folder count logic
                                             let fileCount = client.uploadedData ? client.uploadedData.length : 0;
                                             return (
                                                 <tr key={idx}>
@@ -254,24 +280,54 @@ const StudioDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 2: UPLOAD CLIENT DATA */}
+                {/* 🔴 TAB 2: UPLOAD CLIENT DATA (UPGRADED WITH AUTO-FILL, EMAIL & COUNTERS) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Upload Data for Client</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
-                                <div>
+                                {/* ✅ MOBILE WITH AUTO-SUGGEST */}
+                                <div style={{ position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Mobile</label>
-                                    <input type="number" placeholder="10-Digit Number" value={clientMobile} onChange={(e) => setClientMobile(e.target.value)} className="custom-admin-input" />
+                                    <input 
+                                        type="number" 
+                                        placeholder="10-Digit Number" 
+                                        value={clientMobile} 
+                                        onChange={handleMobileChange}
+                                        onFocus={() => setShowMobileSuggestions(true)} 
+                                        onBlur={() => setTimeout(() => setShowMobileSuggestions(false), 200)}
+                                        className="custom-admin-input" 
+                                    />
+                                    {showMobileSuggestions && clientMobile && filteredMobileSuggestions.length > 0 && (
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                            {filteredMobileSuggestions.map((c, idx) => (
+                                                <li key={idx} onMouseDown={() => {
+                                                    setClientMobile(c.mobile);
+                                                    setClientName(c.name || 'Client');
+                                                    setClientEmail(c.email || '');
+                                                    setShowMobileSuggestions(false);
+                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                                    📞 <strong>{c.mobile}</strong> - {c.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
                                 
                                 <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Name</label>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Name {selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
                                     <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" />
                                 </div>
+
+                                {/* ✅ CLIENT EMAIL FOR NOTIFICATION */}
+                                <div>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Email (For Notification) {clientEmail && selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
+                                    <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" />
+                                    <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>We will send a notification to this email once data is uploaded.</p>
+                                </div>
                                 
-                                {/* ✅ FOLDER NAME INPUT WITH AUTO-SUGGEST */}
+                                {/* ✅ FOLDER NAME INPUT WITH WARNING */}
                                 <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name</label>
                                     <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to select existing or create new.</p>
@@ -284,6 +340,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} 
                                         className="custom-admin-input" 
                                     />
+                                    {/* DEFAULT FOLDER ALERT */}
+                                    {(!folderName || folderName.trim() === '') && (
+                                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span>⚠️</span> Default folder "Stranger Photography" will be used.
+                                        </div>
+                                    )}
+
                                     {showFolderSuggestions && existingFolders.length > 0 && (
                                         <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
                                             {filteredFolderSuggestions.map((folder, idx) => (
@@ -295,13 +358,26 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
-                                <div style={{ border: '2px dashed #ccc', padding: '15px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
+                                {/* ✅ FILE UPLOAD WITH REAL-TIME COUNT */}
+                                <div style={{ border: '2px dashed #ccc', padding: '20px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
                                     <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Select Photos/Videos</label>
-                                    <input id="file-input-field" type="file" multiple onChange={handleFileChange} style={{ color: '#333' }} />
+                                    <input id="file-input-field" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />
+                                    
+                                    {/* DYNAMIC FILE COUNTERS */}
+                                    {files.length > 0 && (
+                                        <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                                            <div style={{ background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
+                                                📸 Photos: {fileStats.photos}
+                                            </div>
+                                            <div style={{ background: '#fdedec', border: '1px solid #e74c3c', color: '#c0392b', padding: '5px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
+                                                🎥 Videos: {fileStats.videos}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px' }}>
-                                    {loading ? 'Uploading...' : '🚀 Upload & Notify Client'}
+                                    {loading ? 'Uploading & Sending Notification...' : '🚀 Upload & Notify Client'}
                                 </button>
                             </div>
                         </div>
@@ -323,7 +399,14 @@ const StudioDashboard = ({ user, onLogout }) => {
                             <div style={{ border: '2px dashed #d4af37', padding: '30px', borderRadius: '10px', background: '#fafafa' }}>
                                 <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', fontSize:'18px', color: '#8e6b1e' }}>📸 Select Feed Content</label>
                                 <input id="feed-input-field" type="file" multiple accept="image/*,video/mp4,video/mov" onChange={handleFeedFileChange} style={{marginTop: '10px'}}/>
-                                <p style={{fontSize: '11px', color: '#888', marginTop: '10px'}}>Max video duration: 1 min.</p>
+                                
+                                {/* FEED FILE COUNTERS */}
+                                {feedFiles.length > 0 && (
+                                    <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                                        <div style={{ background: '#e8f8f5', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>📸 Photos: {fileStats.feedPhotos}</div>
+                                        <div style={{ background: '#fdedec', color: '#c0392b', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>🎥 Videos: {fileStats.feedVideos}</div>
+                                    </div>
+                                )}
                             </div>
                             
                             <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background:'linear-gradient(135deg, #d4af37, #f1c40f)', color:'#000', fontSize: '16px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 15px rgba(212, 175, 55, 0.4)' }}>
