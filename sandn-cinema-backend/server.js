@@ -734,18 +734,53 @@ app.post('/api/auth/update-policies', async (req, res) => {
     }
 });
 
+// ==========================================
+// ✅ GET SERVICES LOGIC (Fix for 404 Error)
+// ==========================================
+app.get('/api/auth/get-services', async (req, res) => {
+    try {
+        // Abhi ke liye hum yahan se default list bhej rahe hain. 
+        // Future mein Admin Panel se dynamic banane ke liye ise DB se connect kar sakte hain.
+        const defaultServices = [
+            "Wedding Photography", 
+            "Pre-Wedding Shoot", 
+            "Corporate Event", 
+            "Fashion / Portfolio", 
+            "Maternity Shoot",
+            "Birthday Party",
+            "Other Media Service"
+        ];
+        
+        res.json({ success: true, services: defaultServices });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch services." });
+    }
+});
 
 // ==========================================
-// ✅ 18. DIRECT BOOKINGS LOGIC 
+// ✅ 18. DIRECT BOOKINGS LOGIC (UPDATED WITH NEW FIELDS)
 // ==========================================
 
 // Create a new Booking
 app.post('/api/auth/create-booking', async (req, res) => {
     try {
-        const { name, mobile, date, type } = req.body;
-        const newBooking = await Booking.create({ name, mobile, date, type });
-        res.json({ success: true, message: "Booking received successfully!", data: newBooking });
+        const { name, mobile, startDate, endDate, type, location, eventPlaceName } = req.body;
+        
+        // strict: false use kar rahe hain taaki agar mongoose schema me update na bhi ho toh crash na ho
+        const newBooking = await Booking.create([{ 
+            name, 
+            mobile, 
+            startDate, 
+            endDate, 
+            type, 
+            location, 
+            eventPlaceName,
+            status: 'Pending'
+        }], { strict: false });
+
+        res.json({ success: true, message: "Booking received successfully!", data: newBooking[0] });
     } catch (e) {
+        console.error("Booking Error:", e);
         res.status(500).json({ success: false, message: "Failed to create booking." });
     }
 });

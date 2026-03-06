@@ -109,12 +109,15 @@ const offerSchema = new mongoose.Schema({
 
 // --- 6. BOOKING SCHEMA ---
 const bookingSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    mobile: { type: String }, // Optional contact
-    date: { type: String, required: true },
-    type: { type: String, required: true }, // e.g., Wedding, Pre-Wedding, Corporate
-    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
-    createdAt: { type: Date, default: Date.now }
+    name: String,
+    mobile: String,
+    startDate: String,
+    endDate: String,
+    type: String,
+    location: String,
+    eventPlaceName: String,
+    status: { type: String, default: 'Pending' },
+    createdAt: { type: Date, default: Date.now } // Fixed sorting key
 });
 
 // --- 7. COLLAB REQUEST SCHEMA ---
