@@ -12,18 +12,23 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [studioProfile, setStudioProfile] = useState(user);
     const [clientMobile, setClientMobile] = useState('');
     const [clientName, setClientName] = useState('');
-    const [clientEmail, setClientEmail] = useState(''); // ✅ NEW: Added Email for Notification
+    const [clientEmail, setClientEmail] = useState(''); // ✅ Added Email for Notification
     const [files, setFiles] = useState([]);
     const [feedFiles, setFeedFiles] = useState([]); 
     const [clients, setClients] = useState([]); 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
 
-    // --- FOLDER & FILE COUNTER STATES (NEW) ---
+    // --- FOLDER & FILE COUNTER STATES ---
     const [folderName, setFolderName] = useState('');
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
     const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); // ✅ Counter State
+
+    // ✅ NEW: UPLOAD PROGRESS TRACKER STATES
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadSpeed, setUploadSpeed] = useState('');
+    const [uploadETA, setUploadETA] = useState('');
 
     // --- PROFILE EDIT STATES ---
     const [profileEdit, setProfileEdit] = useState({
@@ -129,12 +134,17 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
+    // 🚀 UPGRADED: UPLOAD FUNCTION WITH REAL-TIME PROGRESS CALCULATION
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
         setLoading(true);
+        setUploadProgress(0);
+        setUploadSpeed('Calculating...');
+        setUploadETA('Calculating...');
+
         const formDataPayload = new FormData();
         
         if (isFeed) {
@@ -156,24 +166,77 @@ const StudioDashboard = ({ user, onLogout }) => {
             formDataPayload.append('mediaFiles', currentFiles[i]);
         }
 
+        // Timers for Speed and ETA calculation
+        let startTime = Date.now();
+        let lastLoadedBytes = 0;
+        let lastTime = startTime;
+
         try {
-            const res = await axios.post(`${API_BASE}/admin-add-user`, formDataPayload, { headers: { 'Content-Type': 'multipart/form-data' } });
+            const res = await axios.post(`${API_BASE}/admin-add-user`, formDataPayload, { 
+                headers: { 'Content-Type': 'multipart/form-data' },
+                // ✅ AXIOS UPLOAD PROGRESS EVENT
+                onUploadProgress: (progressEvent) => {
+                    const { loaded, total } = progressEvent;
+                    const percentCompleted = Math.round((loaded * 100) / total);
+                    setUploadProgress(percentCompleted);
+
+                    const currentTime = Date.now();
+                    const timeElapsedLimit = (currentTime - lastTime) / 1000; // in seconds
+
+                    // Update ETA and Speed every 0.5 seconds to prevent flickering
+                    if (timeElapsedLimit > 0.5) {
+                        const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                        const speedKbps = speedBps / 1024;
+                        const speedMbps = speedKbps / 1024;
+
+                        // Update Speed UI
+                        if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                        else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+
+                        // Update ETA UI
+                        const bytesRemaining = total - loaded;
+                        const etaSeconds = bytesRemaining / speedBps;
+
+                        if (etaSeconds > 60) {
+                            setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                        } else if (etaSeconds > 0) {
+                            setUploadETA(`${Math.floor(etaSeconds)}s left`);
+                        } else {
+                            setUploadETA(`Almost done...`);
+                        }
+
+                        lastLoadedBytes = loaded;
+                        lastTime = currentTime;
+                    }
+                }
+            });
 
             if (res.data.success) {
-                alert(`✅ Success: ${res.data.message}\n📩 Notification sent to Client on Email & WhatsApp!`);
-                if (isFeed) {
-                    setFeedFiles([]);
-                    document.getElementById('feed-input-field').value = '';
-                    setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
-                } else {
-                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); setFiles([]);
-                    document.getElementById('file-input-field').value = '';
-                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
-                }
-                fetchClients();
-            } else { alert(`❌ Error: ${res.data.message}`); }
-        } catch (error) { alert("Upload Failed. Backend check karein."); } 
-        finally { setLoading(false); }
+                setUploadProgress(100);
+                setUploadETA('Complete!');
+                setTimeout(() => {
+                    alert(`✅ Success: ${res.data.message}\n📩 Notification sent to Client on Email & WhatsApp!`);
+                    if (isFeed) {
+                        setFeedFiles([]);
+                        document.getElementById('feed-input-field').value = '';
+                        setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
+                    } else {
+                        setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); setFiles([]);
+                        document.getElementById('file-input-field').value = '';
+                        setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    }
+                    fetchClients();
+                    setLoading(false);
+                }, 500);
+            } else { 
+                alert(`❌ Error: ${res.data.message}`); 
+                setLoading(false);
+            }
+        } catch (error) { 
+            alert("Upload Failed. Backend check karein."); 
+            setLoading(false);
+        } 
     };
 
     // --- 4. PROFILE UPDATE LOGIC ---
@@ -280,7 +343,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 2: UPLOAD CLIENT DATA (UPGRADED WITH AUTO-FILL, EMAIL & COUNTERS) */}
+                {/* 🔴 TAB 2: UPLOAD CLIENT DATA (UPGRADED WITH LIVE PROGRESS) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Upload Data for Client</h2></div>
@@ -375,16 +438,32 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* ✅ LIVE UPLOAD PROGRESS BAR UI */}
+                                {loading && (
+                                    <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
+                                            <span>Uploading Data... {uploadProgress}%</span>
+                                            <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
+                                        </div>
+                                        <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>
+                                            ⏳ {uploadETA}
+                                        </div>
+                                    </div>
+                                )}
                                 
-                                <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px' }}>
-                                    {loading ? 'Uploading & Sending Notification...' : '🚀 Upload & Notify Client'}
+                                <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px', background: loading ? '#95a5a6' : '#2ecc71', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                    {loading ? 'Uploading in Progress...' : '🚀 Upload & Notify Client'}
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: FEED MANAGEMENT (NEW TAB for Approved Studios) */}
+                {/* 🔴 TAB 3: FEED MANAGEMENT */}
                 {activeTab === 'FEED' && studioProfile.isFeedApproved && (
                     <div className="view-section">
                         <div className="section-header"><h2>🌟 Feed Management</h2></div>
@@ -408,8 +487,24 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* ✅ LIVE UPLOAD PROGRESS BAR UI FOR FEED */}
+                            {loading && (
+                                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginTop: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
+                                        <span>Publishing... {uploadProgress}%</span>
+                                        <span style={{ color: '#d4af37' }}>{uploadSpeed}</span>
+                                    </div>
+                                    <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #f1c40f, #d4af37)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                    </div>
+                                    <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>
+                                        ⏳ {uploadETA}
+                                    </div>
+                                </div>
+                            )}
                             
-                            <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background:'linear-gradient(135deg, #d4af37, #f1c40f)', color:'#000', fontSize: '16px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 15px rgba(212, 175, 55, 0.4)' }}>
+                            <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background: loading ? '#bdc3c7' : 'linear-gradient(135deg, #d4af37, #f1c40f)', color:'#000', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}>
                                 {loading ? 'Uploading to Server...' : '🔥 Upload to Global Feed'}
                             </button>
                         </div>
