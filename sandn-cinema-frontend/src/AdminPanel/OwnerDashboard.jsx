@@ -18,11 +18,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
     const dpInputRef = useRef(null);
 
-    // --- UPLOAD DATA STATES ---
-    const [formData, setFormData] = useState({ type: 'USER', name: '', mobile: '', folderName: '', files: [] });
+    // --- UPLOAD DATA STATES (UPGRADED WITH EXPIRY LIMITS) ---
+    const [formData, setFormData] = useState({ 
+        type: 'USER', 
+        name: '', 
+        mobile: '', 
+        folderName: '', 
+        files: [],
+        expiryDays: '30',       // Default 30 days expiry
+        downloadLimit: '0'      // 0 means unlimited
+    });
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+    const [uploadSubTab, setUploadSubTab] = useState('BASIC'); // 'BASIC' or 'LIMITS'
 
     // --- ADMIN SETTINGS STATES ---
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || 'Owner', email: user?.email || '', password: user?.password || '' });
@@ -161,8 +170,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         
-        // ✅ CONFIRMATION POPUP
-        if (!window.confirm(`Are you sure you want to upload data for ${formData.name || formData.mobile}?`)) return;
+        // ✅ CONFIRMATION POPUP WITH EXPIRY WARNING
+        const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
+        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nFolder Expiry: ${expiryText}\nDownload Limit: ${formData.downloadLimit === '0' ? 'Unlimited' : formData.downloadLimit}`)) return;
 
         setLoading(true);
         const data = new FormData();
@@ -170,15 +180,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
         data.append('name', formData.name);
         data.append('mobile', formData.mobile);
         data.append('folderName', formData.folderName);
+        data.append('expiryDays', formData.expiryDays); // Sending new limit data
+        data.append('downloadLimit', formData.downloadLimit); // Sending new limit data
         data.append('addedBy', 'ADMIN'); 
+        
         formData.files.forEach(file => data.append('mediaFiles', file));
 
         try {
             const res = await axios.post(`${API_BASE}/admin-add-user`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data.success) {
                 alert(`✅ Success: ${res.data.message}`);
-                setFormData({ type: 'USER', name: '', mobile: '', folderName: '', files: [] }); 
+                setFormData({ type: 'USER', name: '', mobile: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0' }); 
                 setPreviews([]); 
+                setUploadSubTab('BASIC');
                 fetchAccounts();
             } else { alert(res.data.message); }
         } catch (error) { alert("Server Error."); } 
@@ -440,107 +454,140 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: DIRECT BOOKINGS (NEW BOOKING FIELDS LOGIC ADDED HERE) */}
+                {/* 🔴 TAB 3: DIRECT BOOKINGS */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
-                        <div className="section-header">
-                            <h2>📅 Direct Bookings</h2>
-                            <button onClick={fetchBookings} style={{padding:'8px 15px', background:'#3498db', color:'#fff', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>🔄 Refresh</button>
-                        </div>
+                        <div className="section-header"><h2>📅 Direct Bookings</h2></div>
                         <div className="data-table-container">
                             <table className="admin-table">
                                 <thead>
-                                    <tr>
-                                        <th>Client Details</th>
-                                        <th>Shoot Dates</th>
-                                        <th>Service Type</th>
-                                        <th>Location & Venue</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
+                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
                                     {bookings.map(b => (
                                         <tr key={b._id}>
-                                            <td>
-                                                <strong style={{fontSize:'15px', color:'#2c3e50'}}>{b.name}</strong><br/>
-                                                <span style={{fontSize:'12px', color:'#7f8c8d'}}>📞 {b.mobile || 'N/A'}</span>
-                                            </td>
-                                            <td>
-                                                <span style={{color:'#e67e22', fontWeight:'bold', fontSize:'13px'}}>
-                                                    From: {b.startDate ? new Date(b.startDate).toLocaleDateString() : (b.date ? new Date(b.date).toLocaleDateString() : 'N/A')}
-                                                </span><br/>
-                                                <span style={{color:'#e74c3c', fontWeight:'bold', fontSize:'13px'}}>
-                                                    To: {b.endDate ? new Date(b.endDate).toLocaleDateString() : 'N/A'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className="status-badge normal">{b.type || 'N/A'}</span>
-                                            </td>
-                                            <td>
-                                                <span style={{fontWeight:'bold', color:'#34495e'}}>{b.location || 'N/A'}</span><br/>
-                                                <span style={{fontSize:'12px', color:'#7f8c8d'}}>🏨 {b.eventPlaceName || 'N/A'}</span>
-                                            </td>
+                                            <td><strong>{b.name}</strong></td>
+                                            <td>{b.mobile || 'N/A'}</td>
+                                            <td>{b.date}</td>
+                                            <td>{b.type}</td>
                                             <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
                                             <td>
                                                 {b.status === 'Pending' && (
-                                                    <div style={{display:'flex', gap:'5px'}}>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px'}}>Accept</button>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px'}}>Decline</button>
-                                                    </div>
-                                                )}
-                                                {b.status !== 'Pending' && (
-                                                    <span style={{fontSize:'12px', color:'#888'}}>Action Taken</span>
+                                                    <>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                    </>
                                                 )}
                                             </td>
                                         </tr>
                                     ))}
-                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'30px', color:'#888'}}>No recent bookings found.</td></tr>}
+                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: UPLOAD DATA */}
+                {/* 🔴 TAB 4: UPLOAD DATA (UPGRADED WITH EXPIRY TABS) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
+                        
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
+                            
+                            {/* NAYA TAB NAVIGATION ANDAR */}
+                            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+                                <button 
+                                    onClick={() => setUploadSubTab('BASIC')} 
+                                    style={{ flex: 1, padding: '10px', background: uploadSubTab === 'BASIC' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'BASIC' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}
+                                >
+                                    1. Basic Info
+                                </button>
+                                <button 
+                                    onClick={() => setUploadSubTab('LIMITS')} 
+                                    style={{ flex: 1, padding: '10px', background: uploadSubTab === 'LIMITS' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'LIMITS' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}
+                                >
+                                    2. Access Limits
+                                </button>
+                            </div>
+
                             <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
-                                <div style={{ position: 'relative' }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number (Auto-suggest)</label>
-                                    <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
-                                    {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
-                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none' }}>
-                                            {filteredSuggestions.map((acc, idx) => (
-                                                <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                                
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Name</label>
-                                <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" /></div>
-                                
-                                <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
-                                    <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
-                                        <option value="USER">User</option><option value="STUDIO">Studio</option>
-                                    </select>
-                                </div>
-                                
-                                <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px' }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>📂 Folder Name</label>
-                                    <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} className="custom-admin-input" />
-                                </div>
-                                
-                                <div style={{ border: '2px dashed #ccc', padding: '15px', textAlign: 'center' }}>
-                                    <label style={{ fontWeight: 'bold' }}>📁 Upload Files</label>
-                                    <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
-                                </div>
-                                <button type="submit" disabled={loading} className="global-update-btn" style={{ padding: '15px' }}>{loading ? 'Uploading...' : '🚀 Upload Data'}</button>
+                                {/* 🟢 SUB-TAB 1: BASIC INFORMATION */}
+                                {uploadSubTab === 'BASIC' && (
+                                    <>
+                                        <div style={{ position: 'relative' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number (Auto-suggest)</label>
+                                            <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
+                                            {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
+                                                <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none' }}>
+                                                    {filteredSuggestions.map((acc, idx) => (
+                                                        <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                        
+                                        <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Name</label>
+                                        <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" /></div>
+                                        
+                                        <div>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
+                                            <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
+                                                <option value="USER">User</option><option value="STUDIO">Studio</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>📂 Folder Name</label>
+                                            <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} className="custom-admin-input" />
+                                        </div>
+                                        
+                                        <div style={{ border: '2px dashed #ccc', padding: '15px', textAlign: 'center' }}>
+                                            <label style={{ fontWeight: 'bold' }}>📁 Upload Files</label>
+                                            <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                        </div>
+
+                                        <button type="button" onClick={() => setUploadSubTab('LIMITS')} className="global-update-btn" style={{ padding: '15px', background: '#3498db' }}>Next: Set Limits ➡️</button>
+                                    </>
+                                )}
+
+                                {/* 🟢 SUB-TAB 2: ACCESS & EXPIRY LIMITS */}
+                                {uploadSubTab === 'LIMITS' && (
+                                    <div style={{ background: '#fcf3cf', padding: '20px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
+                                        <h3 style={{ marginTop: 0, color: '#d4ac0d' }}>⏳ Set Expiry & Access</h3>
+                                        <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Auto-delete data after selected time to save server storage. You can also restrict how many times the user can download.</p>
+                                        
+                                        <div style={{ marginBottom: '15px' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Time Duration (Auto Delete)</label>
+                                            <select value={formData.expiryDays} onChange={(e) => setFormData({ ...formData, expiryDays: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                                <option value="7">7 Days</option>
+                                                <option value="15">15 Days</option>
+                                                <option value="30">1 Month (30 Days)</option>
+                                                <option value="90">3 Months (90 Days)</option>
+                                                <option value="0">Never Expire (Permanent)</option>
+                                            </select>
+                                        </div>
+
+                                        <div style={{ marginBottom: '20px' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Download Limit per user</label>
+                                            <select value={formData.downloadLimit} onChange={(e) => setFormData({ ...formData, downloadLimit: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                                <option value="0">Unlimited Downloads</option>
+                                                <option value="1">Only 1 Time</option>
+                                                <option value="3">Max 3 Times</option>
+                                                <option value="5">Max 5 Times</option>
+                                            </select>
+                                        </div>
+
+                                        <button type="submit" disabled={loading} className="global-update-btn" style={{ padding: '15px', width: '100%', background: '#27ae60' }}>
+                                            {loading ? 'Uploading & Setting Rules...' : '🚀 Final Upload Data'}
+                                        </button>
+                                        
+                                        <button type="button" onClick={() => setUploadSubTab('BASIC')} style={{ width: '100%', padding: '10px', marginTop: '10px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
+                                            ⬅️ Back to Basic Info
+                                        </button>
+                                    </div>
+                                )}
                             </form>
                         </div>
                     </div>
