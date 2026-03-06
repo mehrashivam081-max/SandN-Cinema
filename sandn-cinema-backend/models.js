@@ -10,7 +10,16 @@ const userSchema = new mongoose.Schema({
     
     // ✅ NEW: Tracking & Data
     addedBy: { type: String, default: 'SELF' }, // Kisine add kiya ya khud signup kiya
-    uploadedData: [{ type: String }], // Photos/Videos ke paths ka array
+    
+    // 🚀 UPGRADED: Smart Upload Data with Expiry & Limits
+    uploadedData: [{
+        folderName: String,
+        files: [{ type: String }],                       // Photos/Videos ke paths ka array
+        isDefault: { type: Boolean, default: false },
+        expiryDate: { type: Date, default: null },       // ⏳ Time-based expiry (Auto Delete)
+        downloadLimit: { type: Number, default: 0 },     // 📥 Download limit (0 = Unlimited)
+        downloadCount: { type: Number, default: 0 }      // 📊 Track current downloads
+    }],
     
     // Profile
     profileImage: String,
@@ -46,7 +55,16 @@ const studioSchema = new mongoose.Schema({
     
     // ✅ NEW: Tracking & Data
     addedBy: { type: String, default: 'SELF' },
-    uploadedData: [{ type: String }],
+    
+    // 🚀 UPGRADED: Smart Upload Data with Expiry & Limits
+    uploadedData: [{
+        folderName: String,
+        files: [{ type: String }],
+        isDefault: { type: Boolean, default: false },
+        expiryDate: { type: Date, default: null },       // ⏳ Time-based expiry (Auto Delete)
+        downloadLimit: { type: Number, default: 0 },     // 📥 Download limit (0 = Unlimited)
+        downloadCount: { type: Number, default: 0 }      // 📊 Track current downloads
+    }],
 
     // Verification
     adhaarNumber: { type: String, default: "Pending" }, // 🛠 Required hata diya taaki signup na ruke
