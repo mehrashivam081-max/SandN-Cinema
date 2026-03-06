@@ -64,13 +64,29 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     setProfileData({ email: dbData.email || '', location: dbData.location || '' });
                     if(dbData.wallet) setWallet(dbData.wallet);
                     
-                    const fetchedFolders = dbData.uploadedData || [];
+                    // ✅ FIXED LOGIC: Bulletproof Data Parser for Object vs Array
+                    let fetchedFolders = dbData.uploadedData || [];
                     
-                    const customFolders = fetchedFolders.filter(f => f.folderName?.trim().toLowerCase() !== 'stranger photography');
-                    const backendDefaultFolder = fetchedFolders.find(f => f.folderName?.trim().toLowerCase() === 'stranger photography');
+                    // Force Mongoose Object to Array if it got messed up
+                    if (!Array.isArray(fetchedFolders)) {
+                        if (typeof fetchedFolders === 'object' && fetchedFolders !== null) {
+                            fetchedFolders = Object.values(fetchedFolders);
+                        } else {
+                            fetchedFolders = [];
+                        }
+                    }
+
+                    // Handle legacy string arrays safely
+                    if (fetchedFolders.length > 0 && typeof fetchedFolders[0] === 'string') {
+                        fetchedFolders = [{ folderName: 'Stranger Photography', files: fetchedFolders, isDefault: true }];
+                    }
+                    
+                    // Clean up and filter
+                    const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'stranger photography');
+                    const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'stranger photography');
                     
                     const finalDefaultFolder = backendDefaultFolder 
-                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder } 
+                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder, files: backendDefaultFolder.files || [] } 
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
@@ -106,7 +122,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // --- HELPERS ---
     const isVideo = (filePath) => {
-        if (!filePath) return false;
+        if (!filePath || typeof filePath !== 'string') return false;
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
     const getCleanUrl = (filePath) => `${SERVER_URL}${filePath.replace(/\\/g, '/')}`;
@@ -143,33 +159,35 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             const response = await axios({
                 url,
                 method: 'GET',
-                responseType: 'blob', // Important for saving file
+                responseType: 'blob', 
                 onDownloadProgress: (progressEvent) => {
                     const { loaded, total } = progressEvent;
-                    const percentCompleted = Math.round((loaded * 100) / total);
-                    setDownloadProgress(percentCompleted);
+                    if(total) {
+                        const percentCompleted = Math.round((loaded * 100) / total);
+                        setDownloadProgress(percentCompleted);
 
-                    const currentTime = Date.now();
-                    const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+                        const currentTime = Date.now();
+                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
 
-                    if (timeElapsedLimit > 0.5) {
-                        const bytesLoadedSinceLast = loaded - lastLoadedBytes;
-                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                        const speedKbps = speedBps / 1024;
-                        const speedMbps = speedKbps / 1024;
+                        if (timeElapsedLimit > 0.5) {
+                            const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                            const speedKbps = speedBps / 1024;
+                            const speedMbps = speedKbps / 1024;
 
-                        if (speedMbps >= 1) setDownloadSpeed(`${speedMbps.toFixed(2)} MB/s`);
-                        else setDownloadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+                            if (speedMbps >= 1) setDownloadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                            else setDownloadSpeed(`${speedKbps.toFixed(2)} KB/s`);
 
-                        const bytesRemaining = total - loaded;
-                        const etaSeconds = bytesRemaining / speedBps;
+                            const bytesRemaining = total - loaded;
+                            const etaSeconds = bytesRemaining / speedBps;
 
-                        if (etaSeconds > 60) setDownloadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                        else if (etaSeconds > 0) setDownloadETA(`${Math.floor(etaSeconds)}s left`);
-                        else setDownloadETA(`Almost done...`);
+                            if (etaSeconds > 60) setDownloadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                            else if (etaSeconds > 0) setDownloadETA(`${Math.floor(etaSeconds)}s left`);
+                            else setDownloadETA(`Almost done...`);
 
-                        lastLoadedBytes = loaded;
-                        lastTime = currentTime;
+                            lastLoadedBytes = loaded;
+                            lastTime = currentTime;
+                        }
                     }
                 }
             });
@@ -187,9 +205,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setDownloadingFile(null);
             
-            // 🚀 IMPORTANT: Here you can call an API to update Download Count on server 
-            // e.g. axios.post('/api/auth/update-download-count', { mobile: user.mobile, folderName: activeFolder.folderName })
-
         } catch (error) {
             console.error("Download failed", error);
             alert("Download Failed. Try again.");
@@ -292,11 +307,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 return true;
             });
 
-            // ✅ Expiry Logic Checks
+            // ✅ PREMIUM Expiry & Limit Logic Checks
             const hasExpiry = activeFolder.expiryDate;
             const isExpired = hasExpiry && new Date(activeFolder.expiryDate) < new Date();
             
-            // ✅ Limit Checks
             const hasLimit = activeFolder.downloadLimit > 0;
             const currentDownloads = activeFolder.downloadCount || 0;
             const isLimitReached = hasLimit && currentDownloads >= activeFolder.downloadLimit;
@@ -309,7 +323,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <h3>{activeFolder.folderName}</h3>
                     </div>
 
-                    {/* ✅ PREMIUM EXPIRY / LIMIT ALERT BANNER */}
+                    {/* ✅ EXPIRY / LIMIT ALERT BANNER */}
                     {(hasExpiry || hasLimit) && (
                         <div style={{ background: isExpired || isLimitReached ? '#fdedec' : '#fffdf5', border: `1px solid ${isExpired || isLimitReached ? '#e74c3c' : '#f1c40f'}`, padding: '10px', borderRadius: '8px', marginBottom: '15px', marginTop: '10px' }}>
                             {hasExpiry && (
@@ -369,7 +383,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
-        // Default Folder Grid
+        // ✅ FOLDERS GRID 
         return (
             <div className="folders-view">
                 <div className="welcome-banner">

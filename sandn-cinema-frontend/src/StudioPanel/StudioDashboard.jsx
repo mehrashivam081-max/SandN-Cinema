@@ -12,7 +12,7 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [studioProfile, setStudioProfile] = useState(user);
     const [clientMobile, setClientMobile] = useState('');
     const [clientName, setClientName] = useState('');
-    const [clientEmail, setClientEmail] = useState(''); // ✅ Added Email for Notification
+    const [clientEmail, setClientEmail] = useState(''); 
     const [files, setFiles] = useState([]);
     const [feedFiles, setFeedFiles] = useState([]); 
     const [clients, setClients] = useState([]); 
@@ -21,11 +21,16 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     // --- FOLDER & FILE COUNTER STATES ---
     const [folderName, setFolderName] = useState('');
+    
+    // ✅ NEW: LIMIT & EXPIRY STATES
+    const [expiryDays, setExpiryDays] = useState('');
+    const [downloadLimit, setDownloadLimit] = useState('');
+
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
-    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); // ✅ Counter State
+    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
 
-    // ✅ NEW: UPLOAD PROGRESS TRACKER STATES
+    // --- UPLOAD PROGRESS TRACKER STATES
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadSpeed, setUploadSpeed] = useState('');
     const [uploadETA, setUploadETA] = useState('');
@@ -105,7 +110,6 @@ const StudioDashboard = ({ user, onLogout }) => {
     const handleFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
         setFiles(selectedFiles);
-        // ✅ Count Photos and Videos separately
         const photos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
         const videos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
         setFileStats(prev => ({ ...prev, photos, videos }));
@@ -114,27 +118,24 @@ const StudioDashboard = ({ user, onLogout }) => {
     const handleFeedFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
         setFeedFiles(selectedFiles);
-        // ✅ Count Feed Content separately
         const feedPhotos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
         const feedVideos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
         setFileStats(prev => ({ ...prev, feedPhotos, feedVideos }));
     };
 
-    // ✅ MOBILE AUTO-FILL LOGIC
     const handleMobileChange = (e) => {
         const val = e.target.value;
         setClientMobile(val);
         setShowMobileSuggestions(true);
 
-        // Auto-fill silently if exactly 10 digits match an existing client
         const exactMatch = clients.find(c => c.mobile === val);
         if (exactMatch) {
             setClientName(exactMatch.name || exactMatch.studioName || '');
-            setClientEmail(exactMatch.email || ''); // Ensure email is picked up if available
+            setClientEmail(exactMatch.email || ''); 
         }
     };
 
-    // 🚀 UPGRADED: UPLOAD FUNCTION WITH REAL-TIME PROGRESS CALCULATION
+    // 🚀 UPLOAD FUNCTION (Now sending Limit & Expiry data)
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
@@ -157,7 +158,10 @@ const StudioDashboard = ({ user, onLogout }) => {
             formDataPayload.append('name', clientName || 'Client');
             formDataPayload.append('type', 'USER');
             formDataPayload.append('folderName', folderName);
-            formDataPayload.append('email', clientEmail); // ✅ Pass Email for Notification
+            formDataPayload.append('email', clientEmail); 
+            // ✅ SENDING EXPIRY & LIMIT TO BACKEND
+            formDataPayload.append('expiryDays', expiryDays); 
+            formDataPayload.append('downloadLimit', downloadLimit);
         }
         
         formDataPayload.append('addedBy', user.mobile); 
@@ -166,7 +170,6 @@ const StudioDashboard = ({ user, onLogout }) => {
             formDataPayload.append('mediaFiles', currentFiles[i]);
         }
 
-        // Timers for Speed and ETA calculation
         let startTime = Date.now();
         let lastLoadedBytes = 0;
         let lastTime = startTime;
@@ -174,40 +177,34 @@ const StudioDashboard = ({ user, onLogout }) => {
         try {
             const res = await axios.post(`${API_BASE}/admin-add-user`, formDataPayload, { 
                 headers: { 'Content-Type': 'multipart/form-data' },
-                // ✅ AXIOS UPLOAD PROGRESS EVENT
                 onUploadProgress: (progressEvent) => {
                     const { loaded, total } = progressEvent;
-                    const percentCompleted = Math.round((loaded * 100) / total);
-                    setUploadProgress(percentCompleted);
+                    if(total) {
+                        const percentCompleted = Math.round((loaded * 100) / total);
+                        setUploadProgress(percentCompleted);
 
-                    const currentTime = Date.now();
-                    const timeElapsedLimit = (currentTime - lastTime) / 1000; // in seconds
+                        const currentTime = Date.now();
+                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
 
-                    // Update ETA and Speed every 0.5 seconds to prevent flickering
-                    if (timeElapsedLimit > 0.5) {
-                        const bytesLoadedSinceLast = loaded - lastLoadedBytes;
-                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                        const speedKbps = speedBps / 1024;
-                        const speedMbps = speedKbps / 1024;
+                        if (timeElapsedLimit > 0.5) {
+                            const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                            const speedKbps = speedBps / 1024;
+                            const speedMbps = speedKbps / 1024;
 
-                        // Update Speed UI
-                        if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
-                        else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+                            if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                            else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
 
-                        // Update ETA UI
-                        const bytesRemaining = total - loaded;
-                        const etaSeconds = bytesRemaining / speedBps;
+                            const bytesRemaining = total - loaded;
+                            const etaSeconds = bytesRemaining / speedBps;
 
-                        if (etaSeconds > 60) {
-                            setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                        } else if (etaSeconds > 0) {
-                            setUploadETA(`${Math.floor(etaSeconds)}s left`);
-                        } else {
-                            setUploadETA(`Almost done...`);
+                            if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                            else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
+                            else setUploadETA(`Almost done...`);
+
+                            lastLoadedBytes = loaded;
+                            lastTime = currentTime;
                         }
-
-                        lastLoadedBytes = loaded;
-                        lastTime = currentTime;
                     }
                 }
             });
@@ -216,13 +213,15 @@ const StudioDashboard = ({ user, onLogout }) => {
                 setUploadProgress(100);
                 setUploadETA('Complete!');
                 setTimeout(() => {
-                    alert(`✅ Success: ${res.data.message}\n📩 Notification sent to Client on Email & WhatsApp!`);
+                    alert(`✅ Success: ${res.data.message}\n📩 Notification sent!`);
                     if (isFeed) {
                         setFeedFiles([]);
                         document.getElementById('feed-input-field').value = '';
                         setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                     } else {
-                        setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); setFiles([]);
+                        setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
+                        setExpiryDays(''); setDownloadLimit(''); // Reset new inputs
+                        setFiles([]);
                         document.getElementById('file-input-field').value = '';
                         setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
                     }
@@ -251,15 +250,15 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
-    // ✅ DYNAMIC SUGGESTIONS
     const filteredMobileSuggestions = clients.filter(c => c.mobile && c.mobile.includes(clientMobile));
     const selectedClient = clients.find(c => c.mobile === clientMobile);
     let existingFolders = [];
     if (selectedClient && selectedClient.uploadedData) {
-        existingFolders = selectedClient.uploadedData.map(f => f.folderName).filter(Boolean);
+        if(Array.isArray(selectedClient.uploadedData)){
+             existingFolders = selectedClient.uploadedData.map(f => f.folderName).filter(Boolean);
+        }
     }
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(folderName.toLowerCase()));
-
 
     return (
         <div className="owner-dashboard-container"> 
@@ -317,7 +316,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <tbody>
                                     {clients.length > 0 ? (
                                         clients.map((client, idx) => {
-                                            let fileCount = client.uploadedData ? client.uploadedData.length : 0;
+                                            let fileCount = 0;
+                                            if(Array.isArray(client.uploadedData)) fileCount = client.uploadedData.length;
                                             return (
                                                 <tr key={idx}>
                                                     <td className="bold-text" style={{fontWeight: 'bold'}}>{client.name}</td>
@@ -343,14 +343,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 2: UPLOAD CLIENT DATA (UPGRADED WITH LIVE PROGRESS) */}
+                {/* 🔴 TAB 2: UPLOAD CLIENT DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Upload Data for Client</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
-                                {/* ✅ MOBILE WITH AUTO-SUGGEST */}
                                 <div style={{ position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Mobile</label>
                                     <input 
@@ -383,14 +382,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" />
                                 </div>
 
-                                {/* ✅ CLIENT EMAIL FOR NOTIFICATION */}
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Email (For Notification) {clientEmail && selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
                                     <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" />
                                     <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>We will send a notification to this email once data is uploaded.</p>
                                 </div>
                                 
-                                {/* ✅ FOLDER NAME INPUT WITH WARNING */}
                                 <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name</label>
                                     <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to select existing or create new.</p>
@@ -403,7 +400,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} 
                                         className="custom-admin-input" 
                                     />
-                                    {/* DEFAULT FOLDER ALERT */}
                                     {(!folderName || folderName.trim() === '') && (
                                         <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                             <span>⚠️</span> Default folder "Stranger Photography" will be used.
@@ -421,12 +417,22 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
-                                {/* ✅ FILE UPLOAD WITH REAL-TIME COUNT */}
+                                {/* ✅ NEW: EXPIRY AND LIMIT CONTROLS */}
+                                <div style={{ display: 'flex', gap: '15px', background: '#fffdf5', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>⏳ Expiry (Days)</label>
+                                        <input type="number" placeholder="e.g. 30 (0 = Never)" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>📥 Max Downloads</label>
+                                        <input type="number" placeholder="e.g. 3 (0 = Unlimited)" value={downloadLimit} onChange={(e) => setDownloadLimit(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                    </div>
+                                </div>
+
                                 <div style={{ border: '2px dashed #ccc', padding: '20px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
                                     <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Select Photos/Videos</label>
                                     <input id="file-input-field" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />
                                     
-                                    {/* DYNAMIC FILE COUNTERS */}
                                     {files.length > 0 && (
                                         <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
                                             <div style={{ background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>
@@ -439,7 +445,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
-                                {/* ✅ LIVE UPLOAD PROGRESS BAR UI */}
                                 {loading && (
                                     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
@@ -479,7 +484,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', fontSize:'18px', color: '#8e6b1e' }}>📸 Select Feed Content</label>
                                 <input id="feed-input-field" type="file" multiple accept="image/*,video/mp4,video/mov" onChange={handleFeedFileChange} style={{marginTop: '10px'}}/>
                                 
-                                {/* FEED FILE COUNTERS */}
                                 {feedFiles.length > 0 && (
                                     <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
                                         <div style={{ background: '#e8f8f5', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>📸 Photos: {fileStats.feedPhotos}</div>
@@ -488,7 +492,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 )}
                             </div>
 
-                            {/* ✅ LIVE UPLOAD PROGRESS BAR UI FOR FEED */}
                             {loading && (
                                 <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginTop: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
