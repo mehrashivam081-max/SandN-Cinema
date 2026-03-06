@@ -104,32 +104,52 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 };
 
 // ==========================================
-// 🚀 4. NOTIFICATION LOGIC 
+// 🚀 4. NOTIFICATION LOGIC (CRASH-PROOF)
 // ==========================================
 const sendUploadNotification = async (mobile, email, name) => {
     const customMessage = "999999"; // Dummy variable to trigger Fast2SMS template
+    
+    // 📩 TRY EMAIL FIRST (Independent execution)
+    if (email && !email.includes('dummy_')) {
+        try {
+            await sendBrevoEmail(
+                email, 
+                "Data Uploaded - SandN Cinema", 
+                `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2 style="color: #2b5876;">Hello ${name},</h2>
+                    <p>Your event data has been successfully uploaded to your account.</p>
+                    <p>You can login using your mobile number to view and download your media.</p>
+                    <p>Thanks,<br/>Team SandN Cinema</p>
+                </div>`
+            );
+            console.log(`✅ Email Notification Sent to ${email}`);
+        } catch (emailErr) {
+            console.log(`❌ Email Notification Failed for ${email}. It's okay, app won't crash.`);
+        }
+    }
+
+    // 📱 TRY WHATSAPP / SMS (Independent execution)
     try {
         console.log(`Trying WhatsApp notification for ${mobile}...`);
         const waRes = await sendWhatsAppMsg(mobile, customMessage);
-        if (waRes.data && waRes.data.return === true) return console.log("✅ WhatsApp Notification Sent");
-        throw new Error("WhatsApp Failed");
+        
+        if (waRes.data && waRes.data.return === true) {
+            console.log("✅ WhatsApp Notification Sent");
+        } else {
+            throw new Error("WhatsApp API response was not successful.");
+        }
     } catch (e1) {
+        console.log(`❌ WhatsApp failed (${e1.message}), trying SMS for ${mobile}...`);
+        
         try {
-            console.log(`WhatsApp failed, trying SMS for ${mobile}...`);
             const smsRes = await sendTextSMS(mobile, customMessage);
-            if (smsRes.data && smsRes.data.return === true) return console.log("✅ SMS Notification Sent");
-            throw new Error("SMS Failed");
-        } catch (e2) {
-            console.log(`SMS failed, trying Email for ${email}...`);
-            if (email && !email.includes('dummy_')) {
-                await sendBrevoEmail(
-                    email, 
-                    "Data Uploaded - SandN Cinema", 
-                    `<h2>Hello ${name},</h2><p>Your data has been successfully uploaded to your account.</p>`
-                );
-                return console.log("✅ Email Notification Sent");
+            if (smsRes.data && smsRes.data.return === true) {
+                console.log("✅ SMS Notification Sent");
+            } else {
+                throw new Error("SMS API response was not successful.");
             }
-            console.log("❌ All notification methods failed or invalid email.");
+        } catch (e2) {
+            console.log(`❌ SMS also failed (${e2.message}). All SMS/WA methods failed. App continues safely.`);
         }
     }
 };
@@ -498,7 +518,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
                 await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             }
 
-            // Trigger Notification
+            // Trigger Notification (Safe from crashes)
             sendUploadNotification(mobile, existingAccount.data.email, existingAccount.data.name || existingAccount.data.ownerName || name);
             return res.json({ success: true, message: `Data appended to folder '${finalFolderName}' & Notification sent!` });
         }
@@ -528,6 +548,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             await User.create({ ...newUser, name: name });
         }
 
+        // Trigger Notification (Safe from crashes)
         sendUploadNotification(mobile, dummyEmail, name);
         res.json({ success: true, message: `Registration successful, files saved to '${finalFolderName}' & Notification sent!` });
     } catch (e) {
