@@ -109,7 +109,7 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 const sendUploadNotification = async (mobile, email, name) => {
     const customMessage = "999999"; 
     
-    // 📩 TRY EMAIL FIRST
+    // 📩 TRY EMAIL FIRST (Crash Proof)
     if (email && !email.includes('dummy_')) {
         try {
             await sendBrevoEmail(
@@ -128,7 +128,7 @@ const sendUploadNotification = async (mobile, email, name) => {
         }
     }
 
-    // 📱 TRY WHATSAPP / SMS
+    // 📱 TRY WHATSAPP / SMS (Crash Proof)
     try {
         console.log(`Trying WhatsApp notification for ${mobile}...`);
         const waRes = await sendWhatsAppMsg(mobile, customMessage);
@@ -136,7 +136,7 @@ const sendUploadNotification = async (mobile, email, name) => {
         if (waRes.data && waRes.data.return === true) {
             console.log("✅ WhatsApp Notification Sent");
         } else {
-            throw new Error("WhatsApp API response failed.");
+            throw new Error("WhatsApp API response was not successful.");
         }
     } catch (e1) {
         console.log(`❌ WhatsApp failed (${e1.message}), trying SMS for ${mobile}...`);
@@ -146,7 +146,7 @@ const sendUploadNotification = async (mobile, email, name) => {
             if (smsRes.data && smsRes.data.return === true) {
                 console.log("✅ SMS Notification Sent");
             } else {
-                throw new Error("SMS API response failed.");
+                throw new Error("SMS API response was not successful.");
             }
         } catch (e2) {
             console.log(`❌ SMS also failed. App continues safely.`);
@@ -156,16 +156,18 @@ const sendUploadNotification = async (mobile, email, name) => {
 
 const otpStore = {}; 
 
-// ✅ SMART CLEANER (SUPPORTS EMAIL LOGIN)
+// ✅ SMART CLEANER (SUPPORTS EMAIL RECOGNITION)
 const getCleanMobile = (inputRaw) => {
     if (!inputRaw) return "";
     let str = String(inputRaw).trim();
     if (str === "0000000000CODEIS*@OWNER*") return str; 
     
+    // Email ko safe rakho
     if (str.includes('@')) {
         return str.toLowerCase(); 
     }
 
+    // Mobile ko clean karo
     str = str.replace(/\D/g, ''); 
     if (str.length > 10) {
         str = str.slice(-10); 
@@ -173,44 +175,48 @@ const getCleanMobile = (inputRaw) => {
     return str;
 };
 
-// ✅ UPGRADED SEARCH ACCOUNT (SUPPORTS EMAIL LOGIN)
+// ✅ UPGRADED SEARCH ACCOUNT (.LEAN BYPASS ADDED)
 const findAccount = async (identifier, roleFilter = null) => {
     if (!identifier) return null;
 
     if (identifier === "0000000000CODEIS*@OWNER*") {
-        let acc = await Admin.findOne(); 
+        let acc = await Admin.findOne().lean(); 
         if (acc) return { type: 'ADMIN', data: acc };
         return { type: 'ADMIN', data: { name: "Super Admin", mobile: identifier, role: "ADMIN", password: "shivam@9111" } };
     }
 
     const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
 
-    if (roleFilter === 'USER') {
-        let acc = await User.findOne(query);
+    try {
+        if (roleFilter === 'USER') {
+            let acc = await User.findOne(query).lean();
+            if (acc) return { type: 'USER', data: acc };
+            return null;
+        } 
+        
+        if (roleFilter === 'STUDIO') {
+            let acc = await Studio.findOne(query).lean();
+            if (acc) return { type: 'STUDIO', data: acc };
+            return null;
+        }
+
+        if (roleFilter === 'ADMIN' || roleFilter === 'CODE') {
+            let acc = await Admin.findOne(query).lean();
+            if (acc) return { type: 'ADMIN', data: acc };
+            return null;
+        }
+
+        let acc = await User.findOne(query).lean();
         if (acc) return { type: 'USER', data: acc };
-        return null;
-    } 
-    
-    if (roleFilter === 'STUDIO') {
-        let acc = await Studio.findOne(query);
+        
+        acc = await Studio.findOne(query).lean();
         if (acc) return { type: 'STUDIO', data: acc };
-        return null;
-    }
-
-    if (roleFilter === 'ADMIN' || roleFilter === 'CODE') {
-        let acc = await Admin.findOne(query);
+        
+        acc = await Admin.findOne(query).lean();
         if (acc) return { type: 'ADMIN', data: acc };
-        return null;
+    } catch(e) {
+        console.error("DB Cast Error Prevented: ", e.message);
     }
-
-    let acc = await User.findOne(query);
-    if (acc) return { type: 'USER', data: acc };
-    
-    acc = await Studio.findOne(query);
-    if (acc) return { type: 'STUDIO', data: acc };
-    
-    acc = await Admin.findOne(query);
-    if (acc) return { type: 'ADMIN', data: acc };
     
     return null;
 };
@@ -237,7 +243,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
             }
         } else {
             const account = await findAccount(identifier, roleFilter);
-            if (!account) return res.json({ success: false, message: "Account Not Registered." });
+            if (!account) return res.json({ success: false, message: "Account is not registered. Please sign up." });
             
             targetMobile = account.data.mobile;
             targetEmail = account.data.email;
@@ -248,6 +254,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         console.log(`🔐 Generated OTP for ${identifier}: ${randomOTP}`);
 
         if (sendVia === 'email') {
+            // ✅ PROPER ERROR IF EMAIL MISSING
             if (!targetEmail || targetEmail.includes('dummy_')) {
                 return res.json({ success: false, message: "Email ID is not attached to this account. Please select SMS or WhatsApp to get OTP." });
             }
@@ -407,12 +414,19 @@ app.post('/api/auth/create-password', async (req, res) => {
     const identifier = getCleanMobile(req.body.mobile); 
     const { password, email, roleFilter } = req.body;
     try {
+        const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
         let account = await findAccount(identifier, roleFilter);
 
+        // ✅ SAFE UPDATE (Bypassing validation crashes)
         if (account && account.data) {
-            account.data.password = password;
-            if (email) account.data.email = email; 
-            await account.data.save();
+            const updateFields = { password };
+            if (email) updateFields.email = email;
+            
+            if (account.type === 'USER') {
+                await User.updateOne(query, { $set: updateFields }, { strict: false });
+            } else if (account.type === 'STUDIO') {
+                await Studio.updateOne(query, { $set: updateFields }, { strict: false });
+            }
             
             res.json({ 
                 success: true, 
@@ -466,13 +480,14 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (FIXED 500 ERROR ON RE-UPLOAD)
+// ✅ 8. UPLOAD LOGIC (FIXED 500 ERROR ON RE-UPLOAD & LIMIT INCREASED)
 // ==============================================================
-app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
+app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email } = req.body; 
     const files = req.files; 
 
+    // Handle undefined strings safely
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
     if (type === 'undefined' || type === 'null') type = 'USER';
@@ -493,19 +508,30 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
 
         // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
+            // ✅ CRASH PROOF ARRAY PARSING
             let currentData = [];
             if (existingAccount.data.uploadedData) {
-                currentData = JSON.parse(JSON.stringify(existingAccount.data.uploadedData));
+                if (Array.isArray(existingAccount.data.uploadedData)) {
+                    currentData = existingAccount.data.uploadedData;
+                } else if (typeof existingAccount.data.uploadedData === 'object' && existingAccount.data.uploadedData !== null) {
+                    currentData = Object.values(existingAccount.data.uploadedData);
+                } else if (typeof existingAccount.data.uploadedData === 'string') {
+                    currentData = [existingAccount.data.uploadedData];
+                }
             }
             
+            // Cleanup legacy string paths into object
             if (currentData.length > 0 && typeof currentData[0] === 'string') {
                 currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
             }
 
+            // Remove any weird nulls
+            currentData = currentData.filter(item => typeof item === 'object' && item !== null);
+
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
+                currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
                 currentData[folderIndex].downloadCount = 0; 
@@ -528,6 +554,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
                 updateQuery.$set.email = email;
             }
 
+            // ✅ USE updateOne to bypass any schema mismatch
             if (existingAccount.type === 'STUDIO') {
                 await Studio.updateOne({ mobile }, updateQuery, { strict: false });
             } else {
