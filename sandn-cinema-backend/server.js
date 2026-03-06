@@ -107,9 +107,9 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 // 🚀 4. NOTIFICATION LOGIC (CRASH-PROOF & PARALLEL)
 // ==========================================
 const sendUploadNotification = async (mobile, email, name) => {
-    const customMessage = "999999"; // Dummy variable to trigger Fast2SMS template
+    const customMessage = "999999"; 
     
-    // 📩 TRY EMAIL FIRST (Independent execution)
+    // 📩 TRY EMAIL FIRST
     if (email && !email.includes('dummy_')) {
         try {
             await sendBrevoEmail(
@@ -118,7 +118,7 @@ const sendUploadNotification = async (mobile, email, name) => {
                 `<div style="font-family: Arial, sans-serif; padding: 20px;">
                     <h2 style="color: #2b5876;">Hello ${name},</h2>
                     <p>Your event data has been successfully uploaded to your account.</p>
-                    <p>You can login using your mobile number to view and download your media.</p>
+                    <p>You can login using your mobile number or email to view and download your media.</p>
                     <p>Thanks,<br/>Team SandN Cinema</p>
                 </div>`
             );
@@ -128,7 +128,7 @@ const sendUploadNotification = async (mobile, email, name) => {
         }
     }
 
-    // 📱 TRY WHATSAPP / SMS (Independent execution)
+    // 📱 TRY WHATSAPP / SMS
     try {
         console.log(`Trying WhatsApp notification for ${mobile}...`);
         const waRes = await sendWhatsAppMsg(mobile, customMessage);
@@ -136,7 +136,7 @@ const sendUploadNotification = async (mobile, email, name) => {
         if (waRes.data && waRes.data.return === true) {
             console.log("✅ WhatsApp Notification Sent");
         } else {
-            throw new Error("WhatsApp API response was not successful.");
+            throw new Error("WhatsApp API response failed.");
         }
     } catch (e1) {
         console.log(`❌ WhatsApp failed (${e1.message}), trying SMS for ${mobile}...`);
@@ -146,21 +146,26 @@ const sendUploadNotification = async (mobile, email, name) => {
             if (smsRes.data && smsRes.data.return === true) {
                 console.log("✅ SMS Notification Sent");
             } else {
-                throw new Error("SMS API response was not successful.");
+                throw new Error("SMS API response failed.");
             }
         } catch (e2) {
-            console.log(`❌ SMS also failed (${e2.message}). All SMS/WA methods failed. App continues safely.`);
+            console.log(`❌ SMS also failed. App continues safely.`);
         }
     }
 };
 
 const otpStore = {}; 
 
-// ✅ SMART CLEANER
-const getCleanMobile = (mobileRaw) => {
-    if (!mobileRaw) return "";
-    let str = String(mobileRaw).trim();
+// ✅ SMART CLEANER (SUPPORTS EMAIL LOGIN)
+const getCleanMobile = (inputRaw) => {
+    if (!inputRaw) return "";
+    let str = String(inputRaw).trim();
     if (str === "0000000000CODEIS*@OWNER*") return str; 
+    
+    if (str.includes('@')) {
+        return str.toLowerCase(); 
+    }
+
     str = str.replace(/\D/g, ''); 
     if (str.length > 10) {
         str = str.slice(-10); 
@@ -168,44 +173,43 @@ const getCleanMobile = (mobileRaw) => {
     return str;
 };
 
-// ✅ ADDED STRICT ROLE FILTER LOGIC HERE WITH ADMIN BYPASS
-const findAccount = async (mobile, roleFilter = null) => {
-    const cleanMobile = getCleanMobile(mobile); 
+// ✅ UPGRADED SEARCH ACCOUNT (SUPPORTS EMAIL LOGIN)
+const findAccount = async (identifier, roleFilter = null) => {
+    if (!identifier) return null;
 
-    // 🚀 VIP BYPASS FOR ADMIN SECRET CODE
-    if (cleanMobile === "0000000000CODEIS*@OWNER*") {
-        let acc = await Admin.findOne(); // Fetch any existing admin
+    if (identifier === "0000000000CODEIS*@OWNER*") {
+        let acc = await Admin.findOne(); 
         if (acc) return { type: 'ADMIN', data: acc };
-        // Fallback fake data if DB is empty to allow login
-        return { type: 'ADMIN', data: { name: "Super Admin", mobile: cleanMobile, role: "ADMIN", password: "shivam@9111" } };
+        return { type: 'ADMIN', data: { name: "Super Admin", mobile: identifier, role: "ADMIN", password: "shivam@9111" } };
     }
 
+    const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
+
     if (roleFilter === 'USER') {
-        let acc = await User.findOne({ mobile: cleanMobile });
+        let acc = await User.findOne(query);
         if (acc) return { type: 'USER', data: acc };
         return null;
     } 
     
     if (roleFilter === 'STUDIO') {
-        let acc = await Studio.findOne({ mobile: cleanMobile });
+        let acc = await Studio.findOne(query);
         if (acc) return { type: 'STUDIO', data: acc };
         return null;
     }
 
     if (roleFilter === 'ADMIN' || roleFilter === 'CODE') {
-        let acc = await Admin.findOne({ mobile: cleanMobile });
+        let acc = await Admin.findOne(query);
         if (acc) return { type: 'ADMIN', data: acc };
         return null;
     }
 
-    // Default fallback if no filter passed
-    let acc = await User.findOne({ mobile: cleanMobile });
+    let acc = await User.findOne(query);
     if (acc) return { type: 'USER', data: acc };
     
-    acc = await Studio.findOne({ mobile: cleanMobile });
+    acc = await Studio.findOne(query);
     if (acc) return { type: 'STUDIO', data: acc };
     
-    acc = await Admin.findOne({ mobile: cleanMobile });
+    acc = await Admin.findOne(query);
     if (acc) return { type: 'ADMIN', data: acc };
     
     return null;
@@ -215,14 +219,14 @@ const findAccount = async (mobile, roleFilter = null) => {
 
 // 1. Check & Send OTP (Login)
 app.post('/api/auth/check-send-otp', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
+    const identifier = getCleanMobile(req.body.mobile); 
     const { sendVia, roleFilter } = req.body; 
     
     try {
-        let targetMobile = mobile;
+        let targetMobile = identifier;
         let targetEmail = null;
 
-        if (mobile === "0000000000CODEIS*@OWNER*") {
+        if (identifier === "0000000000CODEIS*@OWNER*") {
             const adminAcc = await Admin.findOne(); 
             if (!adminAcc) {
                 targetMobile = process.env.ADMIN_MOBILE || "9999999999"; 
@@ -232,19 +236,21 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 targetEmail = adminAcc.email || process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
             }
         } else {
-            // ✅ PASSING ROLE FILTER
-            const account = await findAccount(mobile, roleFilter);
-            if (!account) return res.json({ success: false, message: "Not Registered in this section." });
+            const account = await findAccount(identifier, roleFilter);
+            if (!account) return res.json({ success: false, message: "Account Not Registered." });
+            
             targetMobile = account.data.mobile;
             targetEmail = account.data.email;
         }
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore[mobile] = randomOTP; 
-        console.log(`🔐 Generated OTP for ${mobile}: ${randomOTP}`);
+        otpStore[identifier] = randomOTP; 
+        console.log(`🔐 Generated OTP for ${identifier}: ${randomOTP}`);
 
         if (sendVia === 'email') {
-            if (!targetEmail || targetEmail.includes('dummy_')) return res.json({ success: false, message: "No valid Email registered with this account." });
+            if (!targetEmail || targetEmail.includes('dummy_')) {
+                return res.json({ success: false, message: "Email ID is not attached to this account. Please select SMS or WhatsApp to get OTP." });
+            }
             try {
                 await sendBrevoEmail(
                     targetEmail,
@@ -291,12 +297,11 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     const { email, sendVia } = req.body; 
     try {
-        const exists = await findAccount(mobile); // For signup we check globally to avoid duplicate mobiles anywhere
+        const exists = await findAccount(mobile); 
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[`signup_${mobile}`] = randomOTP; 
-        console.log(`🔐 Signup OTP for ${mobile}: ${randomOTP}`);
 
         if (sendVia === 'email' && email) {
             try {
@@ -370,20 +375,18 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // 4. Verify OTP (For Login)
 app.post('/api/auth/verify-otp', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
+    const identifier = getCleanMobile(req.body.mobile); 
     const { otp, roleFilter } = req.body;
     
-    // VIP Admin code check
-    if(mobile === "0000000000CODEIS*@OWNER*" && otpStore[mobile] === otp) {
-        delete otpStore[mobile];
+    if(identifier === "0000000000CODEIS*@OWNER*" && otpStore[identifier] === otp) {
+        delete otpStore[identifier];
         return res.json({ success: true, isNewUser: false });
     }
 
-    if (otpStore[mobile] === otp) { 
-        delete otpStore[mobile]; 
+    if (otpStore[identifier] === otp) { 
+        delete otpStore[identifier]; 
         
-        // ✅ PASSING ROLE FILTER
-        const account = await findAccount(mobile, roleFilter);
+        const account = await findAccount(identifier, roleFilter);
         let isNewUser = false;
         
         if (account) {
@@ -394,7 +397,6 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         } else {
              res.json({ success: false, message: "Account not found for this role." });
         }
-        
     } else {
         res.json({ success: false, message: "Invalid OTP" });
     }
@@ -402,28 +404,19 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
 // 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
+    const identifier = getCleanMobile(req.body.mobile); 
     const { password, email, roleFilter } = req.body;
     try {
-        let account = null;
-        
-        // ✅ Strict checking for setup
-        if (roleFilter === 'USER') {
-            account = await User.findOne({ mobile });
-        } else if (roleFilter === 'STUDIO') {
-            account = await Studio.findOne({ mobile });
-        } else {
-            account = await User.findOne({ mobile }) || await Studio.findOne({ mobile });
-        }
+        let account = await findAccount(identifier, roleFilter);
 
-        if (account) {
-            account.password = password;
-            if (email) account.email = email; 
-            await account.save();
+        if (account && account.data) {
+            account.data.password = password;
+            if (email) account.data.email = email; 
+            await account.data.save();
             
             res.json({ 
                 success: true, 
-                user: { name: account.name || account.ownerName, mobile: account.mobile, role: account.role } 
+                user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.data.role } 
             });
         } else {
             res.json({ success: false, message: "Account not found in this section" });
@@ -433,18 +426,17 @@ app.post('/api/auth/create-password', async (req, res) => {
 
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
+    const identifier = getCleanMobile(req.body.mobile); 
     const { otp, roleFilter } = req.body;
     
-     // VIP Admin code check
-    if(mobile === "0000000000CODEIS*@OWNER*" && otpStore[mobile] === otp) {
-        delete otpStore[mobile];
-        return res.json({ success: true, user: { name: "Owner", mobile: mobile, role: "ADMIN" } });
+    if(identifier === "0000000000CODEIS*@OWNER*" && otpStore[identifier] === otp) {
+        delete otpStore[identifier];
+        return res.json({ success: true, user: { name: "Owner", mobile: identifier, role: "ADMIN" } });
     }
 
-    if (otpStore[mobile] === otp) { 
-        delete otpStore[mobile];
-        const account = await findAccount(mobile, roleFilter); // ✅ Filter added
+    if (otpStore[identifier] === otp) { 
+        delete otpStore[identifier];
+        const account = await findAccount(identifier, roleFilter); 
         if(account) {
             res.json({ success: true, user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type } });
         } else {
@@ -457,10 +449,10 @@ app.post('/api/auth/login-otp', async (req, res) => {
 
 // 7. Password Login
 app.post('/api/auth/login', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
+    const identifier = getCleanMobile(req.body.mobile); 
     const { password, roleFilter } = req.body;
     try {
-        const account = await findAccount(mobile, roleFilter); // ✅ Filter added
+        const account = await findAccount(identifier, roleFilter); 
         if (account && account.data.password === password) {
             res.json({
                 success: true,
@@ -474,12 +466,17 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (UPGRADED WITH EXPIRY AND LIMITS)
+// ✅ 8. UPLOAD LOGIC (FIXED 500 ERROR ON RE-UPLOAD)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { type, name, location, addedBy, folderName, expiryDays, downloadLimit } = req.body; 
+    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email } = req.body; 
     const files = req.files; 
+
+    if (folderName === 'undefined' || folderName === 'null') folderName = '';
+    if (name === 'undefined' || name === 'null') name = 'Client';
+    if (type === 'undefined' || type === 'null') type = 'USER';
+    if (email === 'undefined' || email === 'null') email = '';
 
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
@@ -487,19 +484,19 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         const existingAccount = await findAccount(mobile); 
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
 
-        // Logic for Expiry Date
         let expiryDate = null;
         if (expiryDays && parseInt(expiryDays) > 0) {
             expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + parseInt(expiryDays));
         }
-
-        // Logic for Download Limit
-        const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; // 0 = Unlimited
+        const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; 
 
         // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
-            let currentData = existingAccount.data.uploadedData || [];
+            let currentData = [];
+            if (existingAccount.data.uploadedData) {
+                currentData = JSON.parse(JSON.stringify(existingAccount.data.uploadedData));
+            }
             
             if (currentData.length > 0 && typeof currentData[0] === 'string') {
                 currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
@@ -508,13 +505,11 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                // Folder exist karta hai -> update files & limits
                 currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
-                currentData[folderIndex].downloadCount = 0; // Reset limit count on new upload
+                currentData[folderIndex].downloadCount = 0; 
             } else {
-                // Naya folder banao
                 currentData.push({
                     folderName: finalFolderName,
                     files: filePaths,
@@ -525,18 +520,26 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
                 });
             }
 
-            if (existingAccount.type === 'STUDIO') {
-                await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
-            } else {
-                await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+            const hasDummyEmail = !existingAccount.data.email || existingAccount.data.email.includes('dummy_');
+            const targetEmail = (email && email.trim() !== '') ? email : existingAccount.data.email;
+            
+            let updateQuery = { $set: { uploadedData: currentData } };
+            if (email && email.trim() !== '' && hasDummyEmail) {
+                updateQuery.$set.email = email;
             }
 
-            sendUploadNotification(mobile, existingAccount.data.email, existingAccount.data.name || existingAccount.data.ownerName || name);
+            if (existingAccount.type === 'STUDIO') {
+                await Studio.updateOne({ mobile }, updateQuery, { strict: false });
+            } else {
+                await User.updateOne({ mobile }, updateQuery, { strict: false });
+            }
+
+            sendUploadNotification(mobile, targetEmail, existingAccount.data.name || existingAccount.data.ownerName || name);
             return res.json({ success: true, message: `Data appended to '${finalFolderName}' successfully!` });
         }
 
         // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
-        const dummyEmail = `dummy_${mobile}@sandn.com`;
+        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
         
         const folderStructure = [{
             folderName: finalFolderName,
@@ -550,7 +553,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         const newUser = {
             mobile,
             password: "temp123", 
-            email: dummyEmail, 
+            email: targetEmail, 
             role: type,
             location: location || "",
             addedBy: addedBy || "ADMIN", 
@@ -563,7 +566,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             await User.create({ ...newUser, name: name });
         }
 
-        sendUploadNotification(mobile, dummyEmail, name);
+        sendUploadNotification(mobile, targetEmail, name);
         res.json({ success: true, message: `Registration successful, data saved to '${finalFolderName}'!` });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
@@ -612,9 +615,9 @@ app.post('/api/auth/delete-account', async (req, res) => {
 
 // 11. Search Account
 app.post('/api/auth/search-account', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile);
-    const { roleFilter } = req.body; // ✅ Added Filter
-    const account = await findAccount(mobile, roleFilter);
+    const identifier = getCleanMobile(req.body.mobile);
+    const { roleFilter } = req.body; 
+    const account = await findAccount(identifier, roleFilter);
     if (account) {
         res.json({ success: true, data: account.data });
     } else {
@@ -627,7 +630,6 @@ app.post('/api/auth/search-account', async (req, res) => {
 // ✅ ADMIN SPECIFIC LOGIC
 // ==========================================
 
-// 12. Update Studio Feed Approval (FIXED: Bypassing Schema Strict Mode)
 app.post('/api/auth/update-studio-approval', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
@@ -647,7 +649,6 @@ app.post('/api/auth/update-studio-approval', async (req, res) => {
     }
 });
 
-// ✅ 13. Update Admin Profile (FIXED: Handling Code correctly)
 app.post('/api/auth/update-admin', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
@@ -674,7 +675,6 @@ app.post('/api/auth/update-admin', async (req, res) => {
     }
 });
 
-// 14. Add Sub-Admin
 app.post('/api/auth/add-subadmin', async (req, res) => {
     const { name, mobile, email, password } = req.body;
     try {
@@ -689,7 +689,6 @@ app.post('/api/auth/add-subadmin', async (req, res) => {
     }
 });
 
-// 15. Update Studio Profile
 app.post('/api/auth/update-studio-profile', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
@@ -715,7 +714,6 @@ app.post('/api/auth/update-studio-profile', async (req, res) => {
 // ✅ 16. SOCIAL LINKS LOGIC 
 // ==========================================
 
-// Save Links
 app.post('/api/auth/update-social-links', async (req, res) => {
     try {
         const { links } = req.body;
@@ -731,7 +729,6 @@ app.post('/api/auth/update-social-links', async (req, res) => {
     }
 });
 
-// Fetch Links & Policies
 app.get('/api/auth/get-platform-settings', async (req, res) => {
     try {
         const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
@@ -750,7 +747,6 @@ app.get('/api/auth/get-platform-settings', async (req, res) => {
 // ✅ 17. POLICIES LOGIC 
 // ==========================================
 
-// Save Policies
 app.post('/api/auth/update-policies', async (req, res) => {
     try {
         const { policies } = req.body;
@@ -767,7 +763,7 @@ app.post('/api/auth/update-policies', async (req, res) => {
 });
 
 // ==========================================
-// ✅ GET SERVICES LOGIC (Fix for 404 Error)
+// ✅ GET SERVICES LOGIC 
 // ==========================================
 app.get('/api/auth/get-services', async (req, res) => {
     try {
@@ -791,7 +787,6 @@ app.get('/api/auth/get-services', async (req, res) => {
 // ✅ 18. DIRECT BOOKINGS LOGIC 
 // ==========================================
 
-// Create a new Booking
 app.post('/api/auth/create-booking', async (req, res) => {
     try {
         const { name, mobile, startDate, endDate, type, location, eventPlaceName } = req.body;
@@ -814,7 +809,6 @@ app.post('/api/auth/create-booking', async (req, res) => {
     }
 });
 
-// Fetch all Bookings for Admin
 app.get('/api/auth/get-bookings', async (req, res) => {
     try {
         const bookings = await Booking.find().sort({ createdAt: -1 }); 
@@ -824,7 +818,6 @@ app.get('/api/auth/get-bookings', async (req, res) => {
     }
 });
 
-// Update Booking Status
 app.post('/api/auth/update-booking-status', async (req, res) => {
     try {
         const { bookingId, status } = req.body;
@@ -840,7 +833,6 @@ app.post('/api/auth/update-booking-status', async (req, res) => {
 // ✅ 19. COLLAB REQUESTS LOGIC 
 // ==========================================
 
-// Create a Collab Request
 app.post('/api/auth/create-collab', async (req, res) => {
     try {
         const { name, brand, email } = req.body;
@@ -851,7 +843,6 @@ app.post('/api/auth/create-collab', async (req, res) => {
     }
 });
 
-// Fetch all Collabs for Admin
 app.get('/api/auth/get-collabs', async (req, res) => {
     try {
         const collabs = await CollabRequest.find().sort({ createdAt: -1 }); 
@@ -861,7 +852,6 @@ app.get('/api/auth/get-collabs', async (req, res) => {
     }
 });
 
-// Update Collab Status
 app.post('/api/auth/update-collab-status', async (req, res) => {
     try {
         const { collabId, status } = req.body;
