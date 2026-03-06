@@ -440,34 +440,62 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: DIRECT BOOKINGS */}
+                {/* 🔴 TAB 3: DIRECT BOOKINGS (NEW BOOKING FIELDS LOGIC ADDED HERE) */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📅 Direct Bookings</h2></div>
+                        <div className="section-header">
+                            <h2>📅 Direct Bookings</h2>
+                            <button onClick={fetchBookings} style={{padding:'8px 15px', background:'#3498db', color:'#fff', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>🔄 Refresh</button>
+                        </div>
                         <div className="data-table-container">
                             <table className="admin-table">
                                 <thead>
-                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+                                    <tr>
+                                        <th>Client Details</th>
+                                        <th>Shoot Dates</th>
+                                        <th>Service Type</th>
+                                        <th>Location & Venue</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     {bookings.map(b => (
                                         <tr key={b._id}>
-                                            <td><strong>{b.name}</strong></td>
-                                            <td>{b.mobile || 'N/A'}</td>
-                                            <td>{b.date}</td>
-                                            <td>{b.type}</td>
+                                            <td>
+                                                <strong style={{fontSize:'15px', color:'#2c3e50'}}>{b.name}</strong><br/>
+                                                <span style={{fontSize:'12px', color:'#7f8c8d'}}>📞 {b.mobile || 'N/A'}</span>
+                                            </td>
+                                            <td>
+                                                <span style={{color:'#e67e22', fontWeight:'bold', fontSize:'13px'}}>
+                                                    From: {b.startDate ? new Date(b.startDate).toLocaleDateString() : (b.date ? new Date(b.date).toLocaleDateString() : 'N/A')}
+                                                </span><br/>
+                                                <span style={{color:'#e74c3c', fontWeight:'bold', fontSize:'13px'}}>
+                                                    To: {b.endDate ? new Date(b.endDate).toLocaleDateString() : 'N/A'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className="status-badge normal">{b.type || 'N/A'}</span>
+                                            </td>
+                                            <td>
+                                                <span style={{fontWeight:'bold', color:'#34495e'}}>{b.location || 'N/A'}</span><br/>
+                                                <span style={{fontSize:'12px', color:'#7f8c8d'}}>🏨 {b.eventPlaceName || 'N/A'}</span>
+                                            </td>
                                             <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
                                             <td>
                                                 {b.status === 'Pending' && (
-                                                    <>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
-                                                    </>
+                                                    <div style={{display:'flex', gap:'5px'}}>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px'}}>Accept</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'6px 12px', borderRadius:'4px', cursor:'pointer', fontWeight:'bold', fontSize:'12px'}}>Decline</button>
+                                                    </div>
+                                                )}
+                                                {b.status !== 'Pending' && (
+                                                    <span style={{fontSize:'12px', color:'#888'}}>Action Taken</span>
                                                 )}
                                             </td>
                                         </tr>
                                     ))}
-                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
+                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'30px', color:'#888'}}>No recent bookings found.</td></tr>}
                                 </tbody>
                             </table>
                         </div>

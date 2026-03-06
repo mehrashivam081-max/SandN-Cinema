@@ -8,7 +8,7 @@ const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
 const UserDashboard = ({ user, userData, onLogout }) => {
     // --- UI STATES ---
-    const [currentTab, setCurrentTab] = useState('HOME'); // HOME, SERVICES, BOOKINGS, HISTORY, PROFILE
+    const [currentTab, setCurrentTab] = useState('HOME'); 
     const [loading, setLoading] = useState(true);
     
     // --- USER SYNCED DATA (REAL-TIME) ---
@@ -18,7 +18,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     
     // --- FOLDER & MEDIA STATES ---
     const [folders, setFolders] = useState([]);
-    const [activeFolder, setActiveFolder] = useState(null); // null means showing folder list
+    const [activeFolder, setActiveFolder] = useState(null); 
     const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
     // --- PROFILE STATES ---
@@ -38,7 +38,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
     useEffect(() => {
         const fetchRealTimeData = async () => {
-            if (!user?.mobile) return; 
+            // ✅ FIX: Agar user turant load na ho, toh bhi Default Folder set kardo
+            if (!user?.mobile) {
+                setFolders([DEFAULT_FOLDER]);
+                setLoading(false);
+                return; 
+            }
 
             setLoading(true);
             try {
@@ -56,25 +61,24 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     
                     const fetchedFolders = dbData.uploadedData || [];
                     
-                    // ✅ FIXED LOGIC: Extract and sort out Stranger Photography
-                    const customFolders = fetchedFolders.filter(f => f.folderName.toLowerCase() !== 'stranger photography');
-                    const backendDefaultFolder = fetchedFolders.find(f => f.folderName.toLowerCase() === 'stranger photography');
+                    // ✅ FIXED LOGIC: Strict String Match & Cleanup
+                    const customFolders = fetchedFolders.filter(f => f.folderName?.trim().toLowerCase() !== 'stranger photography');
+                    const backendDefaultFolder = fetchedFolders.find(f => f.folderName?.trim().toLowerCase() === 'stranger photography');
                     
                     const finalDefaultFolder = backendDefaultFolder 
-                        ? { ...DEFAULT_FOLDER, files: backendDefaultFolder.files } 
+                        ? { ...DEFAULT_FOLDER, files: backendDefaultFolder.files || [] } 
                         : DEFAULT_FOLDER;
                     
                     // Put default first, then the rest
                     setFolders([finalDefaultFolder, ...customFolders]);
 
-                    // Update LocalStorage silently
                     localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
                 } else {
-                    setFolders([DEFAULT_FOLDER]);
+                    setFolders([DEFAULT_FOLDER]); // Force default if no success
                 }
             } catch (error) {
                 console.error("Fetch error:", error);
-                setFolders([DEFAULT_FOLDER]);
+                setFolders([DEFAULT_FOLDER]); // Force default on API error
             } finally {
                 setLoading(false);
             }
@@ -129,7 +133,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return renderHomeTab();
     };
 
-    // 🔴 HISTORY TAB (NEW)
+    // 🔴 HISTORY TAB
     const renderHistoryTab = () => {
         const historyData = wallet?.history || [
             { date: new Date().toLocaleDateString(), action: "Daily Login Reward", amount: "+1 Coin", type: "credit" },
@@ -208,7 +212,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // 🔴 HOME TAB
     const renderHomeTab = () => {
         if (activeFolder) {
-            // ✅ ALL/PHOTO/VIDEO FILTERING LOGIC
             const displayedMedia = (activeFolder.files || []).filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
                 if (mediaFilter === 'VIDEOS') return isVideo(item);
@@ -222,11 +225,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <h3>{activeFolder.folderName}</h3>
                     </div>
 
-                    {/* ✅ FILTER BUTTONS */}
                     <div className="filter-group-vip">
                         <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All Items</button>
-                        <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos</button>
-                        <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos Only</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos Only</button>
                     </div>
 
                     <div className="ud-grid-vip mt-20">
@@ -235,13 +237,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
                                 <div className="media-overlay-vip"><a href={getCleanUrl(filePath)} download target="_blank" rel="noreferrer" className="download-btn-vip">⬇ Download</a></div>
                             </div>
-                        )) : <div className="no-data-vip">Folder is empty.</div>}
+                        )) : <div className="no-data-vip">Folder is empty. Media not uploaded yet.</div>}
                     </div>
                 </div>
             );
         }
 
-        // ✅ DEFAULT FOLDERS GRID
+        // ✅ DEFAULT FOLDERS GRID (Always ensures at least Stranger Photography is here)
         return (
             <div className="folders-view">
                 <div className="welcome-banner">
@@ -295,7 +297,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 {renderContent()}
             </main>
 
-            {/* 🔴 BOTTOM NAVIGATION BAR */}
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
                 <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setMediaFilter('ALL'); }}>
                     🏠<span>Home</span>
