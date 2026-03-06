@@ -21,6 +21,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [activeFolder, setActiveFolder] = useState(null); 
     const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
+    // ✅ LIVE DOWNLOAD STATES
+    const [downloadingFile, setDownloadingFile] = useState(null);
+    const [downloadProgress, setDownloadProgress] = useState(0);
+    const [downloadSpeed, setDownloadSpeed] = useState('');
+    const [downloadETA, setDownloadETA] = useState('');
+
     // --- PROFILE STATES ---
     const [profileImage, setProfileImage] = useState(user?.profileImage || null);
     const [editProfileMode, setEditProfileMode] = useState(false);
@@ -38,7 +44,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
     useEffect(() => {
         const fetchRealTimeData = async () => {
-            // ✅ FIX: Agar user turant load na ho, toh bhi Default Folder set kardo
             if (!user?.mobile) {
                 setFolders([DEFAULT_FOLDER]);
                 setLoading(false);
@@ -61,24 +66,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     
                     const fetchedFolders = dbData.uploadedData || [];
                     
-                    // ✅ FIXED LOGIC: Strict String Match & Cleanup
                     const customFolders = fetchedFolders.filter(f => f.folderName?.trim().toLowerCase() !== 'stranger photography');
                     const backendDefaultFolder = fetchedFolders.find(f => f.folderName?.trim().toLowerCase() === 'stranger photography');
                     
                     const finalDefaultFolder = backendDefaultFolder 
-                        ? { ...DEFAULT_FOLDER, files: backendDefaultFolder.files || [] } 
+                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder } 
                         : DEFAULT_FOLDER;
                     
-                    // Put default first, then the rest
                     setFolders([finalDefaultFolder, ...customFolders]);
 
                     localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
                 } else {
-                    setFolders([DEFAULT_FOLDER]); // Force default if no success
+                    setFolders([DEFAULT_FOLDER]); 
                 }
             } catch (error) {
                 console.error("Fetch error:", error);
-                setFolders([DEFAULT_FOLDER]); // Force default on API error
+                setFolders([DEFAULT_FOLDER]); 
             } finally {
                 setLoading(false);
             }
@@ -123,6 +126,77 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setSyncUser(updatedLocalUser);
         localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
+
+    // 🚀 NEW: LIVE DOWNLOAD PROGRESS HANDLER
+    const handleDownload = async (filePath) => {
+        setDownloadingFile(filePath);
+        setDownloadProgress(0);
+        setDownloadSpeed('Calculating...');
+        setDownloadETA('...');
+
+        const url = getCleanUrl(filePath);
+        let startTime = Date.now();
+        let lastLoadedBytes = 0;
+        let lastTime = startTime;
+
+        try {
+            const response = await axios({
+                url,
+                method: 'GET',
+                responseType: 'blob', // Important for saving file
+                onDownloadProgress: (progressEvent) => {
+                    const { loaded, total } = progressEvent;
+                    const percentCompleted = Math.round((loaded * 100) / total);
+                    setDownloadProgress(percentCompleted);
+
+                    const currentTime = Date.now();
+                    const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+
+                    if (timeElapsedLimit > 0.5) {
+                        const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                        const speedKbps = speedBps / 1024;
+                        const speedMbps = speedKbps / 1024;
+
+                        if (speedMbps >= 1) setDownloadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                        else setDownloadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+
+                        const bytesRemaining = total - loaded;
+                        const etaSeconds = bytesRemaining / speedBps;
+
+                        if (etaSeconds > 60) setDownloadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                        else if (etaSeconds > 0) setDownloadETA(`${Math.floor(etaSeconds)}s left`);
+                        else setDownloadETA(`Almost done...`);
+
+                        lastLoadedBytes = loaded;
+                        lastTime = currentTime;
+                    }
+                }
+            });
+
+            // Create blob link and force download
+            const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = urlBlob;
+            const fileName = filePath.substring(filePath.lastIndexOf('/') + 1) || 'SandN_Cinema_Media';
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(urlBlob);
+
+            setDownloadingFile(null);
+            
+            // 🚀 IMPORTANT: Here you can call an API to update Download Count on server 
+            // e.g. axios.post('/api/auth/update-download-count', { mobile: user.mobile, folderName: activeFolder.folderName })
+
+        } catch (error) {
+            console.error("Download failed", error);
+            alert("Download Failed. Try again.");
+            setDownloadingFile(null);
+        }
+    };
+
 
     // --- RENDER TABS ---
     const renderContent = () => {
@@ -218,6 +292,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 return true;
             });
 
+            // ✅ Expiry Logic Checks
+            const hasExpiry = activeFolder.expiryDate;
+            const isExpired = hasExpiry && new Date(activeFolder.expiryDate) < new Date();
+            
+            // ✅ Limit Checks
+            const hasLimit = activeFolder.downloadLimit > 0;
+            const currentDownloads = activeFolder.downloadCount || 0;
+            const isLimitReached = hasLimit && currentDownloads >= activeFolder.downloadLimit;
+            const canDownload = !isExpired && !isLimitReached;
+
             return (
                 <div className="folder-gallery-view">
                     <div className="folder-header-nav">
@@ -225,17 +309,59 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <h3>{activeFolder.folderName}</h3>
                     </div>
 
+                    {/* ✅ PREMIUM EXPIRY / LIMIT ALERT BANNER */}
+                    {(hasExpiry || hasLimit) && (
+                        <div style={{ background: isExpired || isLimitReached ? '#fdedec' : '#fffdf5', border: `1px solid ${isExpired || isLimitReached ? '#e74c3c' : '#f1c40f'}`, padding: '10px', borderRadius: '8px', marginBottom: '15px', marginTop: '10px' }}>
+                            {hasExpiry && (
+                                <p style={{ margin: 0, fontSize: '12px', color: isExpired ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>
+                                    {isExpired ? '🚫 This folder has Expired and will be deleted.' : `⏳ Expires on: ${new Date(activeFolder.expiryDate).toLocaleDateString()}`}
+                                </p>
+                            )}
+                            {hasLimit && !isExpired && (
+                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: isLimitReached ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>
+                                    📥 Downloads: {currentDownloads} of {activeFolder.downloadLimit} {isLimitReached ? '(Limit Reached)' : 'left'}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     <div className="filter-group-vip">
                         <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All Items</button>
-                        <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos Only</button>
-                        <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos Only</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos</button>
                     </div>
 
                     <div className="ud-grid-vip mt-20">
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => (
                             <div key={idx} className="gallery-item-vip">
-                                {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
-                                <div className="media-overlay-vip"><a href={getCleanUrl(filePath)} download target="_blank" rel="noreferrer" className="download-btn-vip">⬇ Download</a></div>
+                                {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls={canDownload} className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
+                                
+                                <div className="media-overlay-vip" style={{flexDirection: 'column', padding: '10px'}}>
+                                    
+                                    {/* ✅ DOWNLOADING LIVE PROGRESS UI */}
+                                    {downloadingFile === filePath ? (
+                                        <div style={{ width: '100%', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                                            <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
+                                            <div style={{ width: '100%', background: '#eee', height: '6px', borderRadius: '5px', overflow: 'hidden' }}>
+                                                <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
+                                            </div>
+                                            <div style={{color: '#fff', fontSize: '10px', marginTop: '5px'}}>{downloadETA}</div>
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={() => canDownload ? handleDownload(filePath) : null} 
+                                            className="download-btn-vip" 
+                                            style={{ 
+                                                background: canDownload ? '#2ecc71' : '#ccc', 
+                                                cursor: canDownload ? 'pointer' : 'not-allowed',
+                                                border: 'none', padding: '8px 15px', color: '#fff', borderRadius: '5px', fontWeight: 'bold'
+                                            }}
+                                            disabled={!canDownload}
+                                        >
+                                            {isExpired ? '🚫 Expired' : isLimitReached ? '🚫 Limit Reached' : '⬇ Download'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )) : <div className="no-data-vip">Folder is empty. Media not uploaded yet.</div>}
                     </div>
@@ -243,7 +369,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
-        // ✅ DEFAULT FOLDERS GRID (Always ensures at least Stranger Photography is here)
+        // Default Folder Grid
         return (
             <div className="folders-view">
                 <div className="welcome-banner">
@@ -253,14 +379,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid">
-                        {folders.map((folder, index) => (
-                            <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)}>
-                                <div className="folder-icon">📁</div>
-                                <h4>{folder.folderName}</h4>
-                                <p>{folder.files?.length || 0} Items</p>
-                                {folder.isDefault && <span className="default-badge">Premium</span>}
-                            </div>
-                        ))}
+                        {folders.map((folder, index) => {
+                            // Folder lock UI logic
+                            const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
+                            const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
+                            const isLocked = isExpired || isLimitReached;
+
+                            return (
+                                <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1 }}>
+                                    <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
+                                    <h4>{folder.folderName}</h4>
+                                    <p>{folder.files?.length || 0} Items</p>
+                                    {folder.isDefault && <span className="default-badge">Premium</span>}
+                                    {isExpired && <span style={{display:'block', fontSize:'11px', color:'#e74c3c', marginTop:'5px'}}>Expired</span>}
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
             </div>
