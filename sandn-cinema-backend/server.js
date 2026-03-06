@@ -104,7 +104,7 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 };
 
 // ==========================================
-// 🚀 4. NOTIFICATION LOGIC (CRASH-PROOF)
+// 🚀 4. NOTIFICATION LOGIC (CRASH-PROOF & PARALLEL)
 // ==========================================
 const sendUploadNotification = async (mobile, email, name) => {
     const customMessage = "999999"; // Dummy variable to trigger Fast2SMS template
@@ -474,25 +474,33 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (BUG FIXED: MONGOOSE STRICT SCHEMA BYPASS)
+// ✅ 8. UPLOAD LOGIC (UPGRADED WITH EXPIRY AND LIMITS)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    const { type, name, location, addedBy, folderName } = req.body; // folderName added
+    const { type, name, location, addedBy, folderName, expiryDays, downloadLimit } = req.body; 
     const files = req.files; 
 
-    // Agar folder name nahi bheja, toh default 'Stranger Photography' use hoga
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
     try {
-        const existingAccount = await findAccount(mobile); // General check for upload
+        const existingAccount = await findAccount(mobile); 
         const filePaths = files && files.length > 0 ? files.map(f => f.path) : [];
+
+        // Logic for Expiry Date
+        let expiryDate = null;
+        if (expiryDays && parseInt(expiryDays) > 0) {
+            expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + parseInt(expiryDays));
+        }
+
+        // Logic for Download Limit
+        const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; // 0 = Unlimited
 
         // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
             let currentData = existingAccount.data.uploadedData || [];
             
-            // Backup Fix: Agar purana data sirf strings ki array me tha, use objects me convert karo
             if (currentData.length > 0 && typeof currentData[0] === 'string') {
                 currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
             }
@@ -500,27 +508,31 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                // Folder exist karta hai -> usme files daal do
+                // Folder exist karta hai -> update files & limits
                 currentData[folderIndex].files = [...currentData[folderIndex].files, ...filePaths];
+                currentData[folderIndex].expiryDate = expiryDate;
+                currentData[folderIndex].downloadLimit = dLimit;
+                currentData[folderIndex].downloadCount = 0; // Reset limit count on new upload
             } else {
                 // Naya folder banao
                 currentData.push({
                     folderName: finalFolderName,
                     files: filePaths,
-                    isDefault: finalFolderName === 'Stranger Photography'
+                    isDefault: finalFolderName === 'Stranger Photography',
+                    expiryDate: expiryDate,
+                    downloadLimit: dLimit,
+                    downloadCount: 0
                 });
             }
 
-            // ✅ MOST IMPORTANT FIX: Use updateOne to bypass mongoose schema crash for old accounts
             if (existingAccount.type === 'STUDIO') {
                 await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             } else {
                 await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             }
 
-            // Trigger Notification (Safe from crashes)
             sendUploadNotification(mobile, existingAccount.data.email, existingAccount.data.name || existingAccount.data.ownerName || name);
-            return res.json({ success: true, message: `Data appended to folder '${finalFolderName}' & Notification sent!` });
+            return res.json({ success: true, message: `Data appended to '${finalFolderName}' successfully!` });
         }
 
         // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
@@ -529,7 +541,10 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
         const folderStructure = [{
             folderName: finalFolderName,
             files: filePaths,
-            isDefault: finalFolderName === 'Stranger Photography'
+            isDefault: finalFolderName === 'Stranger Photography',
+            expiryDate: expiryDate,
+            downloadLimit: dLimit,
+            downloadCount: 0
         }];
 
         const newUser = {
@@ -548,9 +563,8 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 20), async (req,
             await User.create({ ...newUser, name: name });
         }
 
-        // Trigger Notification (Safe from crashes)
         sendUploadNotification(mobile, dummyEmail, name);
-        res.json({ success: true, message: `Registration successful, files saved to '${finalFolderName}' & Notification sent!` });
+        res.json({ success: true, message: `Registration successful, data saved to '${finalFolderName}'!` });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         res.status(500).json({ success: false, message: "Database Error: " + e.message });
@@ -617,7 +631,6 @@ app.post('/api/auth/search-account', async (req, res) => {
 app.post('/api/auth/update-studio-approval', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
-        // ✅ strict: false use kiya taaki database bina column banaye use force-save kar le
         const result = await Studio.updateOne(
             { mobile }, 
             { $set: { isFeedApproved: req.body.isFeedApproved } }, 
@@ -639,7 +652,6 @@ app.post('/api/auth/update-admin', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
         let admin;
-        // Agar code hai toh directly admin account nikal lo
         if (mobile === "0000000000CODEIS*@OWNER*") {
             admin = await Admin.findOne(); 
             if (!admin) admin = new Admin({ mobile: "9999999999", role: 'ADMIN' });
@@ -707,7 +719,6 @@ app.post('/api/auth/update-studio-profile', async (req, res) => {
 app.post('/api/auth/update-social-links', async (req, res) => {
     try {
         const { links } = req.body;
-        // Upsert setting document
         await PlatformSetting.updateOne(
             { settingId: 'GLOBAL' }, 
             { $set: { socialLinks: links, lastUpdated: Date.now() } }, 
@@ -727,7 +738,7 @@ app.get('/api/auth/get-platform-settings', async (req, res) => {
         if (settings) {
             res.json({ success: true, data: settings });
         } else {
-            res.json({ success: true, data: null }); // Default fallback on frontend
+            res.json({ success: true, data: null }); 
         }
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to fetch settings." });
@@ -760,8 +771,6 @@ app.post('/api/auth/update-policies', async (req, res) => {
 // ==========================================
 app.get('/api/auth/get-services', async (req, res) => {
     try {
-        // Abhi ke liye hum yahan se default list bhej rahe hain. 
-        // Future mein Admin Panel se dynamic banane ke liye ise DB se connect kar sakte hain.
         const defaultServices = [
             "Wedding Photography", 
             "Pre-Wedding Shoot", 
@@ -779,7 +788,7 @@ app.get('/api/auth/get-services', async (req, res) => {
 });
 
 // ==========================================
-// ✅ 18. DIRECT BOOKINGS LOGIC (UPDATED WITH NEW FIELDS)
+// ✅ 18. DIRECT BOOKINGS LOGIC 
 // ==========================================
 
 // Create a new Booking
@@ -787,7 +796,6 @@ app.post('/api/auth/create-booking', async (req, res) => {
     try {
         const { name, mobile, startDate, endDate, type, location, eventPlaceName } = req.body;
         
-        // strict: false use kar rahe hain taaki agar mongoose schema me update na bhi ho toh crash na ho
         const newBooking = await Booking.create([{ 
             name, 
             mobile, 
@@ -809,7 +817,7 @@ app.post('/api/auth/create-booking', async (req, res) => {
 // Fetch all Bookings for Admin
 app.get('/api/auth/get-bookings', async (req, res) => {
     try {
-        const bookings = await Booking.find().sort({ createdAt: -1 }); // Nayi upar aayengi
+        const bookings = await Booking.find().sort({ createdAt: -1 }); 
         res.json({ success: true, data: bookings });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to fetch bookings." });
@@ -843,8 +851,6 @@ app.post('/api/auth/create-collab', async (req, res) => {
     }
 });
 
-
-
 // Fetch all Collabs for Admin
 app.get('/api/auth/get-collabs', async (req, res) => {
     try {
@@ -861,7 +867,6 @@ app.post('/api/auth/update-collab-status', async (req, res) => {
         const { collabId, status } = req.body;
         const collab = await CollabRequest.findByIdAndUpdate(collabId, { status }, { new: true });
         
-        // Simulating Email Notification
         if (collab && collab.email && status !== 'Pending') {
             const subject = status === 'Accepted' ? "Collab Request Approved!" : "Collab Request Update";
             const msg = status === 'Accepted' ? "We are excited to work with you." : "Sorry, we can't proceed right now.";
