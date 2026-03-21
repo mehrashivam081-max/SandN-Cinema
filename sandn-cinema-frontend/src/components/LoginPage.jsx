@@ -20,7 +20,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     
     const [otp, setOtp] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState(''); // ✅ Added Confirm Password State
+    const [confirmPassword, setConfirmPassword] = useState(''); // ✅ Confirm Password State
     const [newEmail, setNewEmail] = useState(''); 
     
     const [error, setError] = useState('');
@@ -90,7 +90,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 const res = await axios.post(`${API_BASE}/check-send-otp`, { 
                     mobile: inputValue.trim(),
                     sendVia: otpMethod,
-                    roleFilter: activeTab.toUpperCase() // Yaha bhi bhej diya taaki email/wa ussi acc se uthe
+                    roleFilter: activeTab.toUpperCase() 
                 });
                 
                 if (res.data.success) {
@@ -107,6 +107,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         } finally { setLoading(false); }
     };
 
+    // ✅ UPDATED: BULLETPROOF NEW USER CHECK LOGIC
     const handleVerifyOTP = async () => {
         if (!otp) return setError("Please enter OTP");
         setLoading(true); setError('');
@@ -122,18 +123,21 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 // If success, check backend if password is 'temp123'
                 const searchRes = await axios.post(`${API_BASE}/search-account`, { 
                     mobile: inputValue.trim(),
-                    roleFilter: activeTab.toUpperCase() // Role filter zaroori hai
+                    roleFilter: activeTab.toUpperCase() 
                 });
                 const userData = searchRes.data.data;
-                if (!userData.password || userData.password === "temp123") {
+                const dbPass = userData.password ? String(userData.password).trim() : "";
+                
+                // 100% strict check for temp password
+                if (!dbPass || dbPass === "temp123") {
                     isNewUser = true;
                 }
             } else {
                 // 🚀 Verify BACKEND OTP
                 const res = await axios.post(`${API_BASE}/verify-otp`, { 
-                    mobile: inputValue, 
+                    mobile: inputValue.trim(), 
                     otp,
-                    roleFilter: activeTab.toUpperCase() // Role filter zaroori hai
+                    roleFilter: activeTab.toUpperCase() 
                 });
                 if (res.data.success) {
                     isNewUser = res.data.isNewUser;
@@ -142,11 +146,11 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 }
             }
 
-            // ✅ Decide Next Step
+            // ✅ Decide Next Step Based on New User Status
             if (isNewUser) {
-                setStep(4); // 🚀 GO TO NEW SETUP STEP (Email + Password)
+                setStep(4); // 🚀 GO TO NEW SETUP STEP (Email + Create Password)
             } else {
-                setStep(3); // Go to normal login step
+                setStep(3); // 🟢 Go to normal login step (Enter Password)
             }
 
         } catch (e) {
@@ -338,7 +342,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        {/* ✅ NEW: Confirm Password Field */}
+                        {/* ✅ Confirm Password Field */}
                         <div className="input-group">
                             <label>Confirm Password</label>
                             <div className="pass-wrapper">
