@@ -18,8 +18,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
     const dpInputRef = useRef(null);
 
-    // ✅ NEW: GLOBAL DEFAULT PRICING STATE
+    // ✅ NEW: ADVANCED GLOBAL CHARGES STATES
     const [globalPricing, setGlobalPricing] = useState({ imageCost: '5', videoCost: '10' });
+    const [coinPackages, setCoinPackages] = useState([]);
+    const [miniEvents, setMiniEvents] = useState([]);
 
     // --- UPLOAD DATA STATES ---
     const [formData, setFormData] = useState({ 
@@ -31,7 +33,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         files: [],
         expiryDays: '30',       
         downloadLimit: '0',
-        // ✅ Pre-filled with Global Defaults initially
         imageCost: '5',
         videoCost: '10'
     });
@@ -39,7 +40,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
-    // ✅ NEW: 3-Step Wizard Tab State
     const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
     const [isEmailLocked, setIsEmailLocked] = useState(false); 
 
@@ -120,7 +120,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 if (res.data.data.socialLinks) setSocialLinks(res.data.data.socialLinks);
                 if (res.data.data.policies) setPolicyData(res.data.data.policies);
                 
-                // ✅ Load Global Default Pricing from DB
+                // ✅ Load Advanced Monetization Data
                 if (res.data.data.defaultPricing) {
                     const globalRates = { 
                         imageCost: res.data.data.defaultPricing.imageCost.toString(), 
@@ -129,6 +129,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setGlobalPricing(globalRates);
                     setFormData(prev => ({ ...prev, imageCost: globalRates.imageCost, videoCost: globalRates.videoCost }));
                 }
+                if (res.data.data.coinPackages) setCoinPackages(res.data.data.coinPackages);
+                if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
             }
         } catch(e) { console.log("No settings found yet"); }
     };
@@ -306,7 +308,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 downloadLimit: formData.downloadLimit,
                 addedBy: 'ADMIN',
                 fileUrls: uploadedUrls,
-                // ✅ PRICING DATA TO SERVER
                 imageCost: formData.imageCost,
                 videoCost: formData.videoCost
             };
@@ -317,7 +318,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 setUploadETA('Complete!');
                 setTimeout(() => {
                     alert(`✅ Success: ${res.data.message}\n📩 Notifications triggered!`);
-                    // Reset fields and apply Global Pricing defaults back to form
                     setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }); 
                     setPreviews([]); 
                     setIsEmailLocked(false);
@@ -379,19 +379,22 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error updating profile."); }
     };
 
-    // ✅ SAVE GLOBAL PRICING
-    const handleUpdateGlobalPricing = async (e) => {
-        e.preventDefault();
-        if (!window.confirm("Update default coin charges for ALL new uploads? (Old uploads will keep their current rates)")) return;
-
+    // ✅ SAVE ALL GLOBAL CHARGES (Rates + Packages + Events)
+    const handleSaveGlobalCharges = async () => {
+        if (!window.confirm("Save all Global Charges, Coin Packages, and Events?")) return;
         try {
-            const res = await axios.post(`${API_BASE}/update-default-pricing`, globalPricing);
+            const payload = {
+                imageCost: globalPricing.imageCost,
+                videoCost: globalPricing.videoCost,
+                coinPackages: coinPackages,
+                miniEvents: miniEvents
+            };
+            const res = await axios.post(`${API_BASE}/update-global-charges`, payload);
             if (res.data.success) {
-                alert("✅ Global Default Pricing Updated!");
-                // Also update current form if it hasn't been touched yet
+                alert("✅ Global Monetization Settings Saved Successfully!");
                 setFormData(prev => ({ ...prev, imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }));
             }
-        } catch (error) { alert("Server error updating pricing."); }
+        } catch (e) { alert("Server error saving settings."); }
     };
 
     const handleCreateSubAdmin = async (e) => {
@@ -502,9 +505,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 <ul className="sidebar-menu">
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard</li>
+                    <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
+                    {/* ✅ NEW TAB: GLOBAL CHARGES */}
+                    <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_CHARGES')}>💰 Global Charges</li>
                     <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
                     <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => setActiveTab('BOOKINGS')}>📅 Direct Bookings</li>
-                    <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
                     <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
                     <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
                     <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => setActiveTab('SECURITY')}>🔒 Security Policy</li>
@@ -604,7 +609,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: UPLOAD DATA (3-STEP WIZARD) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
@@ -770,6 +774,66 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
+                {/* 🔴 NEW TAB: GLOBAL CHARGES & MONETIZATION */}
+                {activeTab === 'GLOBAL_CHARGES' && (
+                    <div className="view-section">
+                        <div className="section-header">
+                            <h2>💰 Global Charges & Events Configuration</h2>
+                            <button onClick={handleSaveGlobalCharges} className="global-update-btn" style={{ background: '#2ecc71', width: 'auto', padding: '8px 20px' }}>💾 Save Configs</button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+                            
+                            {/* 1. DEFAULT UPLOAD PRICING */}
+                            <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #3498db' }}>
+                                <h3>📂 1. Default Upload Pricing (Coins)</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Standard coin charge for unlocking newly uploaded media.</p>
+                                <div style={{display: 'flex', gap: '15px'}}>
+                                    <div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div>
+                                    <div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div>
+                                </div>
+                            </div>
+
+                            {/* 2. REAL MONEY COIN PACKAGES */}
+                            <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #f1c40f' }}>
+                                <h3>🪙 2. Real Money Coin Packages</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Set offers for users to buy coins with Rupees (₹).</p>
+                                
+                                {coinPackages.map((pkg, i) => (
+                                    <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center', background: '#f9f9f9', padding: '10px', borderRadius: '5px' }}>
+                                        <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Coins to Give</label><input type="number" value={pkg.coins} onChange={e=>{let arr=[...coinPackages]; arr[i].coins=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Price (₹)</label><input type="number" value={pkg.price} onChange={e=>{let arr=[...coinPackages]; arr[i].price=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        <div style={{flex: 1.5}}><label style={{fontSize:'11px'}}>Offer Tag (e.g. Best Value!)</label><input type="text" value={pkg.tag} onChange={e=>{let arr=[...coinPackages]; arr[i].tag=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        <button onClick={()=>{let arr=[...coinPackages]; arr.splice(i,1); setCoinPackages(arr)}} style={{background:'#e74c3c', color:'white', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', marginTop:'15px'}}>X</button>
+                                    </div>
+                                ))}
+                                <button onClick={()=>setCoinPackages([...coinPackages, {coins: 100, price: 50, tag: ''}])} className="global-update-btn" style={{background: '#f39c12', padding: '10px', marginTop: '10px'}}>➕ Add New Package</button>
+                            </div>
+
+                            {/* 3. MINI EVENTS / FREE COINS */}
+                            <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #9b59b6' }}>
+                                <h3>🎉 3. Mini Events (Earn Free Coins)</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Reward users for organic growth (e.g. Subscribe to YouTube, Follow Instagram).</p>
+
+                                {miniEvents.map((ev, i) => (
+                                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px', background: '#f5eeef', padding: '15px', borderRadius: '5px' }}>
+                                        <div style={{display: 'flex', gap: '10px'}}>
+                                            <div style={{flex: 2}}><label style={{fontSize:'11px'}}>Task Title</label><input type="text" placeholder="e.g. Follow us on Instagram!" value={ev.title} onChange={e=>{let arr=[...miniEvents]; arr[i].title=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                            <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Reward Coins</label><input type="number" value={ev.reward} onChange={e=>{let arr=[...miniEvents]; arr[i].reward=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        </div>
+                                        <div style={{display: 'flex', gap: '10px', alignItems:'center'}}>
+                                            <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Action Link (URL)</label><input type="text" placeholder="https://instagram.com/..." value={ev.link} onChange={e=>{let arr=[...miniEvents]; arr[i].link=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                            <button onClick={()=>{let arr=[...miniEvents]; arr.splice(i,1); setMiniEvents(arr)}} style={{background:'#e74c3c', color:'white', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', marginTop:'15px'}}>Remove Event</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button onClick={()=>setMiniEvents([...miniEvents, { id: Date.now().toString(), title: '', reward: 5, link: ''}])} className="global-update-btn" style={{background: '#8e44ad', padding: '10px', marginTop: '10px'}}>➕ Add Mini Event</button>
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'CRITERIA' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
@@ -893,41 +957,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 10: SETTINGS WITH GLOBAL PRICING */}
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚙️ Settings & Configuration</h2></div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-                            
-                            {/* ADMIN PROFILE SETTINGS */}
-                            <div className="update-creation-container" style={{ margin: 0 }}>
-                                <h3 style={{marginTop: 0, color: '#333'}}>Admin Profile</h3>
-                                <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
-                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
-                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
-                                    <button type="submit" className="global-update-btn" style={{padding: '12px', marginTop:'5px'}}>💾 Save Profile Details</button>
-                                </form>
-                            </div>
-
-                            {/* ✅ NEW: GLOBAL DEFAULT PRICING SETTINGS */}
-                            <div className="update-creation-container" style={{ margin: 0, border: '2px solid #f1c40f', background: '#fffdf5' }}>
-                                <h3 style={{marginTop: 0, color: '#d4ac0d'}}>💰 Global Default Pricing</h3>
-                                <p style={{fontSize: '12px', color: '#555', marginBottom: '15px'}}>Set the default coin cost for all future uploads. You can still manually change these for specific folders during upload.</p>
-                                <form onSubmit={handleUpdateGlobalPricing} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                    <div>
-                                        <label style={{fontWeight:'bold', fontSize:'13px'}}>Default Photo Cost (Coins)</label>
-                                        <input type="number" min="0" value={globalPricing.imageCost} onChange={e => setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/>
-                                    </div>
-                                    <div>
-                                        <label style={{fontWeight:'bold', fontSize:'13px'}}>Default Video Cost (Coins)</label>
-                                        <input type="number" min="0" value={globalPricing.videoCost} onChange={e => setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input" />
-                                    </div>
-                                    <button type="submit" className="global-update-btn" style={{padding: '12px', marginTop:'5px', background: '#f1c40f', color: '#000'}}>💾 Save Global Pricing</button>
-                                </form>
-                            </div>
-
+                        <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
+                            <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
+                            </form>
                         </div>
                     </div>
                 )}
