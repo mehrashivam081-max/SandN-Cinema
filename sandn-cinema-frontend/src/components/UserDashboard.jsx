@@ -21,9 +21,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [activeFolder, setActiveFolder] = useState(null); 
     const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
-    // ✅ NEW: PREVIEW & UPLOADER PROFILE STATES
+    // ✅ PREVIEW & UPLOADER PROFILE STATES
     const [previewMedia, setPreviewMedia] = useState(null); 
     const [uploaderProfile, setUploaderProfile] = useState(null);
+
+    // ✅ NEW MONETIZATION STATES (Pay per View/Download)
+    const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, cost: 0, type: '' });
+    const [adLoading, setAdLoading] = useState(false);
 
     // ✅ LIVE DOWNLOAD STATES
     const [downloadingFile, setDownloadingFile] = useState(null);
@@ -41,7 +45,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
-    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio' };
+    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10 };
 
     // 🟢 FETCH LOGIC 
     useEffect(() => {
@@ -55,6 +59,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setLoading(true);
             try {
+                // Fetch user data stricly to get updated wallet balance
                 const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
                 
                 if (res.data.success) {
@@ -142,7 +147,92 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
-    // 🚀 LIVE DOWNLOAD
+    // ✅ NEW: Trigger Purchase Modal before preview/download
+    const triggerMonetization = (filePath) => {
+        if (!activeFolder) return;
+
+        // ✅ ADMIN PANEL SE DECIDE KIYI HUYI COST YAHAN USE HOGI
+        const fileType = isVideo(filePath) ? 'Video' : 'Photo';
+        const fileCost = fileType === 'Video' ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
+
+        setPurchaseModal({
+            show: true,
+            file: filePath,
+            cost: fileCost,
+            type: fileType
+        });
+    };
+
+    // ✅ NEW logic to determine cost based on admin panel config per folder
+    const getCostLabel = (filePath) => {
+        if(!activeFolder) return '';
+        const isVid = isVideo(filePath);
+        return isVid ? `${activeFolder.videoCost || 10} Coins` : `${activeFolder.imageCost || 5} Coins`;
+    };
+
+    // ✅ NEW logic: Process Purchase with Coins
+    const processCoinPurchase = async () => {
+        if (wallet.coins < purchaseModal.cost) {
+            alert("Not enough coins! Watch Ads to earn or buy more.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // ✅ API to deduct coins from backend
+            const res = await axios.post(`${API_BASE}/deduct-coins`, {
+                mobile: user.mobile,
+                amount: purchaseModal.cost,
+                reason: `Unlocking ${purchaseModal.type} in folder ${activeFolder.folderName}`
+            });
+
+            if (res.data.success) {
+                // Update local wallet state
+                setWallet(res.data.wallet);
+                // Open Preview
+                setPreviewMedia(purchaseModal.file);
+                // Close Modal
+                setPurchaseModal({ show: false, file: null, cost: 0, type: '' });
+                alert(`${purchaseModal.type} Unlocked Successfully! 🎉`);
+            } else {
+                alert(res.data.message || "Purchase failed.");
+            }
+        } catch (e) {
+            console.error("Purchase error", e);
+            alert("Server Error during purchase.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ✅ NEW logic: Watch Ad to earn coins
+    const startWatchAdFlow = () => {
+        setAdLoading(true);
+        alert("Starting Ad Video... (Please watch completely to earn 1 Coin)");
+        
+        // Simulating ad network behavior (e.g., Google AdMob/AdSense)
+        setTimeout(async () => {
+            try {
+                // ✅ API to add 1 coin after watching ad
+                const res = await axios.post(`${API_BASE}/add-coins`, {
+                    mobile: user.mobile,
+                    amount: 1,
+                    reason: "Watched Ad Video"
+                });
+
+                if (res.data.success) {
+                    setWallet(res.data.wallet); // Sync wallet balance
+                    alert("Reward Received! +1 Coin added to your wallet. 🪙");
+                }
+            } catch (e) {
+                console.error("Ad reward error", e);
+            } finally {
+                setAdLoading(false);
+            }
+        }, 5000); // Simulate 5 second ad
+    };
+
+    // 🚀 LIVE DOWNLOAD (Kept original logic, just called after monetization check if needed)
     const handleDownload = async (filePath) => {
         setDownloadingFile(filePath);
         setDownloadProgress(0);
@@ -262,7 +352,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     {editProfileMode && (
                         <div className="dp-controls">
                             <label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label>
-                            <button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button>
+                            <button className="dp-btn remove" onClick={handleDPChange}>Remove</button>
                         </div>
                     )}
                 </div>
@@ -328,11 +418,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     <div className="ud-grid-vip mt-20">
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => (
-                            // ✅ NEW VIP CARD LAYOUT WITH UPLOADER STRIP
                             <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333' }}>
                                 
-                                {/* 1. MEDIA CLICK AREA (Opens Preview) */}
-                                <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => setPreviewMedia(filePath)}>
+                                {/* 1. MEDIA CLICK AREA (Triggers Monetization Modal first) */}
+                                <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => triggerMonetization(filePath)}>
                                     {isVideo(filePath) ? (
                                         <>
                                             <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -353,10 +442,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     )}
                                 </div>
 
-                                {/* 2. UPLOADER & DOWNLOAD STRIP */}
+                                {/* 2. UPLOADER & PRICE STRIP */}
                                 <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
                                     
-                                    {/* Uploader Profile Clickable Area */}
                                     <div 
                                         onClick={() => setUploaderProfile({
                                             name: activeFolder.uploadedBy || 'SandN Cinema',
@@ -374,14 +462,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         </div>
                                     </div>
 
-                                    {/* Direct Download Button */}
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); if(canDownload) handleDownload(filePath); }}
-                                        disabled={!canDownload || downloadingFile === filePath}
-                                        style={{ background: canDownload ? '#2ecc71' : '#555', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', cursor: canDownload ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
-                                    >
-                                        {isExpired ? '🚫 Expired' : isLimitReached ? '🚫 Limit Reached' : '⬇️ Save'}
-                                    </button>
+                                    {/* Price Badge */}
+                                    <div style={{ textAlign: 'right' }}>
+                                        <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
+                                        <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                            🪙 {getCostLabel(filePath)}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         )) : <div className="no-data-vip">Folder is empty. Media not uploaded yet.</div>}
@@ -422,8 +509,56 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     return (
         <div className="ud-container-vip">
+
+            {/* ✅ NEW: PURCHASE CONFIRMATION MODAL (Coins vs Ads) */}
+            {purchaseModal.show && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+                    <div style={{ background: '#fff', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', animation: 'popIn 0.3s ease' }}>
+                        
+                        <div style={{fontSize: '50px', marginBottom: '15px'}}>🔒</div>
+                        <h2 style={{ color: '#333', margin: '0 0 10px 0' }}>Unlock {purchaseModal.type}</h2>
+                        <p style={{ color: '#666', fontSize: '14px', marginBottom: '25px' }}>This is a premium file. Choose how you want to access it below.</p>
+                        
+                        <div style={{ background: '#f4f6f9', padding: '15px', borderRadius: '15px', marginBottom: '20px', textAlign: 'left' }}>
+                            <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
+                                <span>Item Type:</span> <strong style={{color: '#333'}}>{purchaseModal.type}</strong>
+                            </p>
+                            <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
+                                <span>Your Balance:</span> <strong style={{color: wallet.coins >= purchaseModal.cost ? '#2ecc71' : '#e74c3c'}}>🪙 {wallet.coins} Coins</strong>
+                            </p>
+                            <p style={{margin: 0, color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ddd', paddingTop: '8px', marginTop: '8px'}}>
+                                <span>Unlock Cost:</span> <strong style={{color: '#f1c40f', fontSize: '16px'}}>🪙 {purchaseModal.cost} Coins</strong>
+                            </p>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* Option 1: Pay with Coins */}
+                            <button 
+                                onClick={processCoinPurchase}
+                                disabled={loading || wallet.coins < purchaseModal.cost}
+                                style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: wallet.coins >= purchaseModal.cost ? '#3498db' : '#ccc', color: '#fff', cursor: wallet.coins >= purchaseModal.cost ? 'pointer' : 'not-allowed', fontWeight: 'bold', transition: '0.3s' }}
+                            >
+                                {loading ? 'Processing...' : `Pay ${purchaseModal.cost} Coins to Unlock`}
+                            </button>
+
+                            {/* Option 2: Watch Ad to Earn 1 Coin */}
+                            <button 
+                                onClick={startWatchAdFlow}
+                                disabled={adLoading || loading}
+                                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px', border: '2px solid #2ecc71', background: 'transparent', color: '#2ecc71', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                {adLoading ? '🍿 Loading Ad...' : '🎬 Watch Ad to Earn 1 Coin'}
+                            </button>
+                        </div>
+
+                        <p onClick={() => setPurchaseModal({ show: false, file: null, cost: 0, type: '' })} style={{ marginTop: '25px', color: '#999', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}>
+                            Cancel & Go Back
+                        </p>
+                    </div>
+                </div>
+            )}
             
-            {/* ✅ NEW: FULL-SCREEN MEDIA PREVIEW MODAL */}
+            {/* ✅ MEDIA PREVIEW MODAL (With direct download option after unlock) */}
             {previewMedia && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
                     <button onClick={() => setPreviewMedia(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✖</button>
@@ -434,15 +569,27 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <img src={getCleanUrl(previewMedia)} style={{ maxWidth: '95%', maxHeight: '75vh', borderRadius: '10px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', objectFit: 'contain' }} />
                     )}
 
-                    <div style={{ marginTop: '25px' }}>
-                        <button onClick={() => handleDownload(previewMedia)} style={{ background: '#3498db', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)' }}>
-                            ⬇ Download Original Quality
-                        </button>
+                    <div style={{ marginTop: '25px', width: '90%', maxWidth: '300px' }}>
+                        {downloadingFile === previewMedia ? (
+                            <div style={{ width: '100%', background: 'rgba(255,255,255,0.1)', padding: '15px', borderRadius: '12px', textAlign: 'center' }}>
+                                <div style={{color: '#fff', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
+                                <div style={{ width: '100%', background: 'rgba(255,255,255,0.2)', height: '5px', borderRadius: '5px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
+                                </div>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={() => handleDownload(previewMedia)} 
+                                style={{ background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}
+                            >
+                                ⬇️ Download Original Quality
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* ✅ NEW: UPLOADER (STUDIO/ADMIN) ID POPUP MODAL */}
+            {/* ✅ UPLOADER (STUDIO/ADMIN) ID POPUP MODAL */}
             {uploaderProfile && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }} onClick={() => setUploaderProfile(null)}>
                     <div style={{ background: 'linear-gradient(145deg, #1a1a2e, #16213e)', padding: '30px', borderRadius: '25px', width: '300px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
