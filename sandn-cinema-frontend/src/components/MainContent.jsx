@@ -17,11 +17,18 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
     const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
     
     // Search/Auth States
-    const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, NOT_REG
+    const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, SETUP, NOT_REG
     const [mobile, setMobile] = useState('');
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // ✅ NEW: SETUP ACCOUNT STATES (For New Users on Main Page)
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [newEmail, setNewEmail] = useState('');
+    const [showPass, setShowPass] = useState(false);
+    const [showConfirmPass, setShowConfirmPass] = useState(false);
 
     // Responsive Desktop Detection
     useEffect(() => {
@@ -51,7 +58,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
         }
     };
 
-    // --- AUTH LOGIC (Corrected) ---
+    // --- AUTH LOGIC (Upgraded with Smart Setup) ---
     const handleSearch = async () => {
         if(mobile.length !== 10) return setError("Enter valid 10-digit mobile");
         setLoading(true); setError('');
@@ -79,17 +86,62 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
     const handleVerify = async () => {
         setLoading(true); setError('');
         try {
-            const res = await axios.post(`${API_BASE}/login-otp`, { mobile, otp });
+            // 1. Verify OTP and login silently
+            const res = await axios.post(`${API_BASE}/login-otp`, { mobile, otp, roleFilter: 'USER' });
             
             if (res.data.success) {
-                onLoginSuccess(res.data.user);
+                const loggedInUser = res.data.user;
+                
+                // 2. Check if this user needs password setup
+                const searchRes = await axios.post(`${API_BASE}/search-account`, { mobile, roleFilter: 'USER' });
+                
+                if (searchRes.data.success) {
+                    const dbData = searchRes.data.data;
+                    if (!dbData.password || dbData.password === "temp123" || dbData.password.trim() === "") {
+                        // 🚀 User is new, show Setup Screen
+                        setSearchStage('SETUP');
+                    } else {
+                        // 🟢 User is old, log them in instantly
+                        onLoginSuccess(loggedInUser);
+                    }
+                } else {
+                    onLoginSuccess(loggedInUser); // Fallback
+                }
             } else { 
                 setError("Invalid OTP"); 
             }
         } catch (e) {
              console.error("Verify Error:", e);
-             if(otp === '123456') onLoginSuccess({ name: "Simulated User", mobile, role: "USER" }); 
-             else setError("Verification Failed");
+             if(otp === '123456') {
+                 setSearchStage('SETUP'); // Simulation fallback
+             } else {
+                 setError("Verification Failed");
+             }
+        } finally { setLoading(false); }
+    };
+
+    // ✅ SETUP NEW ACCOUNT LOGIC
+    const handleSetupAccount = async () => {
+        if (!password || !newEmail || !confirmPassword) return setError("Please fill all fields!");
+        if (password !== confirmPassword) return setError("Passwords do not match!");
+        
+        setLoading(true); setError('');
+        try {
+            const res = await axios.post(`${API_BASE}/create-password`, { 
+                mobile: mobile.trim(), 
+                email: newEmail.trim(),
+                password: password.trim(),
+                roleFilter: 'USER'
+            });
+
+            if (res.data.success) {
+                alert("Account Setup Complete! 🎉 Logging you in...");
+                onLoginSuccess(res.data.user);
+            } else {
+                setError(res.data.message || "Setup Failed."); 
+            }
+        } catch (e) { 
+            setError("Server Error during setup."); 
         } finally { setLoading(false); }
     };
 
@@ -113,6 +165,38 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                         <button className="link-btn" onClick={()=>setSearchStage('INPUT')}>Change Number</button>
                     </>
                 )}
+                
+                {/* ✅ NEW: PASSWORD SETUP STAGE */}
+                {searchStage === 'SETUP' && (
+                    <div style={{ textAlign: 'left' }}>
+                        <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '5px' }}>Setup Account</h3>
+                        <p style={{ fontSize: '12px', color: '#ccc', textAlign: 'center', marginBottom: '15px' }}>Number verified! Complete your profile to login.</p>
+                        
+                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Email Address</label>
+                        <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '15px'}} />
+                        
+                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Create Password</label>
+                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
+                            <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%'}} />
+                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
+                                {showPass ? '🙈' : '👁️'}
+                            </span>
+                        </div>
+
+                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Confirm Password</label>
+                        <div style={{ position: 'relative', width: '100%', marginBottom: '20px' }}>
+                            <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{width: '100%'}} />
+                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
+                                {showConfirmPass ? '🙈' : '👁️'}
+                            </span>
+                        </div>
+
+                        <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71' }}>
+                            {loading ? 'Saving...' : 'COMPLETE SETUP'}
+                        </button>
+                    </div>
+                )}
+
                  {searchStage === 'NOT_REG' && (
                     <>
                         <h3 style={{color: '#ff4d4d'}}>Number Not Registered</h3>

@@ -18,20 +18,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
     const dpInputRef = useRef(null);
 
-    // --- UPLOAD DATA STATES (UPGRADED WITH EXPIRY LIMITS) ---
+    // --- UPLOAD DATA STATES (UPGRADED WITH CLOUDINARY & EMAIL) ---
     const [formData, setFormData] = useState({ 
         type: 'USER', 
         name: '', 
         mobile: '', 
+        email: '',          // ✅ Added Email Field
         folderName: '', 
         files: [],
-        expiryDays: '30',       // Default 30 days expiry
-        downloadLimit: '0'      // 0 means unlimited
+        expiryDays: '30',       
+        downloadLimit: '0'      
     });
+    
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
-    const [uploadSubTab, setUploadSubTab] = useState('BASIC'); // 'BASIC' or 'LIMITS'
+    const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
+    const [isEmailLocked, setIsEmailLocked] = useState(false); // ✅ Added logic to lock email if it exists
+
+    // --- UPLOAD PROGRESS TRACKER STATES ---
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadSpeed, setUploadSpeed] = useState('');
+    const [uploadETA, setUploadETA] = useState('');
+    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0 }); // Added counter for files
 
     // --- ADMIN SETTINGS STATES ---
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || 'Owner', email: user?.email || '', password: user?.password || '' });
@@ -57,11 +66,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🟢 INITIAL FETCH & ADMIN SYNC
     useEffect(() => {
         fetchAccounts();
-        fetchPlatformSettings(); // Fetch Social Links & Policies
-        fetchBookings();         // Fetch Bookings
-        fetchCollabs();          // Fetch Collabs
+        fetchPlatformSettings(); 
+        fetchBookings();         
+        fetchCollabs();          
 
-        // ✅ LATEST ADMIN DATA FETCH ON RELOAD (Refresh Fix)
         const syncAdminData = async () => {
             try {
                 const res = await axios.post(`${API_BASE}/search-account`, { 
@@ -75,7 +83,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         email: latestData.email || '',
                         password: ''
                     });
-                    // LocalStorage update so refresh shows correct name instantly
                     const updatedUser = { ...user, name: latestData.name };
                     localStorage.setItem('user', JSON.stringify(updatedUser));
                 }
@@ -141,11 +148,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const removeDp = () => { setAdminDp(''); localStorage.removeItem('adminDp'); };
 
     // ==========================================
-    // 🚀 UPLOAD DATA LOGIC
+    // 🚀 UPLOAD DATA LOGIC (WITH CLOUDINARY & EMAIL LOGIC)
     // ==========================================
     const handleFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
         setFormData({ ...formData, files: selectedFiles });
+        
+        // ✅ Add counter stats
+        const photos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
+        const videos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
+        setFileStats({ photos, videos });
+        
         const filePreviews = selectedFiles.map(file => ({ url: URL.createObjectURL(file), type: file.type }));
         setPreviews(filePreviews);
     };
@@ -154,10 +167,41 @@ const OwnerDashboard = ({ user, onLogout }) => {
         const val = e.target.value;
         setFormData({ ...formData, mobile: val });
         setShowSuggestions(val.length > 0);
+
+        // ✅ AUTO-FILL LOGIC
+        const exactMatch = accounts.find(c => c.mobile === val);
+        if (exactMatch) {
+            setFormData(prev => ({
+                ...prev,
+                name: exactMatch.name || exactMatch.studioName || '',
+                type: exactMatch.role || 'USER',
+                email: (exactMatch.email && !exactMatch.email.includes('dummy_')) ? exactMatch.email : ''
+            }));
+            // If email exists and is real, lock it
+            if (exactMatch.email && !exactMatch.email.includes('dummy_')) {
+                setIsEmailLocked(true);
+            } else {
+                setIsEmailLocked(false);
+            }
+        } else {
+            setIsEmailLocked(false);
+        }
     };
 
     const handleSuggestionClick = (acc) => {
-        setFormData({ ...formData, mobile: acc.mobile, name: acc.name || acc.studioName || '', type: acc.role || 'USER' });
+        setFormData({ 
+            ...formData, 
+            mobile: acc.mobile, 
+            name: acc.name || acc.studioName || '', 
+            type: acc.role || 'USER',
+            email: (acc.email && !acc.email.includes('dummy_')) ? acc.email : ''
+        });
+        
+        if (acc.email && !acc.email.includes('dummy_')) {
+            setIsEmailLocked(true);
+        } else {
+            setIsEmailLocked(false);
+        }
         setShowSuggestions(false);
     };
 
@@ -166,37 +210,113 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
+    // 🚀 UPGRADED TO CLOUDINARY UPLOAD
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
+        if (formData.files.length === 0) return alert("Please select files to upload.");
         
-        // ✅ CONFIRMATION POPUP WITH EXPIRY WARNING
         const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
         if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nFolder Expiry: ${expiryText}\nDownload Limit: ${formData.downloadLimit === '0' ? 'Unlimited' : formData.downloadLimit}`)) return;
 
         setLoading(true);
-        const data = new FormData();
-        data.append('type', formData.type);
-        data.append('name', formData.name);
-        data.append('mobile', formData.mobile);
-        data.append('folderName', formData.folderName);
-        data.append('expiryDays', formData.expiryDays); // Sending new limit data
-        data.append('downloadLimit', formData.downloadLimit); // Sending new limit data
-        data.append('addedBy', 'ADMIN'); 
-        
-        formData.files.forEach(file => data.append('mediaFiles', file));
+        setUploadProgress(0);
+        setUploadSpeed('Starting Upload...');
+        setUploadETA('Calculating...');
+
+        const totalBytes = formData.files.reduce((acc, file) => acc + file.size, 0);
+        const loadedBytesArray = new Array(formData.files.length).fill(0);
+        const uploadedUrls = [];
+
+        let startTime = Date.now();
+        let lastTime = startTime;
+        let lastTotalLoaded = 0;
 
         try {
-            const res = await axios.post(`${API_BASE}/admin-add-user`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+            // ✅ STEP 1: UPLOAD DIRECTLY TO CLOUDINARY
+            for (let i = 0; i < formData.files.length; i++) {
+                const file = formData.files[i];
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('upload_preset', 'xgujeuol'); // ☁️ Cloudinary Preset
+
+                const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                    onUploadProgress: (progressEvent) => {
+                        const { loaded } = progressEvent;
+                        loadedBytesArray[i] = loaded;
+
+                        const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
+                        const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
+                        setUploadProgress(Math.min(percentCompleted, 99));
+
+                        const currentTime = Date.now();
+                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+
+                        if (timeElapsedLimit > 0.5) {
+                            const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
+                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                            const speedKbps = speedBps / 1024;
+                            const speedMbps = speedKbps / 1024;
+
+                            if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                            else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+
+                            const bytesRemaining = totalBytes - totalLoaded;
+                            const etaSeconds = bytesRemaining / speedBps;
+
+                            if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                            else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
+                            else setUploadETA(`Almost done...`);
+
+                            lastTotalLoaded = totalLoaded;
+                            lastTime = currentTime;
+                        }
+                    }
+                });
+                
+                uploadedUrls.push(res.data.secure_url);
+            }
+
+            // ✅ STEP 2: SEND LINKS TO BACKEND TO SAVE
+            setUploadProgress(100);
+            setUploadSpeed('Finalizing...');
+            setUploadETA('Saving Data to Server...');
+
+            const payloadData = {
+                type: formData.type,
+                name: formData.name,
+                mobile: formData.mobile,
+                email: formData.email, // ✅ Added email
+                folderName: formData.folderName,
+                expiryDays: formData.expiryDays,
+                downloadLimit: formData.downloadLimit,
+                addedBy: 'ADMIN',
+                fileUrls: uploadedUrls 
+            };
+
+            const res = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData);
+            
             if (res.data.success) {
-                alert(`✅ Success: ${res.data.message}`);
-                setFormData({ type: 'USER', name: '', mobile: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0' }); 
-                setPreviews([]); 
-                setUploadSubTab('BASIC');
-                fetchAccounts();
-            } else { alert(res.data.message); }
-        } catch (error) { alert("Server Error."); } 
-        finally { setLoading(false); }
+                setUploadETA('Complete!');
+                setTimeout(() => {
+                    alert(`✅ Success: ${res.data.message}\n📩 Email & WhatsApp notification triggered!`);
+                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0' }); 
+                    setPreviews([]); 
+                    setIsEmailLocked(false);
+                    setFileStats({ photos: 0, videos: 0 });
+                    document.getElementById('admin-file-input').value = '';
+                    setUploadSubTab('BASIC');
+                    fetchAccounts();
+                    setLoading(false);
+                }, 500);
+            } else { 
+                alert(res.data.message); 
+                setLoading(false);
+            }
+        } catch (error) { 
+            alert("Upload Error. Please check your internet connection."); 
+            setLoading(false); 
+        } 
     };
 
 
@@ -204,7 +324,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 MANAGE ACCOUNTS LOGIC
     // ==========================================
     const handleDelete = async (mobile, role) => {
-        // ✅ CONFIRMATION POPUP (STRICTER)
         if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete this ${role}?`)) return;
         try {
             const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role });
@@ -213,7 +332,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const toggleStudioApproval = async (mobile, currentStatus) => {
-        // ✅ CONFIRMATION POPUP
         const actionText = currentStatus ? "REVOKE" : "APPROVE";
         if (!window.confirm(`Are you sure you want to ${actionText} feed access for this Studio?`)) return;
 
@@ -230,7 +348,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleUpdateAdminProfile = async (e) => {
         e.preventDefault();
         
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm("Are you sure you want to save these profile changes?")) return;
 
         try {
@@ -238,7 +355,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const res = await axios.post(`${API_BASE}/update-admin`, { mobile: identifier, ...adminProfile });
             if (res.data.success) {
                 alert("✅ Admin Profile Updated Successfully!");
-                // ✅ UPDATE LOCAL STORAGE SO NAME STAYS ON REFRESH
                 const updatedUser = { ...user, name: adminProfile.name };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
             }
@@ -248,8 +364,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const handleCreateSubAdmin = async (e) => {
         e.preventDefault();
-        
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm(`Create new Sub-Admin: ${subAdmin.name}?`)) return;
 
         try {
@@ -276,7 +390,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const saveLinksToServer = async () => {
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm("Are you sure you want to update Social Links on the platform?")) return;
 
         try {
@@ -287,8 +400,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const handlePolicySave = async (e) => {
         e.preventDefault();
-        
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm("Are you sure you want to update Platform Policies?")) return;
 
         try {
@@ -301,27 +412,25 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 CRITERIA & BOOKING ACTION LOGIC
     // ==========================================
     const handleCollabAction = async (id, action) => {
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm(`Are you sure you want to ${action} this collaboration request?`)) return;
 
         try {
             const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action });
             if(res.data.success) {
                 alert(`✅ Request ${action}. Email notification triggered!`);
-                fetchCollabs(); // Refresh list
+                fetchCollabs(); 
             }
         } catch(e) { alert("Failed to update collab status"); }
     };
 
     const handleBookingStatus = async (id, newStatus) => {
-        // ✅ CONFIRMATION POPUP
         if (!window.confirm(`Are you sure you want to ${newStatus} this booking?`)) return;
 
         try {
             const res = await axios.post(`${API_BASE}/update-booking-status`, { bookingId: id, status: newStatus });
             if(res.data.success) {
                 alert(`✅ Booking marked as ${newStatus}!`);
-                fetchBookings(); // Refresh list
+                fetchBookings(); 
             }
         } catch (e) { alert("Failed to update booking"); }
     };
@@ -335,7 +444,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const selectedAccount = accounts.find(acc => acc.mobile === formData.mobile);
     let existingFolders = [];
     if (selectedAccount && selectedAccount.uploadedData) {
-        existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
+        if (Array.isArray(selectedAccount.uploadedData)) {
+            existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
+        }
     }
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
@@ -365,7 +476,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <h1 className="admin-title">SandN Cinema</h1>
                 </div>
                 
-                {/* 📸 DP Section (UPDATED: Super Admin Bada, Name chhota) */}
                 <div style={{ background: '#0f3460', padding: '20px 15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', position: 'relative' }}>
                     <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#ccc', margin: '0 auto 10px', overflow: 'hidden', border: '2px solid #4dabf7', cursor: 'pointer' }} onClick={() => dpInputRef.current.click()}>
                         {adminDp ? <img src={adminDp} alt="Admin DP" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '30px', lineHeight: '70px' }}>👤</span>}
@@ -373,10 +483,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <input type="file" accept="image/*" ref={dpInputRef} style={{ display: 'none' }} onChange={handleDpChange} />
                     {adminDp && <span style={{ fontSize: '10px', color: '#ff4d4d', cursor: 'pointer', display: 'block', marginBottom: '10px' }} onClick={removeDp}>Remove DP</span>}
                     
-                    {/* ✅ Super Admin Text (Big & Prominent) */}
                     <h3 style={{ margin: '0 0 5px 0', fontSize: '20px', color: '#fff', letterSpacing: '1px' }}>Super Admin</h3>
-                    
-                    {/* ✅ Name/Owner (Smaller below) */}
                     <p style={{ margin: 0, fontSize: '13px', color: '#4dabf7', fontWeight: 'bold' }}>{adminProfile.name}</p>
                 </div>
 
@@ -488,14 +595,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: UPLOAD DATA (UPGRADED WITH EXPIRY TABS) */}
+                {/* 🔴 TAB 4: UPLOAD DATA (WITH EMAIL, CLOUDINARY & PROGRESS) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
                         
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             
-                            {/* NAYA TAB NAVIGATION ANDAR */}
                             <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
                                 <button 
                                     onClick={() => setUploadSubTab('BASIC')} 
@@ -520,7 +626,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number (Auto-suggest)</label>
                                             <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
                                             {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
-                                                <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none' }}>
+                                                <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', borderRadius: '5px' }}>
                                                     {filteredSuggestions.map((acc, idx) => (
                                                         <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
                                                     ))}
@@ -528,8 +634,28 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             )}
                                         </div>
                                         
-                                        <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Name</label>
-                                        <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" /></div>
+                                        <div>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Client Name {isExistingAccount && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
+                                            <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" />
+                                        </div>
+
+                                        {/* ✅ NEW: AUTO-FILL EMAIL INPUT */}
+                                        <div>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                                Client Email Address 
+                                                {isEmailLocked && <span style={{color: '#2ecc71', fontSize: '11px'}}> (Locked)</span>}
+                                            </label>
+                                            <input 
+                                                type="email" 
+                                                placeholder="example@mail.com (Optional for notification)" 
+                                                value={formData.email} 
+                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
+                                                className="custom-admin-input" 
+                                                disabled={isEmailLocked} // Locked if pre-exists
+                                                style={{ background: isEmailLocked ? '#f5f5f5' : '#fff', cursor: isEmailLocked ? 'not-allowed' : 'text' }}
+                                            />
+                                            <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>Client will receive an email notification when data is uploaded.</p>
+                                        </div>
                                         
                                         <div>
                                             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
@@ -538,14 +664,31 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </select>
                                         </div>
                                         
-                                        <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px' }}>
-                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>📂 Folder Name</label>
-                                            <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} className="custom-admin-input" />
+                                        <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name</label>
+                                            <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to select existing or create new.</p>
+                                            <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} onFocus={() => setShowFolderSuggestions(true)} onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} className="custom-admin-input" />
+                                            
+                                            {showFolderSuggestions && existingFolders.length > 0 && (
+                                                <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
+                                                    {filteredFolderSuggestions.map((folder, idx) => (
+                                                        <li key={idx} onMouseDown={() => { handleFolderSuggestionClick(folder); }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                                            📁 <strong>{folder}</strong>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
                                         </div>
                                         
-                                        <div style={{ border: '2px dashed #ccc', padding: '15px', textAlign: 'center' }}>
-                                            <label style={{ fontWeight: 'bold' }}>📁 Upload Files</label>
-                                            <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} />
+                                        <div style={{ border: '2px dashed #ccc', padding: '20px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
+                                            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Select Photos/Videos</label>
+                                            <input id="admin-file-input" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />
+                                            {formData.files.length > 0 && (
+                                                <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                                                    <div style={{ background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>📸 Photos: {fileStats.photos}</div>
+                                                    <div style={{ background: '#fdedec', border: '1px solid #e74c3c', color: '#c0392b', padding: '5px 15px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' }}>🎥 Videos: {fileStats.videos}</div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <button type="button" onClick={() => setUploadSubTab('LIMITS')} className="global-update-btn" style={{ padding: '15px', background: '#3498db' }}>Next: Set Limits ➡️</button>
@@ -579,7 +722,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </select>
                                         </div>
 
-                                        <button type="submit" disabled={loading} className="global-update-btn" style={{ padding: '15px', width: '100%', background: '#27ae60' }}>
+                                        {/* ✅ LIVE UPLOAD PROGRESS BAR UI FOR ADMIN */}
+                                        {loading && (
+                                            <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
+                                                    <span>{uploadProgress === 100 ? 'Saving to Database...' : `Cloud Upload... ${uploadProgress}%`}</span>
+                                                    <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
+                                                </div>
+                                                <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                                </div>
+                                                <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>⏳ {uploadETA}</div>
+                                            </div>
+                                        )}
+
+                                        <button type="submit" disabled={loading} className="global-update-btn" style={{ padding: '15px', width: '100%', background: loading ? '#95a5a6' : '#27ae60', cursor: loading ? 'not-allowed' : 'pointer' }}>
                                             {loading ? 'Uploading & Setting Rules...' : '🚀 Final Upload Data'}
                                         </button>
                                         

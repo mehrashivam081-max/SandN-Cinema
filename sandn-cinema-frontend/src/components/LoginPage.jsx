@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
@@ -20,11 +20,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     
     const [otp, setOtp] = useState('');
     const [password, setPassword] = useState('');
-    const [newEmail, setNewEmail] = useState(''); // ✅ Added for New User Email Setup
+    const [confirmPassword, setConfirmPassword] = useState(''); // ✅ Added Confirm Password State
+    const [newEmail, setNewEmail] = useState(''); 
     
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    // ✅ Separate states for Show/Hide Password
     const [showPass, setShowPass] = useState(false);
+    const [showConfirmPass, setShowConfirmPass] = useState(false);
 
     // ✅ Firebase Confirmation Result State
     const [confirmationResult, setConfirmationResult] = useState(null);
@@ -188,7 +192,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
     // ✅ SETUP ACCOUNT LOGIC (For Manually Added Admin Users)
     const handleSetupAccount = async () => {
-        if (!password || !newEmail) return setError("Please fill all fields!");
+        if (!password || !newEmail || !confirmPassword) return setError("Please fill all fields!");
+        if (password !== confirmPassword) return setError("Passwords do not match!"); // ✅ Added Check
+        
         setLoading(true); setError('');
 
         try {
@@ -314,7 +320,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     </div>
                 )}
 
-                {/* --- STEP 4: NEW ACCOUNT SETUP (Email & Pass) --- */}
+                {/* --- STEP 4: NEW ACCOUNT SETUP (Email & Password) --- */}
                 {step === 4 && (
                     <div className="fade-in">
                         <p style={{ color: '#28a745', fontSize: '12px', marginBottom: '15px' }}>✅ Number Verified! Please complete your profile setup.</p>
@@ -329,6 +335,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             <div className="pass-wrapper">
                                 <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={(e) => setPassword(e.target.value)} />
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
+                            </div>
+                        </div>
+
+                        {/* ✅ NEW: Confirm Password Field */}
+                        <div className="input-group">
+                            <label>Confirm Password</label>
+                            <div className="pass-wrapper">
+                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                                <span className="eye-icon" onClick={() => setShowConfirmPass(!showConfirmPass)}>{showConfirmPass ? '🙈' : '👁️'}</span>
                             </div>
                         </div>
 
