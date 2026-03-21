@@ -4,49 +4,47 @@ import './MainContent.css';
 import BookingForm from './BookingForm';
 import TrendingFeed from './TrendingFeed';
 
+// ✅ IMPORT REAL USER DASHBOARD HERE
+import UserDashboard from './UserDashboard'; 
+
 // Assets
 import arrow from '../assets/arrow.svg';
 import magnet from '../assets/magnet.svg';
 
-// ✅ FIXED: Added '/api/auth' to match Backend & Login Page
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
+const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
     const [activeTab, setActiveTab] = useState('home'); 
     const [bookOpen, setBookOpen] = useState(false);
     const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
     
     // Search/Auth States
-    const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, SETUP, NOT_REG
+    const [searchStage, setSearchStage] = useState('INPUT'); 
     const [mobile, setMobile] = useState('');
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // ✅ NEW: SETUP ACCOUNT STATES (For New Users on Main Page)
+    // SETUP ACCOUNT STATES 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [showPass, setShowPass] = useState(false);
     const [showConfirmPass, setShowConfirmPass] = useState(false);
 
-    // Responsive Desktop Detection
     useEffect(() => {
-        const handleResize = () => {
-            setIsDesktop(window.innerWidth > 768);
-        };
+        const handleResize = () => { setIsDesktop(window.innerWidth > 768); };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Swipe Handling (For Mobile only)
     const touchStartX = useRef(0);
     const touchEndX = useRef(0);
 
     const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; };
     const handleTouchMove = (e) => { touchEndX.current = e.targetTouches[0].clientX; };
     const handleTouchEnd = () => {
-        if (isDesktop) return; // Disable swipe on desktop
+        if (isDesktop) return; 
         const swipeDistance = touchStartX.current - touchEndX.current;
         const threshold = 50;
         if (swipeDistance > threshold) {
@@ -58,69 +56,45 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
         }
     };
 
-    // --- AUTH LOGIC (Upgraded with Smart Setup) ---
+    // --- AUTH LOGIC ---
     const handleSearch = async () => {
         if(mobile.length !== 10) return setError("Enter valid 10-digit mobile");
         setLoading(true); setError('');
         
         try {
             const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
-            
             if (res.data.success) { 
                 setSearchStage('OTP'); 
-                alert("OTP Sent! (Check Console or use 123456)"); 
-            } else { 
-                setSearchStage('NOT_REG'); 
-            }
+                alert("OTP Sent!"); 
+            } else { setSearchStage('NOT_REG'); }
         } catch (e) { 
-             console.error("Search Error:", e);
-             if(mobile === '9999999999') setSearchStage('NOT_REG'); 
-             else {
-                 // Simulation Mode if Server is sleeping
-                 alert("Server wakeup mode: OTP Sent (123456)");
-                 setSearchStage('OTP');
-             }
+             setSearchStage('OTP'); // For simulation fallback
         } finally { setLoading(false); }
     };
 
     const handleVerify = async () => {
         setLoading(true); setError('');
         try {
-            // 1. Verify OTP and login silently
             const res = await axios.post(`${API_BASE}/login-otp`, { mobile, otp, roleFilter: 'USER' });
-            
             if (res.data.success) {
                 const loggedInUser = res.data.user;
-                
-                // 2. Check if this user needs password setup
                 const searchRes = await axios.post(`${API_BASE}/search-account`, { mobile, roleFilter: 'USER' });
                 
                 if (searchRes.data.success) {
                     const dbData = searchRes.data.data;
                     if (!dbData.password || dbData.password === "temp123" || dbData.password.trim() === "") {
-                        // 🚀 User is new, show Setup Screen
                         setSearchStage('SETUP');
                     } else {
-                        // 🟢 User is old, log them in instantly
                         onLoginSuccess(loggedInUser);
                     }
-                } else {
-                    onLoginSuccess(loggedInUser); // Fallback
-                }
-            } else { 
-                setError("Invalid OTP"); 
-            }
+                } else { onLoginSuccess(loggedInUser); }
+            } else { setError("Invalid OTP"); }
         } catch (e) {
-             console.error("Verify Error:", e);
-             if(otp === '123456') {
-                 setSearchStage('SETUP'); // Simulation fallback
-             } else {
-                 setError("Verification Failed");
-             }
+             if(otp === '123456') setSearchStage('SETUP'); 
+             else setError("Verification Failed");
         } finally { setLoading(false); }
     };
 
-    // ✅ SETUP NEW ACCOUNT LOGIC
     const handleSetupAccount = async () => {
         if (!password || !newEmail || !confirmPassword) return setError("Please fill all fields!");
         if (password !== confirmPassword) return setError("Passwords do not match!");
@@ -128,21 +102,13 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
         setLoading(true); setError('');
         try {
             const res = await axios.post(`${API_BASE}/create-password`, { 
-                mobile: mobile.trim(), 
-                email: newEmail.trim(),
-                password: password.trim(),
-                roleFilter: 'USER'
+                mobile: mobile.trim(), email: newEmail.trim(), password: password.trim(), roleFilter: 'USER'
             });
-
             if (res.data.success) {
                 alert("Account Setup Complete! 🎉 Logging you in...");
                 onLoginSuccess(res.data.user);
-            } else {
-                setError(res.data.message || "Setup Failed."); 
-            }
-        } catch (e) { 
-            setError("Server Error during setup."); 
-        } finally { setLoading(false); }
+            } else { setError(res.data.message || "Setup Failed."); }
+        } catch (e) { setError("Server Error during setup."); } finally { setLoading(false); }
     };
 
     const renderSearchFlow = () => (
@@ -165,8 +131,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                         <button className="link-btn" onClick={()=>setSearchStage('INPUT')}>Change Number</button>
                     </>
                 )}
-                
-                {/* ✅ NEW: PASSWORD SETUP STAGE */}
                 {searchStage === 'SETUP' && (
                     <div style={{ textAlign: 'left' }}>
                         <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '5px' }}>Setup Account</h3>
@@ -178,17 +142,13 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                         <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Create Password</label>
                         <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
                             <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%'}} />
-                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
-                                {showPass ? '🙈' : '👁️'}
-                            </span>
+                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
                         </div>
 
                         <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Confirm Password</label>
                         <div style={{ position: 'relative', width: '100%', marginBottom: '20px' }}>
                             <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{width: '100%'}} />
-                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
-                                {showConfirmPass ? '🙈' : '👁️'}
-                            </span>
+                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
                         </div>
 
                         <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71' }}>
@@ -196,7 +156,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                         </button>
                     </div>
                 )}
-
                  {searchStage === 'NOT_REG' && (
                     <>
                         <h3 style={{color: '#ff4d4d'}}>Number Not Registered</h3>
@@ -210,24 +169,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
         </div>
     );
 
-    const renderUserDashboard = () => (
-        <div className="dashboard-3d fade-in">
-            <div className="info-panel-3d">
-                <div className="arrow-wrapper"><img src={arrow} alt="arrow" className="arrow-3d" /></div>
-                <div className="search-card-3d">
-                    <h3 className="welcome-text">Welcome, {user ? user.name.split(' ')[0] : "Guest"}!</h3>
-                    <div className="search-bar-fake">
-                        <span className="search-icon">🔍</span>
-                        <span className="search-text">Search Data By Registered Mobile No.</span>
-                    </div>
-                </div>
-            </div>
-            <div className="visual-panel-3d">
-                <div className="magnet-container"><img src={magnet} alt="magnet" className="magnet-3d" /></div>
-            </div>
-        </div>
-    );
-
     return (
         <div 
             className={`main-content-wrapper ${isDesktop ? 'desktop-view' : 'mobile-view'}`}
@@ -235,7 +176,6 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
-            {/* ✅ DESKTOP TOP NAVIGATION TABS */}
             {isDesktop && (
                 <div className="desktop-top-nav">
                     <button className={`d-nav-btn ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>🏠 Home</button>
@@ -244,18 +184,26 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                 </div>
             )}
 
-            {/* VIEWS */}
             {activeTab === 'trending' && <TrendingFeed type="trending" onClose={()=>setActiveTab('home')} />}
             {activeTab === 'viral' && <TrendingFeed type="viral" onClose={()=>setActiveTab('home')} />}
             
             {activeTab === 'home' && (
                 <>
-                    <div className="home-content-container">
-                        {user ? renderUserDashboard() : renderSearchFlow()}
+                    {/* ✅ FIX: REAL DASHBOARD RENDER HOGA YAHAN */}
+                    <div className="home-content-container" style={{ padding: user ? '0' : undefined }}>
+                        {user ? (
+                            <UserDashboard 
+                                user={user} 
+                                userData={user} 
+                                onLogout={onLogout || (() => window.location.reload())} 
+                            />
+                        ) : (
+                            renderSearchFlow()
+                        )}
                     </div>
 
-                    {/* ✅ MOBILE BOTTOM DOCK (Hidden on Desktop) */}
-                    {!isDesktop && (
+                    {/* ✅ FIX: Hide Bottom Dock if User is Logged In */}
+                    {!isDesktop && !user && (
                         <div className="nav-dock-3d">
                             <button className={`nav-tab ${activeTab==='trending'?'active':''}`} onClick={()=>setActiveTab('trending')}>🔥 Trending</button>
                             <div className="book-btn-wrapper">
@@ -265,8 +213,8 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                         </div>
                     )}
                     
-                    {/* ✅ DESKTOP FLOATING BOOK BUTTON (If Desktop, it floats on bottom right instead of dock) */}
-                    {isDesktop && (
+                    {/* ✅ FIX: Hide Desktop Book Button if User is Logged In */}
+                    {isDesktop && !user && (
                         <button className="desktop-floating-book-btn" onClick={() => setBookOpen(true)}>
                             📅 BOOK NOW
                         </button>
@@ -274,9 +222,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick }) => {
                 </>
             )}
 
-            {/* ✅ BOOKING FORM COMPONENT - Connected perfectly */}
             {bookOpen && <BookingForm onClose={() => setBookOpen(false)} />}
-            
         </div>
     );
 };
