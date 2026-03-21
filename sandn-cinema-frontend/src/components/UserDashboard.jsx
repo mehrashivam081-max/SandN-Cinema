@@ -13,7 +13,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     
     // --- USER SYNCED DATA (REAL-TIME) ---
     const [syncUser, setSyncUser] = useState(user || {});
-    const [wallet, setWallet] = useState(user?.wallet || { coins: 0, currentStreak: 0, history: [] });
+    const [wallet, setWallet] = useState(user?.wallet || { coins: 0, currentStreak: 0, history: [], claimedEvents: [] });
     const [editName, setEditName] = useState(user?.name || '');
     
     // --- FOLDER & MEDIA STATES ---
@@ -25,9 +25,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [previewMedia, setPreviewMedia] = useState(null); 
     const [uploaderProfile, setUploaderProfile] = useState(null);
 
-    // ✅ NEW MONETIZATION STATES (Pay per View/Download)
+    // ✅ MONETIZATION STATES (Pay per View/Download)
     const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, cost: 0, type: '' });
     const [adLoading, setAdLoading] = useState(false);
+
+    // ✅ NEW: WALLET MODAL & GLOBAL CHARGES STATES
+    const [showWalletModal, setShowWalletModal] = useState(false);
+    const [walletTab, setWalletTab] = useState('BUY'); // 'BUY' or 'FREE'
+    const [coinPackages, setCoinPackages] = useState([]);
+    const [miniEvents, setMiniEvents] = useState([]);
 
     // ✅ LIVE DOWNLOAD STATES
     const [downloadingFile, setDownloadingFile] = useState(null);
@@ -59,7 +65,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setLoading(true);
             try {
-                // Fetch user data stricly to get updated wallet balance
+                // Fetch user data
                 const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
                 
                 if (res.data.success) {
@@ -94,6 +100,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 } else {
                     setFolders([DEFAULT_FOLDER]); 
                 }
+
+                // ✅ FETCH GLOBAL PACKAGES & EVENTS
+                const platformRes = await axios.get(`${API_BASE}/get-platform-settings`);
+                if (platformRes.data.success && platformRes.data.data) {
+                    setCoinPackages(platformRes.data.data.coinPackages || []);
+                    setMiniEvents(platformRes.data.data.miniEvents || []);
+                }
+
             } catch (error) {
                 console.error("Fetch error:", error);
                 setFolders([DEFAULT_FOLDER]); 
@@ -147,11 +161,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
-    // ✅ NEW: Trigger Purchase Modal before preview/download
+    // ✅ Trigger Purchase Modal before preview/download
     const triggerMonetization = (filePath) => {
         if (!activeFolder) return;
-
-        // ✅ ADMIN PANEL SE DECIDE KIYI HUYI COST YAHAN USE HOGI
         const fileType = isVideo(filePath) ? 'Video' : 'Photo';
         const fileCost = fileType === 'Video' ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
 
@@ -163,23 +175,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         });
     };
 
-    // ✅ NEW logic to determine cost based on admin panel config per folder
     const getCostLabel = (filePath) => {
         if(!activeFolder) return '';
         const isVid = isVideo(filePath);
         return isVid ? `${activeFolder.videoCost || 10} Coins` : `${activeFolder.imageCost || 5} Coins`;
     };
 
-    // ✅ NEW logic: Process Purchase with Coins
+    // ✅ Process Purchase with Coins
     const processCoinPurchase = async () => {
         if (wallet.coins < purchaseModal.cost) {
-            alert("Not enough coins! Watch Ads to earn or buy more.");
+            alert("Not enough coins! Buy more or Watch Ads to earn.");
+            setShowWalletModal(true); // Direct user to wallet
             return;
         }
 
         setLoading(true);
         try {
-            // ✅ API to deduct coins from backend
             const res = await axios.post(`${API_BASE}/deduct-coins`, {
                 mobile: user.mobile,
                 amount: purchaseModal.cost,
@@ -187,11 +198,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             });
 
             if (res.data.success) {
-                // Update local wallet state
                 setWallet(res.data.wallet);
-                // Open Preview
                 setPreviewMedia(purchaseModal.file);
-                // Close Modal
                 setPurchaseModal({ show: false, file: null, cost: 0, type: '' });
                 alert(`${purchaseModal.type} Unlocked Successfully! 🎉`);
             } else {
@@ -205,15 +213,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     };
 
-    // ✅ NEW logic: Watch Ad to earn coins
+    // ✅ Watch Ad to earn coins
     const startWatchAdFlow = () => {
         setAdLoading(true);
         alert("Starting Ad Video... (Please watch completely to earn 1 Coin)");
         
-        // Simulating ad network behavior (e.g., Google AdMob/AdSense)
         setTimeout(async () => {
             try {
-                // ✅ API to add 1 coin after watching ad
                 const res = await axios.post(`${API_BASE}/add-coins`, {
                     mobile: user.mobile,
                     amount: 1,
@@ -221,7 +227,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 });
 
                 if (res.data.success) {
-                    setWallet(res.data.wallet); // Sync wallet balance
+                    setWallet(res.data.wallet);
                     alert("Reward Received! +1 Coin added to your wallet. 🪙");
                 }
             } catch (e) {
@@ -229,10 +235,49 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             } finally {
                 setAdLoading(false);
             }
-        }, 5000); // Simulate 5 second ad
+        }, 5000); 
     };
 
-    // 🚀 LIVE DOWNLOAD (Kept original logic, just called after monetization check if needed)
+    // ✅ REAL MONEY PACKAGE PURCHASE (Simulated)
+    const handleBuyPackage = async (pkg) => {
+        if (!window.confirm(`Proceed to pay ₹${pkg.price} for ${pkg.coins} Coins?`)) return;
+        
+        setLoading(true);
+        // Simulate Payment Gateway UI delay
+        setTimeout(async () => {
+            try {
+                const res = await axios.post(`${API_BASE}/purchase-coins`, {
+                    mobile: user.mobile, coinsToAdd: pkg.coins, pricePaid: pkg.price
+                });
+                if (res.data.success) {
+                    setWallet(res.data.wallet);
+                    alert(`✅ Payment Successful!\n${res.data.message}`);
+                }
+            } catch (e) { alert("Payment Failed. Try again."); }
+            setLoading(false);
+        }, 2000);
+    };
+
+    // ✅ CLAIM MINI EVENT
+    const handleClaimEvent = async (ev) => {
+        if (!window.confirm(`Did you complete this task?\n"${ev.title}"`)) return;
+        
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/claim-event`, {
+                mobile: user.mobile, eventId: ev.id || ev.title, rewardCoins: ev.reward, eventTitle: ev.title
+            });
+            if (res.data.success) {
+                setWallet(res.data.wallet);
+                alert(`✅ Task Verified!\n${res.data.message}`);
+            } else {
+                alert(res.data.message); 
+            }
+        } catch (e) { alert("Error claiming reward."); }
+        setLoading(false);
+    };
+
+    // 🚀 LIVE DOWNLOAD
     const handleDownload = async (filePath) => {
         setDownloadingFile(filePath);
         setDownloadProgress(0);
@@ -317,8 +362,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const renderHistoryTab = () => {
         const historyData = wallet?.history || [
-            { date: new Date().toLocaleDateString(), action: "Daily Login Reward", amount: "+1 Coin", type: "credit" },
-            { date: "01/03/2026", action: "Account Registered", amount: "0", type: "neutral" }
+            { date: new Date().toLocaleDateString(), action: "Account Registered", amount: "0", type: "neutral" }
         ];
 
         return (
@@ -330,12 +374,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 
                 <div className="history-list">
                     {historyData.map((item, idx) => (
-                        <div key={idx} style={{ background: '#1a1a2e', padding: '15px', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: item.type === 'credit' ? '4px solid #f1c40f' : '4px solid #3498db' }}>
+                        <div key={idx} style={{ background: '#1a1a2e', padding: '15px', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: item.type === 'credit' ? '4px solid #f1c40f' : item.type === 'debit' ? '4px solid #e74c3c' : '4px solid #3498db' }}>
                             <div>
                                 <h4 style={{margin: '0 0 5px 0', color: '#fff', fontSize: '15px'}}>{item.action}</h4>
                                 <span style={{color: '#888', fontSize: '11px'}}>{item.date}</span>
                             </div>
-                            <div style={{fontWeight: 'bold', color: item.type === 'credit' ? '#f1c40f' : '#fff', fontSize: '16px'}}>{item.amount}</div>
+                            <div style={{fontWeight: 'bold', color: item.type === 'credit' ? '#f1c40f' : item.type === 'debit' ? '#e74c3c' : '#fff', fontSize: '16px'}}>{item.amount}</div>
                         </div>
                     ))}
                 </div>
@@ -352,7 +396,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     {editProfileMode && (
                         <div className="dp-controls">
                             <label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label>
-                            <button className="dp-btn remove" onClick={handleDPChange}>Remove</button>
+                            <button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button>
                         </div>
                     )}
                 </div>
@@ -394,7 +438,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             const hasLimit = activeFolder.downloadLimit > 0;
             const currentDownloads = activeFolder.downloadCount || 0;
             const isLimitReached = hasLimit && currentDownloads >= activeFolder.downloadLimit;
-            const canDownload = !isExpired && !isLimitReached;
 
             return (
                 <div className="folder-gallery-view">
@@ -405,13 +448,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     {(hasExpiry || hasLimit) && (
                         <div style={{ background: isExpired || isLimitReached ? '#fdedec' : '#fffdf5', border: `1px solid ${isExpired || isLimitReached ? '#e74c3c' : '#f1c40f'}`, padding: '10px', borderRadius: '8px', marginBottom: '15px', marginTop: '10px' }}>
-                            {hasExpiry && <p style={{ margin: 0, fontSize: '12px', color: isExpired ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>{isExpired ? '🚫 This folder has Expired and will be deleted.' : `⏳ Expires on: ${new Date(activeFolder.expiryDate).toLocaleDateString()}`}</p>}
-                            {hasLimit && !isExpired && <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: isLimitReached ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>📥 Downloads: {currentDownloads} of {activeFolder.downloadLimit} {isLimitReached ? '(Limit Reached)' : 'left'}</p>}
+                            {hasExpiry && <p style={{ margin: 0, fontSize: '12px', color: isExpired ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>{isExpired ? '🚫 Expired & Locked.' : `⏳ Expires on: ${new Date(activeFolder.expiryDate).toLocaleDateString()}`}</p>}
+                            {hasLimit && !isExpired && <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: isLimitReached ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>📥 Downloads: {currentDownloads} of {activeFolder.downloadLimit} {isLimitReached && '(Limit Reached)'}</p>}
                         </div>
                     )}
 
                     <div className="filter-group-vip">
-                        <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All Items</button>
+                        <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All</button>
                         <button className={`filter-btn-vip ${mediaFilter === 'PHOTOS' ? 'active' : ''}`} onClick={() => setMediaFilter('PHOTOS')}>Photos</button>
                         <button className={`filter-btn-vip ${mediaFilter === 'VIDEOS' ? 'active' : ''}`} onClick={() => setMediaFilter('VIDEOS')}>Videos</button>
                     </div>
@@ -448,7 +491,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <div 
                                         onClick={() => setUploaderProfile({
                                             name: activeFolder.uploadedBy || 'SandN Cinema',
-                                            role: activeFolder.uploaderRole || 'Premium Studio Partner',
+                                            role: activeFolder.uploaderRole || 'Premium Studio',
                                             email: activeFolder.uploaderEmail || 'contact@sandncinema.com'
                                         })}
                                         style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
@@ -510,19 +553,109 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     return (
         <div className="ud-container-vip">
 
-            {/* ✅ NEW: PURCHASE CONFIRMATION MODAL (Coins vs Ads) */}
+            {/* ✅ NEW: WALLET & COIN TOP-UP MODAL */}
+            {showWalletModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }}>
+                    <div style={{ background: '#1a1a2e', width: '90%', maxWidth: '400px', borderRadius: '25px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', border: '1px solid #333' }}>
+                        
+                        {/* Header */}
+                        <div style={{ background: 'linear-gradient(90deg, #f1c40f, #e67e22)', padding: '20px', textAlign: 'center', position: 'relative' }}>
+                            <button onClick={() => setShowWalletModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', fontWeight: 'bold' }}>✖</button>
+                            <h2 style={{ color: '#000', margin: '0 0 5px 0', fontSize: '24px' }}>My Wallet</h2>
+                            <div style={{ display: 'inline-block', background: '#000', color: '#f1c40f', padding: '8px 20px', borderRadius: '30px', fontSize: '20px', fontWeight: 'bold', border: '2px solid #fff' }}>
+                                🪙 {wallet.coins} Coins
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
+                            <button onClick={() => setWalletTab('BUY')} style={{ flex: 1, padding: '15px', background: walletTab === 'BUY' ? '#2c3e50' : 'transparent', color: walletTab === 'BUY' ? '#f1c40f' : '#888', border: 'none', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>💰 Buy Coins</button>
+                            <button onClick={() => setWalletTab('FREE')} style={{ flex: 1, padding: '15px', background: walletTab === 'FREE' ? '#2c3e50' : 'transparent', color: walletTab === 'FREE' ? '#2ecc71' : '#888', border: 'none', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>🎁 Free Coins</button>
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ padding: '20px', maxHeight: '400px', overflowY: 'auto' }}>
+                            
+                            {/* BUY COINS TAB */}
+                            {walletTab === 'BUY' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '0 0 10px 0' }}>Select a package to instantly recharge your wallet.</p>
+                                    
+                                    {coinPackages.length > 0 ? coinPackages.map((pkg, idx) => (
+                                        <div key={idx} style={{ background: '#0f172a', border: '1px solid #444', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', overflow: 'hidden' }}>
+                                            {pkg.tag && <div style={{ position: 'absolute', top: 0, left: 0, background: '#e74c3c', color: '#fff', fontSize: '10px', padding: '2px 10px', fontWeight: 'bold', borderBottomRightRadius: '10px' }}>{pkg.tag}</div>}
+                                            
+                                            <div style={{ marginTop: pkg.tag ? '10px' : '0' }}>
+                                                <div style={{ color: '#f1c40f', fontSize: '22px', fontWeight: 'bold' }}>🪙 {pkg.coins}</div>
+                                                <div style={{ color: '#888', fontSize: '12px' }}>Digital Coins</div>
+                                            </div>
+                                            
+                                            <button 
+                                                onClick={() => handleBuyPackage(pkg)} disabled={loading}
+                                                style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '15px', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}
+                                            >
+                                                {loading ? '...' : `Pay ₹${pkg.price}`}
+                                            </button>
+                                        </div>
+                                    )) : <div style={{ color: '#888', textAlign: 'center', padding: '20px' }}>No packages available right now.</div>}
+                                </div>
+                            )}
+
+                            {/* FREE COINS TAB */}
+                            {walletTab === 'FREE' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '0 0 10px 0' }}>Complete tasks to earn free coins without paying!</p>
+                                    
+                                    {/* Default AD Watch Card */}
+                                    <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>
+                                            <div style={{ color: '#2ecc71', fontSize: '12px', fontWeight: 'bold' }}>Reward: +1 Coin</div>
+                                        </div>
+                                        <button onClick={startWatchAdFlow} disabled={adLoading || loading} style={{ background: 'transparent', border: '2px solid #2ecc71', color: '#2ecc71', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            {adLoading ? '🍿 Loading...' : 'Watch Now'}
+                                        </button>
+                                    </div>
+
+                                    {/* Admin Mini Events */}
+                                    {miniEvents.map((ev, idx) => {
+                                        const isClaimed = wallet.claimedEvents?.includes(ev.id || ev.title);
+                                        return (
+                                            <div key={idx} style={{ background: '#0f172a', border: '1px solid #444', opacity: isClaimed ? 0.6 : 1, borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>{ev.title}</div>
+                                                    <div style={{ color: '#f1c40f', fontSize: '12px', fontWeight: 'bold' }}>Reward: +{ev.reward} Coins</div>
+                                                </div>
+                                                
+                                                {isClaimed ? (
+                                                    <span style={{ color: '#aaa', fontWeight: 'bold', fontSize: '12px', padding: '8px 10px', background: '#333', borderRadius: '8px' }}>✅ Claimed</span>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        {ev.link && <a href={ev.link} target="_blank" rel="noreferrer" style={{ background: '#3498db', color: '#fff', textAlign: 'center', padding: '6px 12px', borderRadius: '8px', fontSize: '11px', textDecoration: 'none', fontWeight: 'bold' }}>1. Open Link</a>}
+                                                        <button onClick={() => handleClaimEvent(ev)} disabled={loading} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}>2. Claim Coin</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ PURCHASE CONFIRMATION MODAL */}
             {purchaseModal.show && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
                     <div style={{ background: '#fff', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', animation: 'popIn 0.3s ease' }}>
                         
                         <div style={{fontSize: '50px', marginBottom: '15px'}}>🔒</div>
                         <h2 style={{ color: '#333', margin: '0 0 10px 0' }}>Unlock {purchaseModal.type}</h2>
-                        <p style={{ color: '#666', fontSize: '14px', marginBottom: '25px' }}>This is a premium file. Choose how you want to access it below.</p>
+                        <p style={{ color: '#666', fontSize: '14px', marginBottom: '25px' }}>This is a premium file. Access it using your wallet coins.</p>
                         
                         <div style={{ background: '#f4f6f9', padding: '15px', borderRadius: '15px', marginBottom: '20px', textAlign: 'left' }}>
-                            <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
-                                <span>Item Type:</span> <strong style={{color: '#333'}}>{purchaseModal.type}</strong>
-                            </p>
                             <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
                                 <span>Your Balance:</span> <strong style={{color: wallet.coins >= purchaseModal.cost ? '#2ecc71' : '#e74c3c'}}>🪙 {wallet.coins} Coins</strong>
                             </p>
@@ -532,33 +665,23 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {/* Option 1: Pay with Coins */}
-                            <button 
-                                onClick={processCoinPurchase}
-                                disabled={loading || wallet.coins < purchaseModal.cost}
-                                style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: wallet.coins >= purchaseModal.cost ? '#3498db' : '#ccc', color: '#fff', cursor: wallet.coins >= purchaseModal.cost ? 'pointer' : 'not-allowed', fontWeight: 'bold', transition: '0.3s' }}
-                            >
-                                {loading ? 'Processing...' : `Pay ${purchaseModal.cost} Coins to Unlock`}
-                            </button>
-
-                            {/* Option 2: Watch Ad to Earn 1 Coin */}
-                            <button 
-                                onClick={startWatchAdFlow}
-                                disabled={adLoading || loading}
-                                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px', border: '2px solid #2ecc71', background: 'transparent', color: '#2ecc71', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                            >
-                                {adLoading ? '🍿 Loading Ad...' : '🎬 Watch Ad to Earn 1 Coin'}
-                            </button>
+                            {wallet.coins >= purchaseModal.cost ? (
+                                <button onClick={processCoinPurchase} disabled={loading} style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: '#3498db', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    {loading ? 'Processing...' : `Pay ${purchaseModal.cost} Coins to Unlock`}
+                                </button>
+                            ) : (
+                                <button onClick={() => { setPurchaseModal({ show: false, file: null, cost: 0, type: '' }); setShowWalletModal(true); }} style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    Not enough coins. Get More!
+                                </button>
+                            )}
                         </div>
 
-                        <p onClick={() => setPurchaseModal({ show: false, file: null, cost: 0, type: '' })} style={{ marginTop: '25px', color: '#999', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}>
-                            Cancel & Go Back
-                        </p>
+                        <p onClick={() => setPurchaseModal({ show: false, file: null, cost: 0, type: '' })} style={{ marginTop: '25px', color: '#999', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel & Go Back</p>
                     </div>
                 </div>
             )}
             
-            {/* ✅ MEDIA PREVIEW MODAL (With direct download option after unlock) */}
+            {/* ✅ MEDIA PREVIEW MODAL */}
             {previewMedia && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
                     <button onClick={() => setPreviewMedia(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✖</button>
@@ -578,10 +701,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 </div>
                             </div>
                         ) : (
-                            <button 
-                                onClick={() => handleDownload(previewMedia)} 
-                                style={{ background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}
-                            >
+                            <button onClick={() => handleDownload(previewMedia)} style={{ background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}>
                                 ⬇️ Download Original Quality
                             </button>
                         )}
@@ -593,25 +713,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             {uploaderProfile && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }} onClick={() => setUploaderProfile(null)}>
                     <div style={{ background: 'linear-gradient(145deg, #1a1a2e, #16213e)', padding: '30px', borderRadius: '25px', width: '300px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
-                        
-                        <div style={{ width: '85px', height: '85px', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '35px', color: '#000', fontWeight: 'bold', border: '4px solid #1a1a2e', boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)' }}>
-                            {uploaderProfile.name.charAt(0).toUpperCase()}
-                        </div>
-                        
+                        <div style={{ width: '85px', height: '85px', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '35px', color: '#000', fontWeight: 'bold', border: '4px solid #1a1a2e', boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)' }}>{uploaderProfile.name.charAt(0).toUpperCase()}</div>
                         <h2 style={{ color: '#fff', margin: '0 0 8px 0', fontSize: '22px' }}>{uploaderProfile.name}</h2>
-                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #3498db' }}>
-                            ✓ {uploaderProfile.role}
-                        </span>
-
+                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #3498db' }}>✓ {uploaderProfile.role}</span>
                         <div style={{ marginTop: '25px', textAlign: 'left', background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '15px' }}>
                             <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📧</span> <span style={{color: '#fff'}}>{uploaderProfile.email}</span></p>
                             <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>🔒</span> <span style={{color: '#2ecc71'}}>Verified Secure Upload</span></p>
-                            <p style={{ margin: 0, color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📸</span> <span>Photography & Videography</span></p>
                         </div>
-
-                        <button onClick={() => setUploaderProfile(null)} style={{ marginTop: '25px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', width: '100%', fontWeight: 'bold', transition: '0.3s' }}>
-                            Close Window
-                        </button>
+                        <button onClick={() => setUploaderProfile(null)} style={{ marginTop: '25px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>Close Window</button>
                     </div>
                 </div>
             )}
@@ -623,19 +732,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <div className="reward-icon">{rewardPopup.type === 'EARNED' ? '🪙' : '💔'}</div>
                         <h2 style={{color:'#fff', margin:'0 0 10px 0'}}>{rewardPopup.type === 'EARNED' ? 'Daily Reward!' : 'Streak Broken!'}</h2>
                         <p style={{color:'#aaa', margin:'0 0 20px 0', fontSize:'14px'}}>{rewardPopup.type === 'EARNED' ? `You earned +${rewardPopup.coins} Coin.` : 'You missed a day. Start again!'}</p>
-                        <div style={{background:'#f1c40f', color:'#000', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', display:'inline-block'}}>
-                            🔥 {rewardPopup.streak} Day Streak
-                        </div>
+                        <div style={{background:'#f1c40f', color:'#000', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', display:'inline-block'}}>🔥 {rewardPopup.streak} Day Streak</div>
                     </div>
                 </div>
             )}
 
             <header className="ud-header-vip">
-                <div className="brand-logo-vip">
-                    <h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span>
-                </div>
-                <div className="ud-coin-badge-vip" title="Your Reward Coins">
-                    <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS</span>
+                <div className="brand-logo-vip"><h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span></div>
+                {/* ✅ COIN BADGE CLICKABLE FOR WALLET */}
+                <div className="ud-coin-badge-vip" title="Click to add coins" onClick={() => setShowWalletModal(true)} style={{ cursor: 'pointer' }}>
+                    <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS ➕</span>
                 </div>
             </header>
 
@@ -644,21 +750,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             </main>
 
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setMediaFilter('ALL'); }}>
-                    🏠<span>Home</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
-                    📸<span>Services</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
-                    📅<span>Bookings</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>
-                    📜<span>History</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
-                    👤<span>{(editName || 'User').split(' ')[0]}</span>
-                </button>
+                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setMediaFilter('ALL'); }}>🏠<span>Home</span></button>
+                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>📸<span>Services</span></button>
+                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>📅<span>Bookings</span></button>
+                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>📜<span>History</span></button>
+                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>👤<span>{(editName || 'User').split(' ')[0]}</span></button>
             </nav>
         </div>
     );
