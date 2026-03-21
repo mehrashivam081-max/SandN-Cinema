@@ -254,7 +254,6 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         console.log(`🔐 Generated OTP for ${identifier}: ${randomOTP}`);
 
         if (sendVia === 'email') {
-            // ✅ PROPER ERROR IF EMAIL MISSING
             if (!targetEmail || targetEmail.includes('dummy_')) {
                 return res.json({ success: false, message: "Email ID is not attached to this account. Please select SMS or WhatsApp to get OTP." });
             }
@@ -480,7 +479,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (FIXED 500 ERROR ON RE-UPLOAD & LIMIT INCREASED)
+// ✅ 8. UPLOAD LOGIC (LOCAL SERVER UPLOAD - RETAINED FOR BACKUP)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
@@ -506,9 +505,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
         }
         const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; 
 
-        // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
-            // ✅ CRASH PROOF ARRAY PARSING
             let currentData = [];
             if (existingAccount.data.uploadedData) {
                 if (Array.isArray(existingAccount.data.uploadedData)) {
@@ -520,12 +517,9 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                 }
             }
             
-            // Cleanup legacy string paths into object
             if (currentData.length > 0 && typeof currentData[0] === 'string') {
                 currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
             }
-
-            // Remove any weird nulls
             currentData = currentData.filter(item => typeof item === 'object' && item !== null);
 
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
@@ -554,7 +548,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                 updateQuery.$set.email = email;
             }
 
-            // ✅ USE updateOne to bypass any schema mismatch
             if (existingAccount.type === 'STUDIO') {
                 await Studio.updateOne({ mobile }, updateQuery, { strict: false });
             } else {
@@ -565,7 +558,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             return res.json({ success: true, message: `Data appended to '${finalFolderName}' successfully!` });
         }
 
-        // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
         const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
         
         const folderStructure = [{
@@ -598,6 +590,106 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         res.status(500).json({ success: false, message: "Database Error: " + e.message });
+    }
+});
+
+
+// ==============================================================
+// 🚀 100% NEW: CLOUDINARY FAST UPLOAD ROUTE (Direct URLs from UI)
+// ==============================================================
+app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile); 
+    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, fileUrls } = req.body; 
+
+    // Handle undefined strings safely
+    if (folderName === 'undefined' || folderName === 'null') folderName = '';
+    if (name === 'undefined' || name === 'null') name = 'Client';
+    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
+
+    try {
+        const existingAccount = await findAccount(mobile); 
+        
+        // ☁️ Direct File URLs from frontend (Cloudinary)
+        const filePaths = Array.isArray(fileUrls) ? fileUrls : [];
+
+        let expiryDate = null;
+        if (expiryDays && parseInt(expiryDays) > 0) {
+            expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + parseInt(expiryDays));
+        }
+        const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; 
+
+        // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
+        if (existingAccount) {
+            let currentData = [];
+            if (existingAccount.data.uploadedData) {
+                if (Array.isArray(existingAccount.data.uploadedData)) {
+                    currentData = existingAccount.data.uploadedData;
+                } else if (typeof existingAccount.data.uploadedData === 'object' && existingAccount.data.uploadedData !== null) {
+                    currentData = Object.values(existingAccount.data.uploadedData);
+                } else if (typeof existingAccount.data.uploadedData === 'string') {
+                    currentData = [existingAccount.data.uploadedData];
+                }
+            }
+            
+            if (currentData.length > 0 && typeof currentData[0] === 'string') {
+                currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
+            }
+            currentData = currentData.filter(item => typeof item === 'object' && item !== null);
+
+            let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
+            
+            if (folderIndex > -1) {
+                currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
+                currentData[folderIndex].expiryDate = expiryDate;
+                currentData[folderIndex].downloadLimit = dLimit;
+                currentData[folderIndex].downloadCount = 0; 
+            } else {
+                currentData.push({
+                    folderName: finalFolderName,
+                    files: filePaths,
+                    isDefault: finalFolderName === 'Stranger Photography',
+                    expiryDate: expiryDate,
+                    downloadLimit: dLimit,
+                    downloadCount: 0
+                });
+            }
+
+            const hasDummyEmail = !existingAccount.data.email || existingAccount.data.email.includes('dummy_');
+            const targetEmail = (email && email.trim() !== '') ? email : existingAccount.data.email;
+            
+            let updateQuery = { $set: { uploadedData: currentData } };
+            if (email && email.trim() !== '' && hasDummyEmail) updateQuery.$set.email = email;
+
+            if (existingAccount.type === 'STUDIO') await Studio.updateOne({ mobile }, updateQuery, { strict: false });
+            else await User.updateOne({ mobile }, updateQuery, { strict: false });
+
+            sendUploadNotification(mobile, targetEmail, existingAccount.data.name || existingAccount.data.ownerName || name);
+            return res.json({ success: true, message: `Cloud Data appended to '${finalFolderName}' successfully!` });
+        }
+
+        // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
+        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
+        
+        const folderStructure = [{
+            folderName: finalFolderName,
+            files: filePaths,
+            isDefault: finalFolderName === 'Stranger Photography',
+            expiryDate: expiryDate,
+            downloadLimit: dLimit,
+            downloadCount: 0
+        }];
+
+        const newUser = { mobile, password: "temp123", email: targetEmail, role: type || 'USER', location: location || "", addedBy: addedBy || "ADMIN", uploadedData: folderStructure };
+
+        if (type === 'STUDIO') await Studio.create({ ...newUser, ownerName: name, studioName: name, isAdhaarVerified: false, adhaarNumber: "Pending" });
+        else await User.create({ ...newUser, name: name });
+
+        sendUploadNotification(mobile, targetEmail, name);
+        res.json({ success: true, message: `Cloud Registration successful, data saved to '${finalFolderName}'!` });
+    } catch (e) {
+        console.error("DB Insert Error:", e.message);
+        res.status(500).json({ success: false, message: e.message });
     }
 });
 
@@ -898,6 +990,57 @@ app.post('/api/auth/update-collab-status', async (req, res) => {
     }
 });
 
+// ==========================================
+// ✅ 20. UPDATE DOWNLOAD COUNT LOGIC
+// ==========================================
+app.post('/api/auth/update-download-count', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { folderName } = req.body;
+
+    try {
+        // Bina strict filter ke account dhoondho
+        const account = await findAccount(mobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        // 100% Crash-Proof data parser
+        let currentData = [];
+        if (account.data.uploadedData) {
+            if (Array.isArray(account.data.uploadedData)) {
+                currentData = account.data.uploadedData;
+            } else if (typeof account.data.uploadedData === 'object' && account.data.uploadedData !== null) {
+                currentData = Object.values(account.data.uploadedData);
+            } else if (typeof account.data.uploadedData === 'string') {
+                currentData = [account.data.uploadedData];
+            }
+        }
+
+        // Legacy format fix
+        if (currentData.length > 0 && typeof currentData[0] === 'string') {
+            currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
+        }
+        currentData = currentData.filter(item => typeof item === 'object' && item !== null);
+
+        // Folder dhundho aur Count badhao
+        let folderIndex = currentData.findIndex(f => f.folderName === folderName);
+
+        if (folderIndex > -1) {
+            currentData[folderIndex].downloadCount = (currentData[folderIndex].downloadCount || 0) + 1;
+            
+            // Bypass schema strictness aur save karo
+            if (account.type === 'STUDIO') {
+                await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+            } else {
+                await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+            }
+            res.json({ success: true, message: "Download count updated!" });
+        } else {
+            res.json({ success: false, message: "Folder not found" });
+        }
+    } catch (e) {
+        console.error("Download Count Update Error:", e);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
