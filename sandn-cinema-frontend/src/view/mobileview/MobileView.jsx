@@ -18,7 +18,6 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
-// API BASE URL - Update this to local during local testing if needed
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const MobileView = ({
@@ -34,6 +33,11 @@ const MobileView = ({
   const [otpMethod, setOtpMethod] = useState('mobile');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  
+  // ✅ NEW: Confirm Password & Eye Icon States
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   // TOP LEFT HOME FUNCTION (Resets everything)
   const goHome = () => { 
@@ -45,6 +49,9 @@ const MobileView = ({
       setNewEmail(''); 
       setOtp('');
       setPassword('');
+      setConfirmPassword('');
+      setShowPass(false);
+      setShowConfirmPass(false);
   };
 
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -94,20 +101,18 @@ const MobileView = ({
     setMagnetStyle({ transform: 'translate(0px, 0px)', transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' });
   };
 
-  // --- API LOGIC (Production Ready - Fast2SMS/Brevo) ---
+  // --- API LOGIC ---
 
-  // 1. Search Click -> Open Popup
   const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Please enter valid 10 digit number");
       setShowOtpPopup(true); 
   };
 
-  // 2. Send OTP via Selected Method
   const handleSendOtp = async (selectedMethod) => {
       setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod });
+          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: 'USER' });
           
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
@@ -123,20 +128,18 @@ const MobileView = ({
       } finally { setLoading(false); }
   };
 
-  // 3. Verify OTP -> Check if new user
   const handleVerifyOTP = async () => {
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp });
+          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: 'USER' });
           if (res.data.success) {
               if (res.data.isNewUser) {
-                  // User has no password -> Show Setup Screen
                   setIsFirstTimeUser(true);
-                  setSearchStep(2); 
+                  setSearchStep(2); // Setup Screen
               } else {
-                  // Normal User -> Login Screen
-                  setSearchStep(2); 
+                  setIsFirstTimeUser(false);
+                  setSearchStep(2); // Login Screen
               }
           } else {
               alert(res.data.message || "Invalid OTP! Kripya sahi OTP dalein.");
@@ -146,7 +149,7 @@ const MobileView = ({
       } finally { setLoading(false); }
   };
 
-  // 4. Login OR Create Password
+  // ✅ UPDATED: Login OR Setup Logic
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
@@ -155,26 +158,28 @@ const MobileView = ({
           if (isFirstTimeUser) {
               // --- SETUP LOGIC ---
               if (!newEmail) return alert("Please enter your email for future recovery.");
+              if (password !== confirmPassword) return alert("Passwords do not match!");
               
               const res = await axios.post(`${API_BASE}/create-password`, { 
                   mobile, 
                   password, 
-                  email: newEmail 
+                  email: newEmail,
+                  roleFilter: 'USER'
               });
 
               if (res.data.success) {
                   alert("Account Setup Complete! Logging in...");
                   setUserData(res.data.user);
-                  setSearchStep(3);
+                  setSearchStep(3); // Dashboard Rendered
               } else {
                   alert(res.data.message);
               }
           } else {
               // --- NORMAL LOGIN ---
-              const res = await axios.post(`${API_BASE}/login`, { mobile, password });
+              const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
               if (res.data.success) {
                   setUserData(res.data.user);
-                  setSearchStep(3);
+                  setSearchStep(3); // Dashboard Rendered
               } else {
                   alert("Wrong Password");
               }
@@ -184,10 +189,11 @@ const MobileView = ({
       } finally { setLoading(false); }
   };
 
+  // ✅ Real Dashboard Routing
   const renderDashboard = () => {
       if (userData.role === 'ADMIN') return <OwnerDashboard />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
-      return <UserDashboard userData={userData} onLogout={handleLogout} />;
+      return <UserDashboard user={userData} userData={userData} onLogout={handleLogout} />;
   };
 
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', height:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back Home</button></div>;
@@ -277,22 +283,43 @@ const MobileView = ({
                         )}
                         {searchStep === 1 && (
                             <>
-                                {/* Clean OTP input field */}
                                 <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
-                        {/* Dynamic Step 2: Login OR Setup Password */}
+
+                        {/* ✅ FIXED: Step 2 handles Password AND Setup elegantly */}
                         {searchStep === 2 && (
-                            <>
-                                {isFirstTimeUser && (
-                                     <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} />
+                            <div style={{ textAlign: 'left', width: '100%' }}>
+                                {isFirstTimeUser ? (
+                                    <>
+                                        <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '15px' }}>Setup Account</h3>
+                                        <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} />
+                                        
+                                        <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
+                                            <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} style={{marginBottom: 0}} />
+                                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
+                                        </div>
+
+                                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
+                                            <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="mobile-input-field" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{marginBottom: 0}} />
+                                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h3 style={{ color: '#3498db', textAlign: 'center', marginBottom: '15px' }}>Enter Password</h3>
+                                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
+                                            <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} style={{marginBottom: 0}} />
+                                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
+                                        </div>
+                                    </>
                                 )}
-                                <input type="password" placeholder={isFirstTimeUser ? "Create New Password" : "Enter Password"} className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} />
-                                <button className="mobile-blue-btn" onClick={handleLoginOrSetup} disabled={loading}>
+                                
+                                <button className="mobile-blue-btn" onClick={handleLoginOrSetup} disabled={loading} style={{marginTop: '10px'}}>
                                     {loading ? 'Processing...' : isFirstTimeUser ? 'Setup Account' : 'Login & Access'}
                                 </button>
-                            </>
+                            </div>
                         )}
                     </div>
 

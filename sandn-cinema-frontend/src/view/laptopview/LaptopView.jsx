@@ -30,6 +30,11 @@ const LaptopView = ({
   const [otpMethod, setOtpMethod] = useState('mobile');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); 
   const [newEmail, setNewEmail] = useState(''); 
+  
+  // ✅ NEW: Confirm Password & Eye Icon States
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   // App Name Clickable as Home (Reset everything)
   const goHome = () => { 
@@ -41,6 +46,9 @@ const LaptopView = ({
       setNewEmail('');
       setOtp('');
       setPassword('');
+      setConfirmPassword('');
+      setShowPass(false);
+      setShowConfirmPass(false);
   };
 
   // 1. Handle Search Click (Open Popup)
@@ -54,7 +62,7 @@ const LaptopView = ({
       setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod });
+          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: 'USER' });
           
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
@@ -75,13 +83,14 @@ const LaptopView = ({
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp });
+          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: 'USER' });
           if (res.data.success) {
               if (res.data.isNewUser) {
                   setIsFirstTimeUser(true);
-                  setSearchStep(2); 
+                  setSearchStep(2); // Goes to Setup Step
               } else {
-                  setSearchStep(2); 
+                  setIsFirstTimeUser(false);
+                  setSearchStep(2); // Goes to Login Step
               }
           } else {
               alert(res.data.message || "Galat OTP! Kripya sahi OTP dalein.");
@@ -98,12 +107,15 @@ const LaptopView = ({
       
       try {
           if (isFirstTimeUser) {
+              // --- SETUP LOGIC ---
               if (!newEmail) return alert("Please enter your email for account recovery.");
+              if (password !== confirmPassword) return alert("Passwords do not match!");
               
               const res = await axios.post(`${API_BASE}/create-password`, { 
                   mobile, 
                   password, 
-                  email: newEmail 
+                  email: newEmail,
+                  roleFilter: 'USER'
               });
 
               if (res.data.success) { 
@@ -114,7 +126,8 @@ const LaptopView = ({
                   alert(res.data.message || "Setup Failed");
               }
           } else {
-              const res = await axios.post(`${API_BASE}/login`, { mobile, password });
+              // --- NORMAL LOGIN ---
+              const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
               if (res.data.success) { 
                   setUserData(res.data.user); 
                   setSearchStep(3); 
@@ -135,7 +148,7 @@ const LaptopView = ({
   const renderDashboard = () => {
       if (userData.role === 'ADMIN') return <OwnerDashboard />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
-      return <UserDashboard userData={userData} onLogout={handleLogout} />;
+      return <UserDashboard user={userData} userData={userData} onLogout={handleLogout} />;
   };
 
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
@@ -203,18 +216,39 @@ const LaptopView = ({
                         <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'...':'Verify'}</button>
                     </div>
                  )}
-                 {/* Dynamic Step 2: Login OR Create Password */}
+                 
+                 {/* ✅ FIXED: Dynamic Step 2 handles Password AND Setup elegantly */}
                  {searchStep === 2 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                        {isFirstTimeUser && (
-                            <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} />
+                        {isFirstTimeUser ? (
+                            <>
+                                <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} />
+                                
+                                <div style={{ position: 'relative', width: '100%' }}>
+                                    <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
+                                    <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showPass ? '🙈' : '👁️'}</span>
+                                </div>
+
+                                <div style={{ position: 'relative', width: '100%' }}>
+                                    <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="search-input" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
+                                    <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
+                                </div>
+                                
+                                <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading} style={{width: '100%', marginTop: '5px'}}>
+                                    {loading ? 'Processing...' : 'Setup Account'}
+                                </button>
+                            </>
+                        ) : (
+                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
+                                    <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showPass ? '🙈' : '👁️'}</span>
+                                </div>
+                                <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading}>
+                                    {loading ? '...' : 'Login'}
+                                </button>
+                            </div>
                         )}
-                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                            <input type="password" placeholder={isFirstTimeUser ? "Create New Password" : "Enter Password"} className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{flex: 1}} />
-                            <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading}>
-                                {loading ? '...' : isFirstTimeUser ? 'Setup Account' : 'Login'}
-                            </button>
-                        </div>
                     </div>
                  )}
               </div>
