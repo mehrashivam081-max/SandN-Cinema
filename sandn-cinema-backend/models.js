@@ -8,10 +8,10 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, default: 'USER' },
     
-    // ✅ NEW: Tracking & Data
-    addedBy: { type: String, default: 'SELF' }, // Kisine add kiya ya khud signup kiya
+    // Tracking & Data
+    addedBy: { type: String, default: 'SELF' }, 
     
-    // 🚀 UPGRADED: Mixed type to prevent Search API & 500 Crashes from schema conflicts
+    // UPGRADED: Mixed type allows flexible folder structures (including imageCost & videoCost)
     uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
     
     // Profile
@@ -21,10 +21,15 @@ const userSchema = new mongoose.Schema({
     city: String,
     location: { lat: Number, long: Number }, 
     
-    // Wallet & Coins
+    // 🪙 UPGRADED: Wallet & Coins (Structured for Monetization & Ads)
     wallet: {
         coins: { type: Number, default: 0 },
-        history: [{ type: String }]
+        history: [{ 
+            action: String,       // e.g. "Watched Ad Video", "Unlocked File"
+            amount: String,       // e.g. "+1 Coin", "-5 Coins"
+            date: String,         // e.g. "21/03/2026"
+            type: { type: String } // e.g. 'credit', 'debit', 'neutral'
+        }]
     },
     
     // Security
@@ -46,14 +51,14 @@ const studioSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, default: 'STUDIO' },
     
-    // ✅ NEW: Tracking & Data
+    // Tracking & Data
     addedBy: { type: String, default: 'SELF' },
     
-    // 🚀 UPGRADED: Mixed type to prevent Search API & 500 Crashes from schema conflicts
+    // UPGRADED: Mixed type to prevent Search API & 500 Crashes from schema conflicts
     uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
 
     // Verification
-    adhaarNumber: { type: String, default: "Pending" }, // 🛠 Required hata diya taaki signup na ruke
+    adhaarNumber: { type: String, default: "Pending" }, 
     isAdhaarVerified: { type: Boolean, default: false },
     ownerImage: String,
     
@@ -106,7 +111,6 @@ const offerSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-
 // ==========================================
 // 🚀 NAYE SCHEMAS (Database Tables)
 // ==========================================
@@ -121,7 +125,7 @@ const bookingSchema = new mongoose.Schema({
     location: String,
     eventPlaceName: String,
     status: { type: String, default: 'Pending' },
-    createdAt: { type: Date, default: Date.now } // Fixed sorting key
+    createdAt: { type: Date, default: Date.now } 
 });
 
 // --- 7. COLLAB REQUEST SCHEMA ---
@@ -129,13 +133,13 @@ const collabRequestSchema = new mongoose.Schema({
     name: { type: String, required: true },
     brand: { type: String, required: true },
     email: { type: String, required: true },
-    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
+    status: { type: String, default: 'Pending' }, 
     createdAt: { type: Date, default: Date.now }
 });
 
 // --- 8. PLATFORM SETTINGS SCHEMA (Policies & Social Links) ---
 const platformSettingSchema = new mongoose.Schema({
-    settingId: { type: String, default: 'GLOBAL', unique: true }, // Ek hi document rahega humesha
+    settingId: { type: String, default: 'GLOBAL', unique: true }, 
     socialLinks: [{
         platform: String,
         url: String
@@ -154,7 +158,6 @@ module.exports = {
     Admin: mongoose.model('Admin', adminSchema),
     Content: mongoose.model('Content', contentSchema),
     Offer: mongoose.model('Offer', offerSchema),
-    // ✅ Exporting new models
     Booking: mongoose.model('Booking', bookingSchema),
     CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
     PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema)

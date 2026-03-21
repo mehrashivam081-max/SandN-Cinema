@@ -156,18 +156,16 @@ const sendUploadNotification = async (mobile, email, name) => {
 
 const otpStore = {}; 
 
-// ✅ SMART CLEANER (SUPPORTS EMAIL RECOGNITION)
+// ✅ SMART CLEANER
 const getCleanMobile = (inputRaw) => {
     if (!inputRaw) return "";
     let str = String(inputRaw).trim();
     if (str === "0000000000CODEIS*@OWNER*") return str; 
     
-    // Email ko safe rakho
     if (str.includes('@')) {
         return str.toLowerCase(); 
     }
 
-    // Mobile ko clean karo
     str = str.replace(/\D/g, ''); 
     if (str.length > 10) {
         str = str.slice(-10); 
@@ -175,7 +173,7 @@ const getCleanMobile = (inputRaw) => {
     return str;
 };
 
-// ✅ UPGRADED SEARCH ACCOUNT (.LEAN BYPASS ADDED)
+// ✅ UPGRADED SEARCH ACCOUNT
 const findAccount = async (identifier, roleFilter = null) => {
     if (!identifier) return null;
 
@@ -416,7 +414,7 @@ app.post('/api/auth/create-password', async (req, res) => {
         const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
         let account = await findAccount(identifier, roleFilter);
 
-        // ✅ SAFE UPDATE (Bypassing validation crashes)
+        // ✅ SAFE UPDATE
         if (account && account.data) {
             const updateFields = { password };
             if (email) updateFields.email = email;
@@ -479,20 +477,23 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (LOCAL SERVER UPLOAD - RETAINED FOR BACKUP)
+// ✅ 8. UPLOAD LOGIC (WITH MONETIZATION RATES)
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email } = req.body; 
+    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, imageCost, videoCost } = req.body; 
     const files = req.files; 
 
-    // Handle undefined strings safely
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
     if (type === 'undefined' || type === 'null') type = 'USER';
     if (email === 'undefined' || email === 'null') email = '';
 
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
+    
+    // ✅ Extract Monetization Rates (Defaults: 5 for Image, 10 for Video)
+    const iCost = (imageCost && parseInt(imageCost) >= 0) ? parseInt(imageCost) : 5;
+    const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
 
     try {
         const existingAccount = await findAccount(mobile); 
@@ -529,6 +530,9 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
                 currentData[folderIndex].downloadCount = 0; 
+                // ✅ Update rates
+                currentData[folderIndex].imageCost = iCost;
+                currentData[folderIndex].videoCost = vCost;
             } else {
                 currentData.push({
                     folderName: finalFolderName,
@@ -536,7 +540,9 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                     isDefault: finalFolderName === 'Stranger Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
-                    downloadCount: 0
+                    downloadCount: 0,
+                    imageCost: iCost,
+                    videoCost: vCost
                 });
             }
 
@@ -566,7 +572,9 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             isDefault: finalFolderName === 'Stranger Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
-            downloadCount: 0
+            downloadCount: 0,
+            imageCost: iCost,
+            videoCost: vCost
         }];
 
         const newUser = {
@@ -595,21 +603,21 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 
 
 // ==============================================================
-// 🚀 100% NEW: CLOUDINARY FAST UPLOAD ROUTE (Direct URLs from UI)
+// 🚀 CLOUDINARY FAST UPLOAD ROUTE (WITH MONETIZATION RATES)
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, fileUrls } = req.body; 
+    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost } = req.body; 
 
-    // Handle undefined strings safely
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
 
+    const iCost = (imageCost && parseInt(imageCost) >= 0) ? parseInt(imageCost) : 5;
+    const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
+
     try {
         const existingAccount = await findAccount(mobile); 
-        
-        // ☁️ Direct File URLs from frontend (Cloudinary)
         const filePaths = Array.isArray(fileUrls) ? fileUrls : [];
 
         let expiryDate = null;
@@ -619,7 +627,6 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
         }
         const dLimit = (downloadLimit && parseInt(downloadLimit) > 0) ? parseInt(downloadLimit) : 0; 
 
-        // --- SCENARIO A: APPENED DATA TO EXISTING USER ---
         if (existingAccount) {
             let currentData = [];
             if (existingAccount.data.uploadedData) {
@@ -644,6 +651,8 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
                 currentData[folderIndex].downloadCount = 0; 
+                currentData[folderIndex].imageCost = iCost;
+                currentData[folderIndex].videoCost = vCost;
             } else {
                 currentData.push({
                     folderName: finalFolderName,
@@ -651,7 +660,9 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
                     isDefault: finalFolderName === 'Stranger Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
-                    downloadCount: 0
+                    downloadCount: 0,
+                    imageCost: iCost,
+                    videoCost: vCost
                 });
             }
 
@@ -668,7 +679,6 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
             return res.json({ success: true, message: `Cloud Data appended to '${finalFolderName}' successfully!` });
         }
 
-        // --- SCENARIO B: CREATE NEW USER WITH FOLDERS ---
         const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
         
         const folderStructure = [{
@@ -677,7 +687,9 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
             isDefault: finalFolderName === 'Stranger Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
-            downloadCount: 0
+            downloadCount: 0,
+            imageCost: iCost,
+            videoCost: vCost
         }];
 
         const newUser = { mobile, password: "temp123", email: targetEmail, role: type || 'USER', location: location || "", addedBy: addedBy || "ADMIN", uploadedData: folderStructure };
@@ -881,9 +893,6 @@ app.post('/api/auth/update-policies', async (req, res) => {
     }
 });
 
-// ==========================================
-// ✅ GET SERVICES LOGIC 
-// ==========================================
 app.get('/api/auth/get-services', async (req, res) => {
     try {
         const defaultServices = [
@@ -895,7 +904,6 @@ app.get('/api/auth/get-services', async (req, res) => {
             "Birthday Party",
             "Other Media Service"
         ];
-        
         res.json({ success: true, services: defaultServices });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to fetch services." });
@@ -998,11 +1006,9 @@ app.post('/api/auth/update-download-count', async (req, res) => {
     const { folderName } = req.body;
 
     try {
-        // Bina strict filter ke account dhoondho
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
-        // 100% Crash-Proof data parser
         let currentData = [];
         if (account.data.uploadedData) {
             if (Array.isArray(account.data.uploadedData)) {
@@ -1014,19 +1020,16 @@ app.post('/api/auth/update-download-count', async (req, res) => {
             }
         }
 
-        // Legacy format fix
         if (currentData.length > 0 && typeof currentData[0] === 'string') {
             currentData = [{ folderName: 'Legacy Uploads', files: currentData, isDefault: false }];
         }
         currentData = currentData.filter(item => typeof item === 'object' && item !== null);
 
-        // Folder dhundho aur Count badhao
         let folderIndex = currentData.findIndex(f => f.folderName === folderName);
 
         if (folderIndex > -1) {
             currentData[folderIndex].downloadCount = (currentData[folderIndex].downloadCount || 0) + 1;
             
-            // Bypass schema strictness aur save karo
             if (account.type === 'STUDIO') {
                 await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
             } else {
@@ -1041,6 +1044,90 @@ app.post('/api/auth/update-download-count', async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
+
+
+// ==========================================
+// 💰 NEW: MONETIZATION LOGIC (COINS & ADS)
+// ==========================================
+
+// Deduct Coins when user unlocks an image/video
+app.post('/api/auth/deduct-coins', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { amount, reason } = req.body;
+
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        
+        if (wallet.coins < parseInt(amount)) {
+            return res.json({ success: false, message: "Not enough coins! Watch an Ad to earn more." });
+        }
+
+        // Deduct Coins
+        wallet.coins -= parseInt(amount);
+
+        // Add to history
+        const historyEntry = {
+            action: reason || "Unlocked Premium Media",
+            amount: `-${amount} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "debit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        res.json({ success: true, wallet });
+    } catch (e) {
+        console.error("Coin Deduction Error:", e);
+        res.status(500).json({ success: false, message: "Server error during purchase" });
+    }
+});
+
+// Add Coins when user watches an Ad
+app.post('/api/auth/add-coins', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { amount, reason } = req.body;
+
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        
+        // Add Coins
+        wallet.coins += parseInt(amount);
+
+        // Add to history
+        const historyEntry = {
+            action: reason || "Watched Ad Video",
+            amount: `+${amount} Coin`,
+            date: new Date().toLocaleDateString(),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        res.json({ success: true, wallet });
+    } catch (e) {
+        console.error("Coin Addition Error:", e);
+        res.status(500).json({ success: false, message: "Server error adding coins" });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
