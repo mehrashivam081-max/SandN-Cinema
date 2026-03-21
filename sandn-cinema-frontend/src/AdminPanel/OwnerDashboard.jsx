@@ -18,7 +18,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
     const dpInputRef = useRef(null);
 
-    // --- UPLOAD DATA STATES (UPGRADED) ---
+    // ✅ NEW: GLOBAL DEFAULT PRICING STATE
+    const [globalPricing, setGlobalPricing] = useState({ imageCost: '5', videoCost: '10' });
+
+    // --- UPLOAD DATA STATES ---
     const [formData, setFormData] = useState({ 
         type: 'USER', 
         name: '', 
@@ -28,7 +31,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         files: [],
         expiryDays: '30',       
         downloadLimit: '0',
-        // ✅ NEW: Monetization Rates (Default values)
+        // ✅ Pre-filled with Global Defaults initially
         imageCost: '5',
         videoCost: '10'
     });
@@ -36,6 +39,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+    // ✅ NEW: 3-Step Wizard Tab State
     const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
     const [isEmailLocked, setIsEmailLocked] = useState(false); 
 
@@ -115,6 +119,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
             if (res.data.success && res.data.data) {
                 if (res.data.data.socialLinks) setSocialLinks(res.data.data.socialLinks);
                 if (res.data.data.policies) setPolicyData(res.data.data.policies);
+                
+                // ✅ Load Global Default Pricing from DB
+                if (res.data.data.defaultPricing) {
+                    const globalRates = { 
+                        imageCost: res.data.data.defaultPricing.imageCost.toString(), 
+                        videoCost: res.data.data.defaultPricing.videoCost.toString() 
+                    };
+                    setGlobalPricing(globalRates);
+                    setFormData(prev => ({ ...prev, imageCost: globalRates.imageCost, videoCost: globalRates.videoCost }));
+                }
             }
         } catch(e) { console.log("No settings found yet"); }
     };
@@ -210,7 +224,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
-    // 🚀 CLOUDINARY UPLOAD WITH NEW MONETIZATION FIELDS
+    // 🚀 CLOUDINARY UPLOAD WITH MANUAL PRICING OVERRIDE
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
@@ -292,7 +306,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 downloadLimit: formData.downloadLimit,
                 addedBy: 'ADMIN',
                 fileUrls: uploadedUrls,
-                // ✅ Send Pricing to backend
+                // ✅ PRICING DATA TO SERVER
                 imageCost: formData.imageCost,
                 videoCost: formData.videoCost
             };
@@ -302,8 +316,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
             if (res.data.success) {
                 setUploadETA('Complete!');
                 setTimeout(() => {
-                    alert(`✅ Success: ${res.data.message}\n📩 Email & WhatsApp notification triggered!`);
-                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: '5', videoCost: '10' }); 
+                    alert(`✅ Success: ${res.data.message}\n📩 Notifications triggered!`);
+                    // Reset fields and apply Global Pricing defaults back to form
+                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }); 
                     setPreviews([]); 
                     setIsEmailLocked(false);
                     setFileStats({ photos: 0, videos: 0 });
@@ -346,7 +361,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     // ==========================================
-    // 🚀 ADMIN SETTINGS & SUB ADMIN
+    // 🚀 ADMIN SETTINGS & PRICING
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
         e.preventDefault();
@@ -364,6 +379,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error updating profile."); }
     };
 
+    // ✅ SAVE GLOBAL PRICING
+    const handleUpdateGlobalPricing = async (e) => {
+        e.preventDefault();
+        if (!window.confirm("Update default coin charges for ALL new uploads? (Old uploads will keep their current rates)")) return;
+
+        try {
+            const res = await axios.post(`${API_BASE}/update-default-pricing`, globalPricing);
+            if (res.data.success) {
+                alert("✅ Global Default Pricing Updated!");
+                // Also update current form if it hasn't been touched yet
+                setFormData(prev => ({ ...prev, imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }));
+            }
+        } catch (error) { alert("Server error updating pricing."); }
+    };
+
     const handleCreateSubAdmin = async (e) => {
         e.preventDefault();
         if (!window.confirm(`Create new Sub-Admin: ${subAdmin.name}?`)) return;
@@ -378,9 +408,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
-    // ==========================================
-    // 🚀 SOCIAL LINKS & POLICIES SAVING LOGIC
-    // ==========================================
     const handleAddLink = () => {
         if (!newLink.url) return alert("Please enter URL");
         setSocialLinks(prev => {
@@ -393,52 +420,38 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const saveLinksToServer = async () => {
         if (!window.confirm("Are you sure you want to update Social Links on the platform?")) return;
-
         try {
             await axios.post(`${API_BASE}/update-social-links`, { links: socialLinks });
-            alert("✅ Links Saved to Database! Now visible on User Profile.");
+            alert("✅ Links Saved to Database!");
         } catch (e) { alert("Error connecting to backend."); }
     };
 
     const handlePolicySave = async (e) => {
         e.preventDefault();
         if (!window.confirm("Are you sure you want to update Platform Policies?")) return;
-
         try {
             await axios.post(`${API_BASE}/update-policies`, { policies: policyData });
-            alert("✅ Security & Privacy Policies Updated Successfully in Database!");
+            alert("✅ Policies Updated Successfully!");
         } catch (e) { alert("Failed to save policies."); }
     };
 
-    // ==========================================
-    // 🚀 CRITERIA & BOOKING ACTION LOGIC
-    // ==========================================
     const handleCollabAction = async (id, action) => {
-        if (!window.confirm(`Are you sure you want to ${action} this collaboration request?`)) return;
-
+        if (!window.confirm(`Are you sure you want to ${action} this request?`)) return;
         try {
             const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action });
-            if(res.data.success) {
-                alert(`✅ Request ${action}. Email notification triggered!`);
-                fetchCollabs(); 
-            }
+            if(res.data.success) { alert(`✅ Request ${action}!`); fetchCollabs(); }
         } catch(e) { alert("Failed to update collab status"); }
     };
 
     const handleBookingStatus = async (id, newStatus) => {
         if (!window.confirm(`Are you sure you want to ${newStatus} this booking?`)) return;
-
         try {
             const res = await axios.post(`${API_BASE}/update-booking-status`, { bookingId: id, status: newStatus });
-            if(res.data.success) {
-                alert(`✅ Booking marked as ${newStatus}!`);
-                fetchBookings(); 
-            }
+            if(res.data.success) { alert(`✅ Booking marked as ${newStatus}!`); fetchBookings(); }
         } catch (e) { alert("Failed to update booking"); }
     };
 
 
-    // --- FILTERING & DERIVED DATA ---
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
     const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
@@ -459,7 +472,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     return (
         <div className="owner-dashboard-container">
             
-            {/* ✅ Custom Logout Confirmation Popup */}
             {showLogoutPopup && (
                 <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}>
                     <div style={{background:'#fff', padding:'30px', borderRadius:'10px', textAlign:'center', color:'#333', boxShadow:'0 10px 25px rgba(0,0,0,0.5)'}}>
@@ -472,7 +484,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* 👈 SIDEBAR */}
             <aside className="admin-sidebar">
                 <div className="sidebar-header" style={{ paddingBottom: '10px' }}>
                     <h1 className="admin-title">SandN Cinema</h1>
@@ -504,10 +515,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 <button onClick={() => setShowLogoutPopup(true)} className="admin-logout-btn">Log Out</button> 
             </aside>
 
-            {/* 👉 MAIN CONTENT */}
             <main className="admin-main-content">
                 
-                {/* 🔴 TAB 1: DASHBOARD */}
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>Overview Statistics</h2></div>
@@ -528,7 +537,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 2: MANAGE ACCOUNTS */}
                 {activeTab === 'ACCOUNTS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📋 Manage Users & Studios</h2></div>
@@ -563,7 +571,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: DIRECT BOOKINGS */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📅 Direct Bookings</h2></div>
@@ -604,7 +611,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             
-                            {/* ✅ NEW: 3-STEP TAB NAVIGATION */}
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
                                 <button onClick={() => setUploadSubTab('BASIC')} style={{ flex: 1, padding: '10px', background: uploadSubTab === 'BASIC' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'BASIC' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '12px' }}>
                                     1. Basic Info
@@ -619,7 +625,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                             <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
-                                {/* 🟢 STEP 1: BASIC INFORMATION */}
                                 {uploadSubTab === 'BASIC' && (
                                     <>
                                         <div style={{ position: 'relative' }}>
@@ -686,7 +691,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </>
                                 )}
 
-                                {/* 🟢 STEP 2: ACCESS & EXPIRY LIMITS */}
                                 {uploadSubTab === 'LIMITS' && (
                                     <>
                                         <div style={{ background: '#fcf3cf', padding: '20px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
@@ -720,25 +724,24 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </>
                                 )}
 
-                                {/* 🟢 STEP 3: SET CHARGES (MONETIZATION) */}
+                                {/* 🟢 STEP 3: SET CHARGES (MANUAL OVERRIDE) */}
                                 {uploadSubTab === 'CHARGES' && (
                                     <>
                                         <div style={{ background: '#e8f8f5', padding: '20px', borderRadius: '8px', border: '1px solid #2ecc71' }}>
-                                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>💰 Set Premium Charges (Coins)</h3>
-                                            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Define how many coins a user must spend to unlock and download files in this folder.</p>
+                                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>💰 Set Charges for this Folder</h3>
+                                            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>These values are pre-filled with your Global Default Pricing. You can change them specifically for this client/folder.</p>
 
                                             <div style={{ marginBottom: '15px' }}>
                                                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Cost per Photo (Coins)</label>
-                                                <input type="number" min="0" placeholder="e.g. 5" value={formData.imageCost} onChange={(e) => setFormData({ ...formData, imageCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                                <input type="number" min="0" value={formData.imageCost} onChange={(e) => setFormData({ ...formData, imageCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
                                             </div>
 
                                             <div style={{ marginBottom: '20px' }}>
                                                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Cost per Video (Coins)</label>
-                                                <input type="number" min="0" placeholder="e.g. 10" value={formData.videoCost} onChange={(e) => setFormData({ ...formData, videoCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                                <input type="number" min="0" value={formData.videoCost} onChange={(e) => setFormData({ ...formData, videoCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
                                             </div>
                                         </div>
 
-                                        {/* ✅ LIVE UPLOAD PROGRESS BAR UI FOR ADMIN */}
                                         {loading && (
                                             <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
@@ -767,7 +770,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 5: CRITERIA & TRAFFIC */}
                 {activeTab === 'CRITERIA' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
@@ -814,7 +816,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 6: SOCIAL LINKS */}
                 {activeTab === 'SOCIAL' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
@@ -842,7 +843,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 7: SECURITY POLICY */}
                 {activeTab === 'SECURITY' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🔒 Security & App Policies</h2></div>
@@ -866,7 +866,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 8: INCOME */}
                 {activeTab === 'INCOME' && (
                     <div className="view-section">
                         <div className="section-header"><h2>💰 Financial Overview</h2></div>
@@ -878,7 +877,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 9: SUB ADMINS */}
                 {activeTab === 'SUB_ADMIN' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div>
@@ -895,17 +893,41 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 10: SETTINGS */}
+                {/* 🔴 TAB 10: SETTINGS WITH GLOBAL PRICING */}
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
-                            <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
-                                <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
-                            </form>
+                        <div className="section-header"><h2>⚙️ Settings & Configuration</h2></div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+                            
+                            {/* ADMIN PROFILE SETTINGS */}
+                            <div className="update-creation-container" style={{ margin: 0 }}>
+                                <h3 style={{marginTop: 0, color: '#333'}}>Admin Profile</h3>
+                                <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
+                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                    <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                    <button type="submit" className="global-update-btn" style={{padding: '12px', marginTop:'5px'}}>💾 Save Profile Details</button>
+                                </form>
+                            </div>
+
+                            {/* ✅ NEW: GLOBAL DEFAULT PRICING SETTINGS */}
+                            <div className="update-creation-container" style={{ margin: 0, border: '2px solid #f1c40f', background: '#fffdf5' }}>
+                                <h3 style={{marginTop: 0, color: '#d4ac0d'}}>💰 Global Default Pricing</h3>
+                                <p style={{fontSize: '12px', color: '#555', marginBottom: '15px'}}>Set the default coin cost for all future uploads. You can still manually change these for specific folders during upload.</p>
+                                <form onSubmit={handleUpdateGlobalPricing} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                    <div>
+                                        <label style={{fontWeight:'bold', fontSize:'13px'}}>Default Photo Cost (Coins)</label>
+                                        <input type="number" min="0" value={globalPricing.imageCost} onChange={e => setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/>
+                                    </div>
+                                    <div>
+                                        <label style={{fontWeight:'bold', fontSize:'13px'}}>Default Video Cost (Coins)</label>
+                                        <input type="number" min="0" value={globalPricing.videoCost} onChange={e => setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input" />
+                                    </div>
+                                    <button type="submit" className="global-update-btn" style={{padding: '12px', marginTop:'5px', background: '#f1c40f', color: '#000'}}>💾 Save Global Pricing</button>
+                                </form>
+                            </div>
+
                         </div>
                     </div>
                 )}
