@@ -893,6 +893,22 @@ app.post('/api/auth/update-policies', async (req, res) => {
     }
 });
 
+// ✅ NEW: UPDATE GLOBAL PRICING
+app.post('/api/auth/update-default-pricing', async (req, res) => {
+    try {
+        const { imageCost, videoCost } = req.body;
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { $set: { "defaultPricing.imageCost": imageCost, "defaultPricing.videoCost": videoCost, lastUpdated: Date.now() } }, 
+            { upsert: true }
+        );
+        res.json({ success: true, message: "Global Default Pricing updated successfully!" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Failed to save pricing." });
+    }
+});
+
 app.get('/api/auth/get-services', async (req, res) => {
     try {
         const defaultServices = [

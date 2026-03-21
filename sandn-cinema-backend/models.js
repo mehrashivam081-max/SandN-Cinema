@@ -149,6 +149,11 @@ const platformSettingSchema = new mongoose.Schema({
         privacy: { type: String, default: "We do not sell data to 3rd parties..." },
         bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
     },
+    // ✅ NEW: GLOBAL DEFAULT PRICING
+    defaultPricing: {
+        imageCost: { type: Number, default: 5 },
+        videoCost: { type: Number, default: 10 }
+    },
     lastUpdated: { type: Date, default: Date.now }
 });
 
