@@ -1144,6 +1144,102 @@ app.post('/api/auth/add-coins', async (req, res) => {
     }
 });
 
+// ==========================================
+// 💰 ADVANCED MONETIZATION (REAL MONEY & EVENTS)
+// ==========================================
+
+// 1. Save Global Charges (Packages, Events, Pricing) from Admin
+app.post('/api/auth/update-global-charges', async (req, res) => {
+    try {
+        const { imageCost, videoCost, coinPackages, miniEvents } = req.body;
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { 
+                $set: { 
+                    "defaultPricing.imageCost": imageCost, 
+                    "defaultPricing.videoCost": videoCost,
+                    coinPackages: coinPackages,
+                    miniEvents: miniEvents,
+                    lastUpdated: Date.now() 
+                } 
+            }, 
+            { upsert: true }
+        );
+        res.json({ success: true, message: "Global Charges & Events Updated!" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Failed to save global charges." });
+    }
+});
+
+// 2. Simulate Real Money Purchase
+app.post('/api/auth/purchase-coins', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { coinsToAdd, pricePaid } = req.body;
+
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [], claimedEvents: [] };
+        
+        wallet.coins += parseInt(coinsToAdd);
+        const historyEntry = {
+            action: `Purchased with ₹${pricePaid}`,
+            amount: `+${coinsToAdd} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        
+        res.json({ success: true, wallet, message: "Payment Successful! Coins Added." });
+    } catch (e) {
+        console.error("Purchase Error:", e);
+        res.status(500).json({ success: false, message: "Server error during purchase" });
+    }
+});
+
+// 3. Claim Mini Event Reward
+app.post('/api/auth/claim-event', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { eventId, rewardCoins, eventTitle } = req.body;
+
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [], claimedEvents: [] };
+        
+        if (!wallet.claimedEvents) wallet.claimedEvents = [];
+        
+        if (wallet.claimedEvents.includes(eventId)) {
+            return res.json({ success: false, message: "You have already claimed this reward!" });
+        }
+
+        wallet.coins += parseInt(rewardCoins);
+        wallet.claimedEvents.push(eventId); // Mark as completed
+
+        const historyEntry = {
+            action: `Completed: ${eventTitle}`,
+            amount: `+${rewardCoins} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        
+        res.json({ success: true, wallet, message: `Reward Claimed! +${rewardCoins} Coins` });
+    } catch (e) {
+        console.error("Event Claim Error:", e);
+        res.status(500).json({ success: false, message: "Server error claiming event" });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {

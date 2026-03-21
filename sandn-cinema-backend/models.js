@@ -29,7 +29,9 @@ const userSchema = new mongoose.Schema({
             amount: String,       // e.g. "+1 Coin", "-5 Coins"
             date: String,         // e.g. "21/03/2026"
             type: { type: String } // e.g. 'credit', 'debit', 'neutral'
-        }]
+        }],
+        // ✅ NEW: To track which mini-events the user has already completed
+        claimedEvents: [{ type: String }]
     },
     
     // Security
@@ -149,11 +151,18 @@ const platformSettingSchema = new mongoose.Schema({
         privacy: { type: String, default: "We do not sell data to 3rd parties..." },
         bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
     },
-    // ✅ NEW: GLOBAL DEFAULT PRICING
+    // GLOBAL DEFAULT PRICING
     defaultPricing: {
         imageCost: { type: Number, default: 5 },
         videoCost: { type: Number, default: 10 }
     },
+    
+    // ✅ NEW: Real Money Coin Packages (from Admin Panel)
+    coinPackages: { type: Array, default: [] },
+    
+    // ✅ NEW: Mini Events for Organic Growth (from Admin Panel)
+    miniEvents: { type: Array, default: [] },
+    
     lastUpdated: { type: Date, default: Date.now }
 });
 
