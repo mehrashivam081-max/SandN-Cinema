@@ -21,6 +21,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [activeFolder, setActiveFolder] = useState(null); 
     const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
+    // ✅ NEW: PREVIEW & UPLOADER PROFILE STATES
+    const [previewMedia, setPreviewMedia] = useState(null); 
+    const [uploaderProfile, setUploaderProfile] = useState(null);
+
     // ✅ LIVE DOWNLOAD STATES
     const [downloadingFile, setDownloadingFile] = useState(null);
     const [downloadProgress, setDownloadProgress] = useState(0);
@@ -35,35 +39,24 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         location: user?.location || ''
     });
 
-    // --- REWARD ANIMATION STATE ---
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
-    // ✅ DEFAULT FOLDER FALLBACK (STRICT)
-    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true };
+    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio' };
 
-    // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
+    // 🟢 FETCH LOGIC 
     useEffect(() => {
-        // 👇 MAIN DEBUGGING LOGS 👇
         console.log("🔥 DASHBOARD LOAD HUA. User Data:", user);
-
         const fetchRealTimeData = async () => {
             if (!user || !user.mobile) {
-                console.log("❌ ERROR: User object mein 'mobile' number nahi mila! Isliye API call stop ho gayi.");
                 setFolders([DEFAULT_FOLDER]);
                 setLoading(false);
                 return; 
             }
 
-            console.log("✅ MOBILE NUMBER MIL GAYA:", user.mobile, "--> API Call ja rahi hai...");
-
             setLoading(true);
             try {
-                const res = await axios.post(`${API_BASE}/search-account`, { 
-                    mobile: user.mobile
-                });
+                const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
                 
-                console.log("📦 BACKEND SE DATA AAYA:", res.data);
-
                 if (res.data.success) {
                     const dbData = res.data.data;
                     setSyncUser(dbData);
@@ -72,13 +65,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     if(dbData.wallet) setWallet(dbData.wallet);
                     
                     let fetchedFolders = dbData.uploadedData || [];
-                    
                     if (!Array.isArray(fetchedFolders)) {
-                        if (typeof fetchedFolders === 'object' && fetchedFolders !== null) {
-                            fetchedFolders = Object.values(fetchedFolders);
-                        } else {
-                            fetchedFolders = [];
-                        }
+                        fetchedFolders = (typeof fetchedFolders === 'object' && fetchedFolders !== null) ? Object.values(fetchedFolders) : [];
                     }
 
                     fetchedFolders = fetchedFolders.map(folder => {
@@ -97,7 +85,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
-
                     localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
                 } else {
                     setFolders([DEFAULT_FOLDER]); 
@@ -112,7 +99,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         fetchRealTimeData();
         
-        // 🎁 DAILY REWARD LOGIC WITH PROFESSIONAL UI
         const currentUserData = userData || user || {};
         const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         
@@ -128,19 +114,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     }, [user?.mobile]); 
 
     // --- HELPERS ---
-    // ✅ BUG FIX 3: Cloudinary Video Detection Fix
     const isVideo = (filePath) => {
         if (!filePath || typeof filePath !== 'string') return false;
-        // Identifies Cloudinary videos even if extension is missing
         if (filePath.includes('/video/upload/')) return true; 
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
 
-    // 🚀 CLOUDINARY & LOCAL URL HANDLER
     const getCleanUrl = (filePath) => {
         if (!filePath) return '';
-        if (filePath.startsWith('http')) return filePath; // Cloudinary Link
-        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; // Local Link
+        if (filePath.startsWith('http')) return filePath; 
+        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
     };
 
     // --- PROFILE HANDLERS ---
@@ -159,7 +142,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
-    // 🚀 NEW: LIVE DOWNLOAD PROGRESS & LIMIT UPDATER
+    // 🚀 LIVE DOWNLOAD
     const handleDownload = async (filePath) => {
         setDownloadingFile(filePath);
         setDownloadProgress(0);
@@ -173,9 +156,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         try {
             const response = await axios({
-                url,
-                method: 'GET',
-                responseType: 'blob', 
+                url, method: 'GET', responseType: 'blob', 
                 onDownloadProgress: (progressEvent) => {
                     const { loaded, total } = progressEvent;
                     if(total) {
@@ -208,7 +189,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }
             });
 
-            // Create blob link and force download
             const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = urlBlob;
@@ -221,19 +201,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setDownloadingFile(null);
             
-            // ✅ INCREASE DOWNLOAD COUNT LOGIC (Local UI + Backend)
             if (activeFolder && activeFolder.downloadLimit > 0) {
                 const newCount = (activeFolder.downloadCount || 0) + 1;
-                
-                // Fast UI update
                 setActiveFolder({ ...activeFolder, downloadCount: newCount });
                 setFolders(folders.map(f => f.folderName === activeFolder.folderName ? { ...f, downloadCount: newCount } : f));
-                
-                // Silent backend update
-                axios.post(`${API_BASE}/update-download-count`, { 
-                    mobile: user.mobile, 
-                    folderName: activeFolder.folderName 
-                }).catch(err => console.log("Failed to sync count", err));
+                axios.post(`${API_BASE}/update-download-count`, { mobile: user.mobile, folderName: activeFolder.folderName }).catch(err => console.log("Failed to sync count", err));
             }
 
         } catch (error) {
@@ -253,7 +225,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return renderHomeTab();
     };
 
-    // 🔴 HISTORY TAB
     const renderHistoryTab = () => {
         const historyData = wallet?.history || [
             { date: new Date().toLocaleDateString(), action: "Daily Login Reward", amount: "+1 Coin", type: "credit" },
@@ -269,18 +240,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 
                 <div className="history-list">
                     {historyData.map((item, idx) => (
-                        <div key={idx} style={{
-                            background: '#1a1a2e', padding: '15px', borderRadius: '10px', marginBottom: '10px', 
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                            borderLeft: item.type === 'credit' ? '4px solid #f1c40f' : '4px solid #3498db'
-                        }}>
+                        <div key={idx} style={{ background: '#1a1a2e', padding: '15px', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: item.type === 'credit' ? '4px solid #f1c40f' : '4px solid #3498db' }}>
                             <div>
                                 <h4 style={{margin: '0 0 5px 0', color: '#fff', fontSize: '15px'}}>{item.action}</h4>
                                 <span style={{color: '#888', fontSize: '11px'}}>{item.date}</span>
                             </div>
-                            <div style={{fontWeight: 'bold', color: item.type === 'credit' ? '#f1c40f' : '#fff', fontSize: '16px'}}>
-                                {item.amount}
-                            </div>
+                            <div style={{fontWeight: 'bold', color: item.type === 'credit' ? '#f1c40f' : '#fff', fontSize: '16px'}}>{item.amount}</div>
                         </div>
                     ))}
                 </div>
@@ -288,15 +253,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         );
     };
 
-    // 🔴 PROFILE TAB
     const renderProfileTab = () => (
         <div className="profile-tab-vip">
             <h2>Your Profile</h2>
             <div className="profile-card-vip">
                 <div className="dp-section">
-                    <div className="dp-circle">
-                        {profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}
-                    </div>
+                    <div className="dp-circle">{profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}</div>
                     {editProfileMode && (
                         <div className="dp-controls">
                             <label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label>
@@ -329,7 +291,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         </div>
     );
 
-    // 🔴 HOME TAB
     const renderHomeTab = () => {
         if (activeFolder) {
             const displayedMedia = (activeFolder.files || []).filter(item => {
@@ -338,10 +299,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 return true;
             });
 
-            // ✅ PREMIUM Expiry & Limit Logic Checks
             const hasExpiry = activeFolder.expiryDate;
             const isExpired = hasExpiry && new Date(activeFolder.expiryDate) < new Date();
-            
             const hasLimit = activeFolder.downloadLimit > 0;
             const currentDownloads = activeFolder.downloadCount || 0;
             const isLimitReached = hasLimit && currentDownloads >= activeFolder.downloadLimit;
@@ -354,19 +313,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <h3>{activeFolder.folderName}</h3>
                     </div>
 
-                    {/* ✅ EXPIRY / LIMIT ALERT BANNER */}
                     {(hasExpiry || hasLimit) && (
                         <div style={{ background: isExpired || isLimitReached ? '#fdedec' : '#fffdf5', border: `1px solid ${isExpired || isLimitReached ? '#e74c3c' : '#f1c40f'}`, padding: '10px', borderRadius: '8px', marginBottom: '15px', marginTop: '10px' }}>
-                            {hasExpiry && (
-                                <p style={{ margin: 0, fontSize: '12px', color: isExpired ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>
-                                    {isExpired ? '🚫 This folder has Expired and will be deleted.' : `⏳ Expires on: ${new Date(activeFolder.expiryDate).toLocaleDateString()}`}
-                                </p>
-                            )}
-                            {hasLimit && !isExpired && (
-                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: isLimitReached ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>
-                                    📥 Downloads: {currentDownloads} of {activeFolder.downloadLimit} {isLimitReached ? '(Limit Reached)' : 'left'}
-                                </p>
-                            )}
+                            {hasExpiry && <p style={{ margin: 0, fontSize: '12px', color: isExpired ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>{isExpired ? '🚫 This folder has Expired and will be deleted.' : `⏳ Expires on: ${new Date(activeFolder.expiryDate).toLocaleDateString()}`}</p>}
+                            {hasLimit && !isExpired && <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: isLimitReached ? '#c0392b' : '#d4ac0d', fontWeight: 'bold' }}>📥 Downloads: {currentDownloads} of {activeFolder.downloadLimit} {isLimitReached ? '(Limit Reached)' : 'left'}</p>}
                         </div>
                     )}
 
@@ -378,34 +328,60 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     <div className="ud-grid-vip mt-20">
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => (
-                            <div key={idx} className="gallery-item-vip">
-                                {isVideo(filePath) ? <video src={getCleanUrl(filePath)} controls={canDownload} className="gallery-media-vip" /> : <img src={getCleanUrl(filePath)} loading="lazy" className="gallery-media-vip" />}
+                            // ✅ NEW VIP CARD LAYOUT WITH UPLOADER STRIP
+                            <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: '1px solid #333' }}>
                                 
-                                <div className="media-overlay-vip" style={{flexDirection: 'column', padding: '10px'}}>
-                                    
-                                    {/* ✅ DOWNLOADING LIVE PROGRESS UI */}
-                                    {downloadingFile === filePath ? (
-                                        <div style={{ width: '100%', background: 'rgba(0,0,0,0.8)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                                {/* 1. MEDIA CLICK AREA (Opens Preview) */}
+                                <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => setPreviewMedia(filePath)}>
+                                    {isVideo(filePath) ? (
+                                        <>
+                                            <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
+                                        </>
+                                    ) : (
+                                        <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    )}
+
+                                    {/* Download Progress Overlay */}
+                                    {downloadingFile === filePath && (
+                                        <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: 'rgba(0,0,0,0.85)', padding: '10px', textAlign: 'center', zIndex: 10 }}>
                                             <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
-                                            <div style={{ width: '100%', background: '#eee', height: '6px', borderRadius: '5px', overflow: 'hidden' }}>
+                                            <div style={{ width: '100%', background: '#eee', height: '4px', borderRadius: '5px', overflow: 'hidden' }}>
                                                 <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
                                             </div>
-                                            <div style={{color: '#fff', fontSize: '10px', marginTop: '5px'}}>{downloadETA}</div>
                                         </div>
-                                    ) : (
-                                        <button 
-                                            onClick={() => canDownload ? handleDownload(filePath) : null} 
-                                            className="download-btn-vip" 
-                                            style={{ 
-                                                background: canDownload ? '#2ecc71' : '#ccc', 
-                                                cursor: canDownload ? 'pointer' : 'not-allowed',
-                                                border: 'none', padding: '8px 15px', color: '#fff', borderRadius: '5px', fontWeight: 'bold'
-                                            }}
-                                            disabled={!canDownload}
-                                        >
-                                            {isExpired ? '🚫 Expired' : isLimitReached ? '🚫 Limit Reached' : '⬇ Download'}
-                                        </button>
                                     )}
+                                </div>
+
+                                {/* 2. UPLOADER & DOWNLOAD STRIP */}
+                                <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
+                                    
+                                    {/* Uploader Profile Clickable Area */}
+                                    <div 
+                                        onClick={() => setUploaderProfile({
+                                            name: activeFolder.uploadedBy || 'SandN Cinema',
+                                            role: activeFolder.uploaderRole || 'Premium Studio Partner',
+                                            email: activeFolder.uploaderEmail || 'contact@sandncinema.com'
+                                        })}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                                    >
+                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>
+                                            {(activeFolder.uploadedBy || 'S')[0].toUpperCase()}
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span>
+                                            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Direct Download Button */}
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); if(canDownload) handleDownload(filePath); }}
+                                        disabled={!canDownload || downloadingFile === filePath}
+                                        style={{ background: canDownload ? '#2ecc71' : '#555', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', cursor: canDownload ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+                                    >
+                                        {isExpired ? '🚫 Expired' : isLimitReached ? '🚫 Limit Reached' : '⬇️ Save'}
+                                    </button>
                                 </div>
                             </div>
                         )) : <div className="no-data-vip">Folder is empty. Media not uploaded yet.</div>}
@@ -414,7 +390,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
-        // ✅ FOLDERS GRID 
         return (
             <div className="folders-view">
                 <div className="welcome-banner">
@@ -425,7 +400,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid">
                         {folders.map((folder, index) => {
-                            // Folder lock UI logic
                             const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
                             const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
                             const isLocked = isExpired || isLimitReached;
@@ -449,6 +423,52 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     return (
         <div className="ud-container-vip">
             
+            {/* ✅ NEW: FULL-SCREEN MEDIA PREVIEW MODAL */}
+            {previewMedia && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+                    <button onClick={() => setPreviewMedia(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✖</button>
+
+                    {isVideo(previewMedia) ? (
+                        <video src={getCleanUrl(previewMedia)} controls autoPlay style={{ maxWidth: '95%', maxHeight: '75vh', borderRadius: '10px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} />
+                    ) : (
+                        <img src={getCleanUrl(previewMedia)} style={{ maxWidth: '95%', maxHeight: '75vh', borderRadius: '10px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', objectFit: 'contain' }} />
+                    )}
+
+                    <div style={{ marginTop: '25px' }}>
+                        <button onClick={() => handleDownload(previewMedia)} style={{ background: '#3498db', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)' }}>
+                            ⬇ Download Original Quality
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: UPLOADER (STUDIO/ADMIN) ID POPUP MODAL */}
+            {uploaderProfile && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }} onClick={() => setUploaderProfile(null)}>
+                    <div style={{ background: 'linear-gradient(145deg, #1a1a2e, #16213e)', padding: '30px', borderRadius: '25px', width: '300px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ width: '85px', height: '85px', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '35px', color: '#000', fontWeight: 'bold', border: '4px solid #1a1a2e', boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)' }}>
+                            {uploaderProfile.name.charAt(0).toUpperCase()}
+                        </div>
+                        
+                        <h2 style={{ color: '#fff', margin: '0 0 8px 0', fontSize: '22px' }}>{uploaderProfile.name}</h2>
+                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #3498db' }}>
+                            ✓ {uploaderProfile.role}
+                        </span>
+
+                        <div style={{ marginTop: '25px', textAlign: 'left', background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '15px' }}>
+                            <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📧</span> <span style={{color: '#fff'}}>{uploaderProfile.email}</span></p>
+                            <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>🔒</span> <span style={{color: '#2ecc71'}}>Verified Secure Upload</span></p>
+                            <p style={{ margin: 0, color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📸</span> <span>Photography & Videography</span></p>
+                        </div>
+
+                        <button onClick={() => setUploaderProfile(null)} style={{ marginTop: '25px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', width: '100%', fontWeight: 'bold', transition: '0.3s' }}>
+                            Close Window
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* 🎁 PROFESSIONAL COIN ANIMATION POPUP */}
             {rewardPopup.show && (
                 <div className="reward-popup-overlay">
