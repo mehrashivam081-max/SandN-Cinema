@@ -43,20 +43,27 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // 🟢 FETCH LOGIC (SINGLE SOURCE OF TRUTH)
     useEffect(() => {
+        // 👇 MAIN DEBUGGING LOGS 👇
+        console.log("🔥 DASHBOARD LOAD HUA. User Data:", user);
+
         const fetchRealTimeData = async () => {
-            if (!user?.mobile) {
+            if (!user || !user.mobile) {
+                console.log("❌ ERROR: User object mein 'mobile' number nahi mila! Isliye API call stop ho gayi.");
                 setFolders([DEFAULT_FOLDER]);
                 setLoading(false);
                 return; 
             }
 
+            console.log("✅ MOBILE NUMBER MIL GAYA:", user.mobile, "--> API Call ja rahi hai...");
+
             setLoading(true);
             try {
-                // ✅ BUG FIX 1: Removed Strict 'roleFilter' so it finds the data no matter how Admin created it
                 const res = await axios.post(`${API_BASE}/search-account`, { 
                     mobile: user.mobile
                 });
                 
+                console.log("📦 BACKEND SE DATA AAYA:", res.data);
+
                 if (res.data.success) {
                     const dbData = res.data.data;
                     setSyncUser(dbData);
@@ -64,7 +71,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     setProfileData({ email: dbData.email || '', location: dbData.location || '' });
                     if(dbData.wallet) setWallet(dbData.wallet);
                     
-                    // ✅ BUG FIX 2: Deep Parser for Mongoose Mixed Array
                     let fetchedFolders = dbData.uploadedData || [];
                     
                     if (!Array.isArray(fetchedFolders)) {
@@ -75,7 +81,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         }
                     }
 
-                    // Deep format array items
                     fetchedFolders = fetchedFolders.map(folder => {
                         if (typeof folder === 'string') return null; 
                         return {
@@ -84,7 +89,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         };
                     }).filter(Boolean);
 
-                    // Clean up and filter
                     const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'stranger photography');
                     const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'stranger photography');
                     
