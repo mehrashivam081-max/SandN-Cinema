@@ -125,7 +125,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         if (!filePath || typeof filePath !== 'string') return false;
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
-    const getCleanUrl = (filePath) => `${SERVER_URL}${filePath.replace(/\\/g, '/')}`;
+
+    // 🚀 CLOUDINARY & LOCAL URL HANDLER
+    const getCleanUrl = (filePath) => {
+        if (!filePath) return '';
+        if (filePath.startsWith('http')) return filePath; // Cloudinary Link
+        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; // Local Link
+    };
 
     // --- PROFILE HANDLERS ---
     const handleDPChange = (e) => {
@@ -143,7 +149,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
-    // 🚀 NEW: LIVE DOWNLOAD PROGRESS HANDLER
+    // 🚀 NEW: LIVE DOWNLOAD PROGRESS & LIMIT UPDATER
     const handleDownload = async (filePath) => {
         setDownloadingFile(filePath);
         setDownloadProgress(0);
@@ -205,6 +211,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setDownloadingFile(null);
             
+            // ✅ INCREASE DOWNLOAD COUNT LOGIC (Local UI + Backend)
+            if (activeFolder && activeFolder.downloadLimit > 0) {
+                const newCount = (activeFolder.downloadCount || 0) + 1;
+                
+                // Fast UI update
+                setActiveFolder({ ...activeFolder, downloadCount: newCount });
+                setFolders(folders.map(f => f.folderName === activeFolder.folderName ? { ...f, downloadCount: newCount } : f));
+                
+                // Silent backend update
+                axios.post(`${API_BASE}/update-download-count`, { 
+                    mobile: user.mobile, 
+                    folderName: activeFolder.folderName 
+                }).catch(err => console.log("Failed to sync count", err));
+            }
+
         } catch (error) {
             console.error("Download failed", error);
             alert("Download Failed. Try again.");

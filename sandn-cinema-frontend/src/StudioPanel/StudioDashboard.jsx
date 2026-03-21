@@ -135,7 +135,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // 🚀 UPLOAD FUNCTION (Now sending Limit & Expiry data)
+    // 🚀 100% UPGRADED: DIRECT CLOUDINARY UPLOAD FUNCTION
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
@@ -143,51 +143,40 @@ const StudioDashboard = ({ user, onLogout }) => {
 
         setLoading(true);
         setUploadProgress(0);
-        setUploadSpeed('Calculating...');
+        setUploadSpeed('Starting Upload...');
         setUploadETA('Calculating...');
 
-        const formDataPayload = new FormData();
-        
-        if (isFeed) {
-            formDataPayload.append('mobile', studioProfile.mobile);
-            formDataPayload.append('name', studioProfile.studioName);
-            formDataPayload.append('type', 'STUDIO');
-            formDataPayload.append('folderName', 'Public Feed Content'); 
-        } else {
-            formDataPayload.append('mobile', clientMobile);
-            formDataPayload.append('name', clientName || 'Client');
-            formDataPayload.append('type', 'USER');
-            formDataPayload.append('folderName', folderName);
-            formDataPayload.append('email', clientEmail); 
-            // ✅ SENDING EXPIRY & LIMIT TO BACKEND
-            formDataPayload.append('expiryDays', expiryDays); 
-            formDataPayload.append('downloadLimit', downloadLimit);
-        }
-        
-        formDataPayload.append('addedBy', user.mobile); 
-
-        for (let i = 0; i < currentFiles.length; i++) {
-            formDataPayload.append('mediaFiles', currentFiles[i]);
-        }
+        const totalBytes = currentFiles.reduce((acc, file) => acc + file.size, 0);
+        const loadedBytesArray = new Array(currentFiles.length).fill(0);
+        const uploadedUrls = [];
 
         let startTime = Date.now();
-        let lastLoadedBytes = 0;
         let lastTime = startTime;
+        let lastTotalLoaded = 0;
 
         try {
-            const res = await axios.post(`${API_BASE}/admin-add-user`, formDataPayload, { 
-                headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (progressEvent) => {
-                    const { loaded, total } = progressEvent;
-                    if(total) {
-                        const percentCompleted = Math.round((loaded * 100) / total);
-                        setUploadProgress(percentCompleted);
+            // ✅ STEP 1: UPLOAD TO CLOUDINARY DIRECTLY
+            for (let i = 0; i < currentFiles.length; i++) {
+                const file = currentFiles[i];
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('upload_preset', 'xgujeuol'); // ☁️ Your Preset
+
+                // ☁️ Your Cloud Name URL
+                const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                    onUploadProgress: (progressEvent) => {
+                        const { loaded } = progressEvent;
+                        loadedBytesArray[i] = loaded;
+
+                        const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
+                        const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
+                        setUploadProgress(Math.min(percentCompleted, 99)); // Cap at 99% until saving to DB
 
                         const currentTime = Date.now();
                         const timeElapsedLimit = (currentTime - lastTime) / 1000; 
 
                         if (timeElapsedLimit > 0.5) {
-                            const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                            const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
                             const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
                             const speedKbps = speedBps / 1024;
                             const speedMbps = speedKbps / 1024;
@@ -195,32 +184,54 @@ const StudioDashboard = ({ user, onLogout }) => {
                             if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
                             else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
 
-                            const bytesRemaining = total - loaded;
+                            const bytesRemaining = totalBytes - totalLoaded;
                             const etaSeconds = bytesRemaining / speedBps;
 
                             if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
                             else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
                             else setUploadETA(`Almost done...`);
 
-                            lastLoadedBytes = loaded;
+                            lastTotalLoaded = totalLoaded;
                             lastTime = currentTime;
                         }
                     }
-                }
-            });
+                });
+                
+                // Store Secure Cloud URL
+                uploadedUrls.push(res.data.secure_url);
+            }
 
-            if (res.data.success) {
-                setUploadProgress(100);
+            // ✅ STEP 2: SEND FAST URLs TO YOUR BACKEND
+            setUploadProgress(100);
+            setUploadSpeed('Finalizing...');
+            setUploadETA('Saving Data to Server...');
+
+            const payload = {
+                mobile: isFeed ? studioProfile.mobile : clientMobile,
+                name: isFeed ? studioProfile.studioName : (clientName || 'Client'),
+                type: isFeed ? 'STUDIO' : 'USER',
+                folderName: isFeed ? 'Public Feed Content' : folderName,
+                email: isFeed ? '' : clientEmail,
+                expiryDays: isFeed ? '' : expiryDays,
+                downloadLimit: isFeed ? '' : downloadLimit,
+                addedBy: user.mobile,
+                fileUrls: uploadedUrls // 🚀 Send Array of Cloudinary Links
+            };
+
+            // Calling the correct backend route
+            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
+
+            if (backendRes.data.success) {
                 setUploadETA('Complete!');
                 setTimeout(() => {
-                    alert(`✅ Success: ${res.data.message}\n📩 Notification sent!`);
+                    alert(`✅ Success: ${backendRes.data.message}\n📩 Notification sent!`);
                     if (isFeed) {
                         setFeedFiles([]);
                         document.getElementById('feed-input-field').value = '';
                         setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                     } else {
                         setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
-                        setExpiryDays(''); setDownloadLimit(''); // Reset new inputs
+                        setExpiryDays(''); setDownloadLimit('');
                         setFiles([]);
                         document.getElementById('file-input-field').value = '';
                         setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
@@ -229,11 +240,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                     setLoading(false);
                 }, 500);
             } else { 
-                alert(`❌ Error: ${res.data.message}`); 
+                alert(`❌ Error from Database: ${backendRes.data.message}`); 
                 setLoading(false);
             }
         } catch (error) { 
-            alert("Upload Failed. Backend check karein."); 
+            alert("Upload Failed. Check internet connection."); 
+            console.error(error);
             setLoading(false);
         } 
     };
@@ -417,7 +429,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
-                                {/* ✅ NEW: EXPIRY AND LIMIT CONTROLS */}
+                                {/* ✅ EXPIRY AND LIMIT CONTROLS */}
                                 <div style={{ display: 'flex', gap: '15px', background: '#fffdf5', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>⏳ Expiry (Days)</label>
@@ -448,7 +460,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 {loading && (
                                     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
-                                            <span>Uploading Data... {uploadProgress}%</span>
+                                            <span>{uploadProgress === 100 ? 'Saving to Database...' : `Cloud Upload... ${uploadProgress}%`}</span>
                                             <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
                                         </div>
                                         <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
@@ -461,7 +473,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 )}
                                 
                                 <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px', background: loading ? '#95a5a6' : '#2ecc71', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                    {loading ? 'Uploading in Progress...' : '🚀 Upload & Notify Client'}
+                                    {loading ? 'Uploading to Cloud...' : '🚀 Upload & Notify Client'}
                                 </button>
                             </div>
                         </div>
@@ -508,7 +520,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                             )}
                             
                             <button onClick={() => handleUpload(true)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', marginTop:'20px', background: loading ? '#bdc3c7' : 'linear-gradient(135deg, #d4af37, #f1c40f)', color:'#000', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                {loading ? 'Uploading to Server...' : '🔥 Upload to Global Feed'}
+                                {loading ? 'Uploading to Cloud Server...' : '🔥 Upload to Global Feed'}
                             </button>
                         </div>
                     </div>
