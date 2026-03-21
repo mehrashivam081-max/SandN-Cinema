@@ -18,29 +18,32 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adminDp, setAdminDp] = useState(() => localStorage.getItem('adminDp') || '');
     const dpInputRef = useRef(null);
 
-    // --- UPLOAD DATA STATES (UPGRADED WITH CLOUDINARY & EMAIL) ---
+    // --- UPLOAD DATA STATES (UPGRADED) ---
     const [formData, setFormData] = useState({ 
         type: 'USER', 
         name: '', 
         mobile: '', 
-        email: '',          // ✅ Added Email Field
+        email: '',          
         folderName: '', 
         files: [],
         expiryDays: '30',       
-        downloadLimit: '0'      
+        downloadLimit: '0',
+        // ✅ NEW: Monetization Rates (Default values)
+        imageCost: '5',
+        videoCost: '10'
     });
     
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
-    const [isEmailLocked, setIsEmailLocked] = useState(false); // ✅ Added logic to lock email if it exists
+    const [isEmailLocked, setIsEmailLocked] = useState(false); 
 
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadSpeed, setUploadSpeed] = useState('');
     const [uploadETA, setUploadETA] = useState('');
-    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0 }); // Added counter for files
+    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0 }); 
 
     // --- ADMIN SETTINGS STATES ---
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || 'Owner', email: user?.email || '', password: user?.password || '' });
@@ -148,13 +151,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const removeDp = () => { setAdminDp(''); localStorage.removeItem('adminDp'); };
 
     // ==========================================
-    // 🚀 UPLOAD DATA LOGIC (WITH CLOUDINARY & EMAIL LOGIC)
+    // 🚀 UPLOAD DATA LOGIC
     // ==========================================
     const handleFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
         setFormData({ ...formData, files: selectedFiles });
         
-        // ✅ Add counter stats
         const photos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
         const videos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
         setFileStats({ photos, videos });
@@ -168,7 +170,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setFormData({ ...formData, mobile: val });
         setShowSuggestions(val.length > 0);
 
-        // ✅ AUTO-FILL LOGIC
         const exactMatch = accounts.find(c => c.mobile === val);
         if (exactMatch) {
             setFormData(prev => ({
@@ -177,7 +178,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 type: exactMatch.role || 'USER',
                 email: (exactMatch.email && !exactMatch.email.includes('dummy_')) ? exactMatch.email : ''
             }));
-            // If email exists and is real, lock it
             if (exactMatch.email && !exactMatch.email.includes('dummy_')) {
                 setIsEmailLocked(true);
             } else {
@@ -210,14 +210,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
-    // 🚀 UPGRADED TO CLOUDINARY UPLOAD
+    // 🚀 CLOUDINARY UPLOAD WITH NEW MONETIZATION FIELDS
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         if (formData.files.length === 0) return alert("Please select files to upload.");
         
         const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
-        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nFolder Expiry: ${expiryText}\nDownload Limit: ${formData.downloadLimit === '0' ? 'Unlimited' : formData.downloadLimit}`)) return;
+        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins`)) return;
 
         setLoading(true);
         setUploadProgress(0);
@@ -233,12 +233,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
         let lastTotalLoaded = 0;
 
         try {
-            // ✅ STEP 1: UPLOAD DIRECTLY TO CLOUDINARY
+            // STEP 1: UPLOAD TO CLOUDINARY
             for (let i = 0; i < formData.files.length; i++) {
                 const file = formData.files[i];
                 const fd = new FormData();
                 fd.append('file', file);
-                fd.append('upload_preset', 'xgujeuol'); // ☁️ Cloudinary Preset
+                fd.append('upload_preset', 'xgujeuol'); 
 
                 const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                     onUploadProgress: (progressEvent) => {
@@ -277,7 +277,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 uploadedUrls.push(res.data.secure_url);
             }
 
-            // ✅ STEP 2: SEND LINKS TO BACKEND TO SAVE
+            // STEP 2: SEND LINKS TO BACKEND TO SAVE
             setUploadProgress(100);
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
@@ -286,12 +286,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 type: formData.type,
                 name: formData.name,
                 mobile: formData.mobile,
-                email: formData.email, // ✅ Added email
+                email: formData.email, 
                 folderName: formData.folderName,
                 expiryDays: formData.expiryDays,
                 downloadLimit: formData.downloadLimit,
                 addedBy: 'ADMIN',
-                fileUrls: uploadedUrls 
+                fileUrls: uploadedUrls,
+                // ✅ Send Pricing to backend
+                imageCost: formData.imageCost,
+                videoCost: formData.videoCost
             };
 
             const res = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData);
@@ -300,7 +303,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 setUploadETA('Complete!');
                 setTimeout(() => {
                     alert(`✅ Success: ${res.data.message}\n📩 Email & WhatsApp notification triggered!`);
-                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0' }); 
+                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: '5', videoCost: '10' }); 
                     setPreviews([]); 
                     setIsEmailLocked(false);
                     setFileStats({ photos: 0, videos: 0 });
@@ -347,7 +350,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
         e.preventDefault();
-        
         if (!window.confirm("Are you sure you want to save these profile changes?")) return;
 
         try {
@@ -595,31 +597,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: UPLOAD DATA (WITH EMAIL, CLOUDINARY & PROGRESS) */}
+                {/* 🔴 TAB 4: UPLOAD DATA (3-STEP WIZARD) */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
                         
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             
-                            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
-                                <button 
-                                    onClick={() => setUploadSubTab('BASIC')} 
-                                    style={{ flex: 1, padding: '10px', background: uploadSubTab === 'BASIC' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'BASIC' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}
-                                >
+                            {/* ✅ NEW: 3-STEP TAB NAVIGATION */}
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+                                <button onClick={() => setUploadSubTab('BASIC')} style={{ flex: 1, padding: '10px', background: uploadSubTab === 'BASIC' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'BASIC' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '12px' }}>
                                     1. Basic Info
                                 </button>
-                                <button 
-                                    onClick={() => setUploadSubTab('LIMITS')} 
-                                    style={{ flex: 1, padding: '10px', background: uploadSubTab === 'LIMITS' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'LIMITS' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}
-                                >
-                                    2. Access Limits
+                                <button onClick={() => setUploadSubTab('LIMITS')} style={{ flex: 1, padding: '10px', background: uploadSubTab === 'LIMITS' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'LIMITS' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '12px' }}>
+                                    2. Limits
+                                </button>
+                                <button onClick={() => setUploadSubTab('CHARGES')} style={{ flex: 1, padding: '10px', background: uploadSubTab === 'CHARGES' ? '#0f3460' : '#f0f2f5', color: uploadSubTab === 'CHARGES' ? 'white' : '#333', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '12px' }}>
+                                    3. Charges 💰
                                 </button>
                             </div>
 
                             <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
-                                {/* 🟢 SUB-TAB 1: BASIC INFORMATION */}
+                                {/* 🟢 STEP 1: BASIC INFORMATION */}
                                 {uploadSubTab === 'BASIC' && (
                                     <>
                                         <div style={{ position: 'relative' }}>
@@ -639,21 +639,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" />
                                         </div>
 
-                                        {/* ✅ NEW: AUTO-FILL EMAIL INPUT */}
                                         <div>
                                             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>
                                                 Client Email Address 
                                                 {isEmailLocked && <span style={{color: '#2ecc71', fontSize: '11px'}}> (Locked)</span>}
                                             </label>
-                                            <input 
-                                                type="email" 
-                                                placeholder="example@mail.com (Optional for notification)" 
-                                                value={formData.email} 
-                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
-                                                className="custom-admin-input" 
-                                                disabled={isEmailLocked} // Locked if pre-exists
-                                                style={{ background: isEmailLocked ? '#f5f5f5' : '#fff', cursor: isEmailLocked ? 'not-allowed' : 'text' }}
-                                            />
+                                            <input type="email" placeholder="example@mail.com (Optional for notification)" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="custom-admin-input" disabled={isEmailLocked} style={{ background: isEmailLocked ? '#f5f5f5' : '#fff', cursor: isEmailLocked ? 'not-allowed' : 'text' }} />
                                             <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>Client will receive an email notification when data is uploaded.</p>
                                         </div>
                                         
@@ -695,31 +686,56 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </>
                                 )}
 
-                                {/* 🟢 SUB-TAB 2: ACCESS & EXPIRY LIMITS */}
+                                {/* 🟢 STEP 2: ACCESS & EXPIRY LIMITS */}
                                 {uploadSubTab === 'LIMITS' && (
-                                    <div style={{ background: '#fcf3cf', padding: '20px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
-                                        <h3 style={{ marginTop: 0, color: '#d4ac0d' }}>⏳ Set Expiry & Access</h3>
-                                        <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Auto-delete data after selected time to save server storage. You can also restrict how many times the user can download.</p>
-                                        
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Time Duration (Auto Delete)</label>
-                                            <select value={formData.expiryDays} onChange={(e) => setFormData({ ...formData, expiryDays: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
-                                                <option value="7">7 Days</option>
-                                                <option value="15">15 Days</option>
-                                                <option value="30">1 Month (30 Days)</option>
-                                                <option value="90">3 Months (90 Days)</option>
-                                                <option value="0">Never Expire (Permanent)</option>
-                                            </select>
+                                    <>
+                                        <div style={{ background: '#fcf3cf', padding: '20px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
+                                            <h3 style={{ marginTop: 0, color: '#d4ac0d' }}>⏳ Set Expiry & Access</h3>
+                                            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Auto-delete data after selected time to save server storage. You can also restrict how many times the user can download.</p>
+                                            
+                                            <div style={{ marginBottom: '15px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Time Duration (Auto Delete)</label>
+                                                <select value={formData.expiryDays} onChange={(e) => setFormData({ ...formData, expiryDays: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                                    <option value="7">7 Days</option>
+                                                    <option value="15">15 Days</option>
+                                                    <option value="30">1 Month (30 Days)</option>
+                                                    <option value="90">3 Months (90 Days)</option>
+                                                    <option value="0">Never Expire (Permanent)</option>
+                                                </select>
+                                            </div>
+
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Download Limit per user</label>
+                                                <select value={formData.downloadLimit} onChange={(e) => setFormData({ ...formData, downloadLimit: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                                    <option value="0">Unlimited Downloads</option>
+                                                    <option value="1">Only 1 Time</option>
+                                                    <option value="3">Max 3 Times</option>
+                                                    <option value="5">Max 5 Times</option>
+                                                </select>
+                                            </div>
                                         </div>
 
-                                        <div style={{ marginBottom: '20px' }}>
-                                            <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Download Limit per user</label>
-                                            <select value={formData.downloadLimit} onChange={(e) => setFormData({ ...formData, downloadLimit: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
-                                                <option value="0">Unlimited Downloads</option>
-                                                <option value="1">Only 1 Time</option>
-                                                <option value="3">Max 3 Times</option>
-                                                <option value="5">Max 5 Times</option>
-                                            </select>
+                                        <button type="button" onClick={() => setUploadSubTab('CHARGES')} className="global-update-btn" style={{ padding: '15px', background: '#3498db' }}>Next: Set Charges 💰 ➡️</button>
+                                        <button type="button" onClick={() => setUploadSubTab('BASIC')} style={{ width: '100%', padding: '10px', marginTop: '5px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>⬅️ Back to Basic Info</button>
+                                    </>
+                                )}
+
+                                {/* 🟢 STEP 3: SET CHARGES (MONETIZATION) */}
+                                {uploadSubTab === 'CHARGES' && (
+                                    <>
+                                        <div style={{ background: '#e8f8f5', padding: '20px', borderRadius: '8px', border: '1px solid #2ecc71' }}>
+                                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>💰 Set Premium Charges (Coins)</h3>
+                                            <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Define how many coins a user must spend to unlock and download files in this folder.</p>
+
+                                            <div style={{ marginBottom: '15px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Cost per Photo (Coins)</label>
+                                                <input type="number" min="0" placeholder="e.g. 5" value={formData.imageCost} onChange={(e) => setFormData({ ...formData, imageCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                            </div>
+
+                                            <div style={{ marginBottom: '20px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Cost per Video (Coins)</label>
+                                                <input type="number" min="0" placeholder="e.g. 10" value={formData.videoCost} onChange={(e) => setFormData({ ...formData, videoCost: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                            </div>
                                         </div>
 
                                         {/* ✅ LIVE UPLOAD PROGRESS BAR UI FOR ADMIN */}
@@ -740,11 +756,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             {loading ? 'Uploading & Setting Rules...' : '🚀 Final Upload Data'}
                                         </button>
                                         
-                                        <button type="button" onClick={() => setUploadSubTab('BASIC')} style={{ width: '100%', padding: '10px', marginTop: '10px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
-                                            ⬅️ Back to Basic Info
+                                        <button type="button" onClick={() => setUploadSubTab('LIMITS')} style={{ width: '100%', padding: '10px', marginTop: '5px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
+                                            ⬅️ Back to Limits
                                         </button>
-                                    </div>
+                                    </>
                                 )}
+
                             </form>
                         </div>
                     </div>
