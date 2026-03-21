@@ -412,7 +412,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                             <div style={{display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center'}}>
                                 <div className="menu-left-group">
                                     <span className="menu-icon">👤</span>
-                                    <span className="menu-label">Accounts (Login/Signup)</span>
+                                    <span className="menu-label">Accounts</span>
                                 </div>
                                 <span className="menu-arrow" style={{ transform: isAccountsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: '0.3s' }}>›</span>
                             </div>

@@ -52,9 +52,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setLoading(true);
             try {
+                // ✅ BUG FIX 1: Removed Strict 'roleFilter' so it finds the data no matter how Admin created it
                 const res = await axios.post(`${API_BASE}/search-account`, { 
-                    mobile: user.mobile,
-                    roleFilter: 'USER' 
+                    mobile: user.mobile
                 });
                 
                 if (res.data.success) {
@@ -64,10 +64,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     setProfileData({ email: dbData.email || '', location: dbData.location || '' });
                     if(dbData.wallet) setWallet(dbData.wallet);
                     
-                    // ✅ FIXED LOGIC: Bulletproof Data Parser for Object vs Array
+                    // ✅ BUG FIX 2: Deep Parser for Mongoose Mixed Array
                     let fetchedFolders = dbData.uploadedData || [];
                     
-                    // Force Mongoose Object to Array if it got messed up
                     if (!Array.isArray(fetchedFolders)) {
                         if (typeof fetchedFolders === 'object' && fetchedFolders !== null) {
                             fetchedFolders = Object.values(fetchedFolders);
@@ -76,11 +75,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         }
                     }
 
-                    // Handle legacy string arrays safely
-                    if (fetchedFolders.length > 0 && typeof fetchedFolders[0] === 'string') {
-                        fetchedFolders = [{ folderName: 'Stranger Photography', files: fetchedFolders, isDefault: true }];
-                    }
-                    
+                    // Deep format array items
+                    fetchedFolders = fetchedFolders.map(folder => {
+                        if (typeof folder === 'string') return null; 
+                        return {
+                            ...folder,
+                            files: Array.isArray(folder.files) ? folder.files : (typeof folder.files === 'string' ? [folder.files] : [])
+                        };
+                    }).filter(Boolean);
+
                     // Clean up and filter
                     const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'stranger photography');
                     const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'stranger photography');
@@ -121,8 +124,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     }, [user?.mobile]); 
 
     // --- HELPERS ---
+    // ✅ BUG FIX 3: Cloudinary Video Detection Fix
     const isVideo = (filePath) => {
         if (!filePath || typeof filePath !== 'string') return false;
+        // Identifies Cloudinary videos even if extension is missing
+        if (filePath.includes('/video/upload/')) return true; 
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
 
