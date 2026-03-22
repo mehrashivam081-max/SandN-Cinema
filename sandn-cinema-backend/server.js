@@ -1241,6 +1241,60 @@ app.post('/api/auth/claim-event', async (req, res) => {
 });
 
 
+// ==========================================
+// 🗑️ ADVANCED DELETE LOGIC (Folder, Sub-Folder, or Specific File)
+// ==========================================
+app.post('/api/auth/delete-specific-data', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { folderName, subFolderName, fileUrl } = req.body;
+
+    try {
+        const account = await findAccount(mobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        let currentData = [];
+        if (account.data.uploadedData) {
+            currentData = Array.isArray(account.data.uploadedData) ? account.data.uploadedData : Object.values(account.data.uploadedData);
+        }
+
+        let folderIndex = currentData.findIndex(f => f.folderName === folderName);
+        
+        if (folderIndex > -1) {
+            if (fileUrl) {
+                // ✅ 1. DELETE SPECIFIC FILE ONLY
+                if (subFolderName) {
+                    let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
+                    if (subIndex > -1) {
+                        currentData[folderIndex].subFolders[subIndex].files = currentData[folderIndex].subFolders[subIndex].files.filter(url => url !== fileUrl);
+                    }
+                } else {
+                    currentData[folderIndex].files = currentData[folderIndex].files.filter(url => url !== fileUrl);
+                }
+            } else if (subFolderName) {
+                // ✅ 2. DELETE ENTIRE SUB-FOLDER (Dates)
+                if (currentData[folderIndex].subFolders) {
+                    currentData[folderIndex].subFolders = currentData[folderIndex].subFolders.filter(sf => sf.name !== subFolderName);
+                }
+            } else {
+                // ✅ 3. DELETE ENTIRE MAIN FOLDER
+                currentData = currentData.filter(f => f.folderName !== folderName);
+            }
+        }
+
+        // Save back to DB safely
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
+        }
+
+        res.json({ success: true, message: "Data deleted successfully!", updatedData: currentData });
+    } catch (e) {
+        console.error("Delete Data Error:", e);
+        res.status(500).json({ success: false, message: "Server Error deleting data." });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
