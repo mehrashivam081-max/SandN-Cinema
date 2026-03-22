@@ -29,7 +29,7 @@ const upload = multer({ storage: storage });
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
-const WEBSITE_URL = "https://mehrashivam081-max.github.io"; // ✅ Global URL for Emails
+const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema"; // ✅ Global URL for Emails
 
 app.use(cors({
     origin: [
