@@ -20,13 +20,14 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
     const [isDesktop, setIsDesktop] = useState(window.innerWidth > 768);
     
     // Search/Auth States
-    const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, PASSWORD, SETUP, NOT_REG
+    // ✅ NEW: Splitted SETUP into SETUP_EMAIL and SETUP_PASSWORD
+    const [searchStage, setSearchStage] = useState('INPUT'); // INPUT, OTP, PASSWORD, SETUP_EMAIL, SETUP_PASSWORD, NOT_REG
     const [mobile, setMobile] = useState('');
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // ✅ NEW: NORMAL LOGIN STATE (For Existing Users)
+    // ✅ NORMAL LOGIN STATE (For Existing Users)
     const [loginPassword, setLoginPassword] = useState('');
 
     // SETUP ACCOUNT STATES (For New Users on Main Page)
@@ -89,7 +90,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
         } finally { setLoading(false); }
     };
 
-    // ✅ FIXED: Verify OTP first, then route to 'SETUP' or 'PASSWORD'
+    // ✅ FIXED: Verify OTP first, then route to 'SETUP_EMAIL' or 'PASSWORD'
     const handleVerify = async () => {
         setLoading(true); setError('');
         try {
@@ -97,8 +98,8 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
             
             if (res.data.success) {
                 if (res.data.isNewUser) {
-                    // 🚀 User is new (temp123 password), show Setup Screen
-                    setSearchStage('SETUP');
+                    // 🚀 User is new (temp123 password), show Step 1 Setup Screen
+                    setSearchStage('SETUP_EMAIL');
                 } else {
                     // 🟢 User is old (Has real password), show Password Screen
                     setSearchStage('PASSWORD');
@@ -109,14 +110,14 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
         } catch (e) {
              console.error("Verify Error:", e);
              if(otp === '123456') {
-                 setSearchStage('SETUP'); // Simulation fallback
+                 setSearchStage('SETUP_EMAIL'); // Simulation fallback
              } else {
                  setError("Verification Failed");
              }
         } finally { setLoading(false); }
     };
 
-    // ✅ NEW: PASSWORD LOGIN LOGIC (For Existing Users)
+    // ✅ PASSWORD LOGIN LOGIC (For Existing Users)
     const handlePasswordLogin = async () => {
         if (!loginPassword) return setError("Please enter password");
         setLoading(true); setError('');
@@ -130,9 +131,18 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
         } catch (e) { setError("Login Failed"); } finally { setLoading(false); }
     };
 
-    // ✅ SETUP NEW ACCOUNT LOGIC (For Admin Added Users)
+    // ✅ NEXT BUTTON LOGIC (Email -> Password Stage)
+    const handleEmailNext = () => {
+        if (!newEmail || !newEmail.includes('@')) {
+            return setError("Please enter a valid email address!");
+        }
+        setError('');
+        setSearchStage('SETUP_PASSWORD');
+    };
+
+    // ✅ SETUP NEW ACCOUNT LOGIC (For Admin Added Users) - Final Step
     const handleSetupAccount = async () => {
-        if (!password || !newEmail || !confirmPassword) return setError("Please fill all fields!");
+        if (!password || !confirmPassword) return setError("Please fill all fields!");
         if (password !== confirmPassword) return setError("Passwords do not match!");
         
         setLoading(true); setError('');
@@ -157,9 +167,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
 
     const renderSearchFlow = () => (
         <div className="search-flow-container">
-            {/* ✅ FIX: Added dynamic height so it expands when 3 inputs come */}
-            <div className="search-card-glass" style={{ height: searchStage === 'SETUP' ? 'auto' : '', minHeight: searchStage === 'SETUP' ? '420px' : '', paddingBottom: searchStage === 'SETUP' ? '30px' : '' }}>
-                
+            <div className="search-card-glass">
                 {searchStage === 'INPUT' && (
                     <>
                         <h3>Search Your Data</h3>
@@ -168,6 +176,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         <button className="action-btn" onClick={handleSearch} disabled={loading}>{loading?'Searching...':'GET OTP'}</button>
                     </>
                 )}
+                
                 {searchStage === 'OTP' && (
                     <>
                         <h3>Enter OTP</h3>
@@ -180,36 +189,52 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
 
                 {/* ✅ ENTER PASSWORD STAGE (For Existing Users) */}
                 {searchStage === 'PASSWORD' && (
-                    <div style={{ textAlign: 'left' }}>
-                        <h3 style={{ color: '#3498db', textAlign: 'center', marginBottom: '5px' }}>Enter Password</h3>
-                        <p style={{ fontSize: '12px', color: '#ccc', textAlign: 'center', marginBottom: '15px' }}>Securely login to view your data.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', textAlign: 'left' }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <h3 style={{ color: '#3498db', margin: '0 0 5px 0' }}>Enter Password</h3>
+                            <p style={{ fontSize: '12px', color: '#ccc', margin: 0 }}>Securely login to view your data.</p>
+                        </div>
                         
-                        <div style={{ position: 'relative', width: '100%', marginBottom: '20px' }}>
-                            <input type={showPass ? "text" : "password"} placeholder="Your Password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} style={{width: '100%'}} />
+                        <div style={{ position: 'relative', width: '100%' }}>
+                            <input type={showPass ? "text" : "password"} placeholder="Your Password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} style={{width: '100%', padding: '12px', boxSizing: 'border-box', margin: 0}} />
                             <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
                         </div>
 
-                        <button className="action-btn" onClick={handlePasswordLogin} disabled={loading} style={{ background: '#3498db' }}>
+                        <button className="action-btn" onClick={handlePasswordLogin} disabled={loading} style={{ background: '#3498db', width: '100%', margin: '5px 0 0 0', position: 'relative', zIndex: 10 }}>
                             {loading ? 'Logging in...' : 'LOGIN TO DASHBOARD'}
                         </button>
                     </div>
                 )}
 
-                {/* ✅ SETUP PASSWORD STAGE (FIXED LAYOUT - 100% NO OVERLAP) */}
-                {searchStage === 'SETUP' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', textAlign: 'left' }}>
+                {/* ✅ SETUP STEP 1: EMAIL */}
+                {searchStage === 'SETUP_EMAIL' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', textAlign: 'left' }}>
                         <div style={{ textAlign: 'center', marginBottom: '5px' }}>
-                            <h3 style={{ color: '#2ecc71', margin: '0 0 5px 0' }}>Setup Account</h3>
-                            <p style={{ fontSize: '12px', color: '#ccc', margin: 0 }}>Number verified! Complete your profile to login.</p>
+                            <h3 style={{ color: '#2ecc71', margin: '0 0 5px 0' }}>Step 1: Setup Email</h3>
+                            <p style={{ fontSize: '12px', color: '#ccc', margin: 0 }}>Enter your email address for notifications.</p>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Email Address</label>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Email Address</label>
                             <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
                         </div>
+
+                        <button className="action-btn" onClick={handleEmailNext} style={{ background: '#3498db', width: '100%', margin: '15px 0 0 0' }}>
+                            Next ➡️
+                        </button>
+                    </div>
+                )}
+
+                {/* ✅ SETUP STEP 2: PASSWORD */}
+                {searchStage === 'SETUP_PASSWORD' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', textAlign: 'left' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '5px' }}>
+                            <h3 style={{ color: '#2ecc71', margin: '0 0 5px 0' }}>Step 2: Security</h3>
+                            <p style={{ fontSize: '12px', color: '#ccc', margin: 0 }}>Create a strong password for your account.</p>
+                        </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Create Password</label>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Create Password</label>
                             <div style={{ position: 'relative', width: '100%' }}>
                                 <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
                                 <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
@@ -219,7 +244,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Confirm Password</label>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Confirm Password</label>
                             <div style={{ position: 'relative', width: '100%' }}>
                                 <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
                                 <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
@@ -228,23 +253,14 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                             </div>
                         </div>
 
-                        {/* ✅ OVERRIDING ABSOLUTE POSITION TO PREVENT OVERLAP */}
-                        <button 
-                            className="action-btn" 
-                            onClick={handleSetupAccount} 
-                            disabled={loading} 
-                            style={{ 
-                                background: '#2ecc71', 
-                                width: '100%', 
-                                position: 'relative', 
-                                bottom: 'auto', 
-                                transform: 'none', 
-                                left: 'auto',
-                                marginTop: '15px' 
-                            }}
-                        >
-                            {loading ? 'Saving...' : 'COMPLETE SETUP'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                            <button className="action-btn" onClick={() => setSearchStage('SETUP_EMAIL')} style={{ background: '#7f8c8d', width: '40%', margin: 0 }}>
+                                ⬅️ Back
+                            </button>
+                            <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71', width: '60%', margin: 0 }}>
+                                {loading ? 'Saving...' : 'FINISH 🚀'}
+                            </button>
+                        </div>
                     </div>
                 )}
 
