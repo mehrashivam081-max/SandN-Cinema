@@ -29,6 +29,7 @@ const upload = multer({ storage: storage });
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
+const WEBSITE_URL = "https://mehrashivam081-max.github.io"; // ✅ Global URL for Emails
 
 app.use(cors({
     origin: [
@@ -109,17 +110,21 @@ const sendWhatsAppMsg = async (mobile, otp) => {
 const sendUploadNotification = async (mobile, email, name) => {
     const customMessage = "999999"; 
     
-    // 📩 TRY EMAIL FIRST (Crash Proof)
+    // 📩 TRY EMAIL FIRST (Crash Proof & With Professional Button)
     if (email && !email.includes('dummy_')) {
         try {
             await sendBrevoEmail(
                 email, 
                 "Data Uploaded - SandN Cinema", 
-                `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                `<div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; border-radius: 10px;">
                     <h2 style="color: #2b5876;">Hello ${name},</h2>
-                    <p>Your event data has been successfully uploaded to your account.</p>
-                    <p>You can login using your mobile number or email to view and download your media.</p>
-                    <p>Thanks,<br/>Team SandN Cinema</p>
+                    <p style="color: #444; font-size: 15px;">Your event data has been successfully uploaded to your account.</p>
+                    <p style="color: #444; font-size: 15px;">You can login using your mobile number or email to view and download your media.</p>
+                    <br/>
+                    <div style="text-align: center; margin-top: 15px; margin-bottom: 25px;">
+                        <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Visit SandN Cinema</a>
+                    </div>
+                    <p style="color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px;">Thanks,<br/>Team SandN Cinema</p>
                 </div>`
             );
             console.log(`✅ Email Notification Sent to ${email}`);
@@ -259,7 +264,15 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 await sendBrevoEmail(
                     targetEmail,
                     "Login Verification - SandN Cinema",
-                    `<h2>Your Security OTP is: ${randomOTP}</h2><p>Do not share this with anyone.</p>`
+                    `<div style="font-family: Arial, sans-serif; padding: 20px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
+                        <h2 style="color: #2b5876;">Login Verification</h2>
+                        <p style="color: #555;">Your Security OTP is:</p>
+                        <h1 style="color: #e74c3c; font-size: 36px; letter-spacing: 4px; margin: 10px 0;">${randomOTP}</h1>
+                        <p style="color: #777; font-size: 12px;">Do not share this with anyone.</p>
+                        <div style="margin-top: 25px;">
+                            <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Return to Platform</a>
+                        </div>
+                    </div>`
                 );
                 return res.json({ success: true, message: "OTP Sent successfully via Email!" });
             } catch (emailErr) { 
@@ -312,7 +325,12 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 await sendBrevoEmail(
                     email,
                     "Verify Registration - SandN Cinema",
-                    `<h2>Verification Code: ${randomOTP}</h2><p>Enter this OTP to create your account.</p>`
+                    `<div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
+                        <h2 style="color: #2b5876;">Welcome to SandN Cinema!</h2>
+                        <p style="color: #555;">Use the Verification Code below to create your account.</p>
+                        <h1 style="color: #3498db; letter-spacing: 5px; margin: 20px 0;">${randomOTP}</h1>
+                        <a href="${WEBSITE_URL}" style="background-color: #34495e; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 15px;">Go to Website</a>
+                    </div>`
                 );
                 return res.json({ success: true, message: "OTP Sent to your Email." });
             } catch (emailErr) { 
@@ -491,7 +509,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 
     const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
     
-    // ✅ Extract Monetization Rates (Defaults: 5 for Image, 10 for Video)
     const iCost = (imageCost && parseInt(imageCost) >= 0) ? parseInt(imageCost) : 5;
     const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
 
@@ -530,7 +547,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
                 currentData[folderIndex].downloadCount = 0; 
-                // ✅ Update rates
                 currentData[folderIndex].imageCost = iCost;
                 currentData[folderIndex].videoCost = vCost;
             } else {
@@ -1004,7 +1020,18 @@ app.post('/api/auth/update-collab-status', async (req, res) => {
             const subject = status === 'Accepted' ? "Collab Request Approved!" : "Collab Request Update";
             const msg = status === 'Accepted' ? "We are excited to work with you." : "Sorry, we can't proceed right now.";
             try {
-                await sendBrevoEmail(collab.email, subject, `<p>Hi ${collab.name},</p><p>${msg}</p>`);
+                // ✅ With Premium Website Button 
+                await sendBrevoEmail(
+                    collab.email, 
+                    subject, 
+                    `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                        <h2 style="color: #2b5876;">Hi ${collab.name},</h2>
+                        <p style="color: #444; font-size: 15px;">${msg}</p>
+                        <div style="margin-top: 20px;">
+                            <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Visit Platform</a>
+                        </div>
+                    </div>`
+                );
             } catch(err) { console.log("Email failed for collab, but DB updated."); }
         }
 
@@ -1063,10 +1090,10 @@ app.post('/api/auth/update-download-count', async (req, res) => {
 
 
 // ==========================================
-// 💰 NEW: MONETIZATION LOGIC (COINS & ADS)
+// 💰 MONETIZATION LOGIC (COINS, ADS & BATCH)
 // ==========================================
 
-// Deduct Coins when user unlocks an image/video
+// SINGLE File Deduct Route
 app.post('/api/auth/deduct-coins', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { amount, reason } = req.body;
@@ -1084,9 +1111,30 @@ app.post('/api/auth/deduct-coins', async (req, res) => {
         // Deduct Coins
         wallet.coins -= parseInt(amount);
 
-        // ==========================================
-// 💰 BATCH MONETIZATION (MULTIPLE UNLOCK & VALIDITY)
-// ==========================================
+        // Add to history
+        const historyEntry = {
+            action: reason || "Unlocked Premium Media",
+            amount: `-${amount} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "debit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        res.json({ success: true, wallet });
+    } catch (e) {
+        console.error("Coin Deduction Error:", e);
+        res.status(500).json({ success: false, message: "Server error during purchase" });
+    }
+});
+
+// ✅ BATCH MONETIZATION (MULTIPLE UNLOCK & VALIDITY & EMAIL WITH BUTTON)
 app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { amount, filesToUnlock, expiryDate, reason } = req.body; 
@@ -1124,31 +1172,35 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
         if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
 
-        res.json({ success: true, wallet });
-    } catch (e) {
-        res.status(500).json({ success: false, message: "Server error during purchase" });
-    }
-});
-
-        // Add to history
-        const historyEntry = {
-            action: reason || "Unlocked Premium Media",
-            amount: `-${amount} Coins`,
-            date: new Date().toLocaleDateString(),
-            type: "debit"
-        };
-        wallet.history = [historyEntry, ...(wallet.history || [])];
-
-        // Safe DB Update
-        if (account.type === 'STUDIO') {
-            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
-        } else {
-            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        // ✅ EMAIL NOTIFICATION LOGIC (With Styled Button)
+        const targetEmail = account.data.email;
+        if (targetEmail && !targetEmail.includes('dummy_')) {
+            const subject = "Media Unlocked Successfully - SandN Cinema";
+            const htmlContent = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 500px; margin: 0 auto; background: #fafafa;">
+                    <h2 style="color: #2ecc71; text-align: center;">Unlock Successful! 🎉</h2>
+                    <p style="color: #444;">Hello <strong>${account.data.name || account.data.studioName || 'User'}</strong>,</p>
+                    <p style="color: #444;">You have successfully unlocked <strong>${filesToUnlock.length}</strong> premium media file(s) on SandN Cinema.</p>
+                    <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 15px 0; border: 1px dashed #ccc;">
+                        <p style="margin: 5px 0;">Total Coins Deducted: <strong style="color: #e74c3c;">${amount}</strong></p>
+                        <p style="margin: 5px 0;">Remaining Coin Balance: <strong style="color: #f39c12;">${wallet.coins}</strong></p>
+                        <p style="margin: 5px 0;">Access Validity: <strong style="color: #3498db;">${expiryDate === 'Permanent' ? 'Permanent' : 'Limited Time'}</strong></p>
+                    </div>
+                    <p style="color: #444; text-align: center;">You can now view, download, and share your media.</p>
+                    
+                    <div style="text-align: center; margin-top: 25px;">
+                        <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">View Unlocked Media</a>
+                    </div>
+                    
+                    <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
+                    <p style="font-size: 11px; color: #999; text-align: center;">Thank you for choosing SandN Cinema.</p>
+                </div>
+            `;
+            sendBrevoEmail(targetEmail, subject, htmlContent).catch(e => console.log("Email failed, but unlock success"));
         }
 
         res.json({ success: true, wallet });
     } catch (e) {
-        console.error("Coin Deduction Error:", e);
         res.status(500).json({ success: false, message: "Server error during purchase" });
     }
 });
