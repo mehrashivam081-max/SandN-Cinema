@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './StudioDashboard.css'; 
 
@@ -61,6 +61,27 @@ const StudioDashboard = ({ user, onLogout }) => {
             fetchClients();
         }
     }, [user]);
+
+    // ✅ SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
+    useEffect(() => {
+        window.history.pushState(null, null, window.location.href);
+        const handlePopState = () => {
+            window.history.pushState(null, null, window.location.href); // Prevent default back
+            if (activeTab !== 'DASHBOARD') {
+                setActiveTab('DASHBOARD'); // Return to main tab instead of logging out
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [activeTab]);
+
+    // ✅ ENTER KEY SUPPORT HELPER
+    const handleKeyDown = (e, action) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            action(e);
+        }
+    };
 
     const fetchMyProfile = async () => {
         try {
@@ -240,6 +261,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                 setUploadETA('Complete!');
                 setTimeout(() => {
                     alert(`✅ Success: ${backendRes.data.message}\n📩 Notification sent!`);
+                    
+                    // ✅ COMPLETE UI RESET LOGIC AFTER UPLOAD
+                    setUploadProgress(0);
+                    setUploadSpeed('');
+                    setUploadETA('');
+
                     if (isFeed) {
                         setFeedFiles([]);
                         document.getElementById('feed-input-field').value = '';
@@ -268,7 +295,7 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     // --- 4. PROFILE UPDATE LOGIC ---
     const handleProfileUpdate = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault();
         try {
             const res = await axios.post(`${API_BASE}/update-studio-profile`, { mobile: user.mobile, ...profileEdit });
             if (res.data.success) {
@@ -524,6 +551,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onFocus={() => setShowMobileSuggestions(true)} 
                                         onBlur={() => setTimeout(() => setShowMobileSuggestions(false), 200)}
                                         className="custom-admin-input" 
+                                        onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))}
                                     />
                                     {showMobileSuggestions && clientMobile && filteredMobileSuggestions.length > 0 && (
                                         <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
@@ -543,12 +571,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Name {selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
-                                    <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" />
+                                    <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                 </div>
 
                                 <div>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Email (For Notification) {clientEmail && selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
-                                    <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" />
+                                    <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>We will send a notification to this email once data is uploaded.</p>
                                 </div>
                                 
@@ -563,6 +591,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onFocus={() => setShowFolderSuggestions(true)} 
                                         onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} 
                                         className="custom-admin-input" 
+                                        onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))}
                                     />
                                     {(!folderName || folderName.trim() === '') && (
                                         <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -591,11 +620,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <div style={{ display: 'flex', gap: '15px', background: '#fffdf5', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>⏳ Expiry (Days)</label>
-                                        <input type="number" placeholder="e.g. 30 (0 = Never)" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} />
+                                        <input type="number" placeholder="e.g. 30 (0 = Never)" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>📥 Max Downloads</label>
-                                        <input type="number" placeholder="e.g. 3 (0 = Unlimited)" value={downloadLimit} onChange={(e) => setDownloadLimit(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                        <input type="number" placeholder="e.g. 3 (0 = Unlimited)" value={downloadLimit} onChange={(e) => setDownloadLimit(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     </div>
                                 </div>
 
@@ -712,23 +741,23 @@ const StudioDashboard = ({ user, onLogout }) => {
                             <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Studio Name</label>
-                                    <input type="text" value={profileEdit.studioName} onChange={e => setProfileEdit({...profileEdit, studioName: e.target.value})} className="custom-admin-input"/>
+                                    <input type="text" value={profileEdit.studioName} onChange={e => setProfileEdit({...profileEdit, studioName: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Owner Name</label>
-                                    <input type="text" value={profileEdit.ownerName} onChange={e => setProfileEdit({...profileEdit, ownerName: e.target.value})} className="custom-admin-input"/>
+                                    <input type="text" value={profileEdit.ownerName} onChange={e => setProfileEdit({...profileEdit, ownerName: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Email Address</label>
-                                    <input type="email" value={profileEdit.email} onChange={e => setProfileEdit({...profileEdit, email: e.target.value})} className="custom-admin-input"/>
+                                    <input type="email" value={profileEdit.email} onChange={e => setProfileEdit({...profileEdit, email: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Location</label>
-                                    <input type="text" value={profileEdit.location} onChange={e => setProfileEdit({...profileEdit, location: e.target.value})} className="custom-admin-input"/>
+                                    <input type="text" value={profileEdit.location} onChange={e => setProfileEdit({...profileEdit, location: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>New Password</label>
-                                    <input type="password" placeholder="Leave blank to keep current password" value={profileEdit.password} onChange={e => setProfileEdit({...profileEdit, password: e.target.value})} className="custom-admin-input"/>
+                                    <input type="password" placeholder="Leave blank to keep current password" value={profileEdit.password} onChange={e => setProfileEdit({...profileEdit, password: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 
                                 <button type="submit" className="global-update-btn" style={{ width: '100%', padding: '15px', background: '#2ecc71', fontSize: '16px', marginTop: '10px' }}>

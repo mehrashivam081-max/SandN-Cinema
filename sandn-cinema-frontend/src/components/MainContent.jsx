@@ -46,6 +46,27 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // ✅ SMART BROWSER BACK BUTTON LOGIC (Prevent Direct Logout)
+    useEffect(() => {
+        window.history.pushState(null, null, window.location.href);
+        const handlePopState = () => {
+            window.history.pushState(null, null, window.location.href); // Prevent default back
+            if (user) {
+                // Do nothing if user is logged in, stay on dashboard
+            } else if (searchStage === 'OTP' || searchStage === 'PASSWORD' || searchStage === 'SETUP_EMAIL' || searchStage === 'NOT_REG') {
+                setSearchStage('INPUT'); // Go back to Mobile Input
+            } else if (searchStage === 'SETUP_PASSWORD') {
+                setSearchStage('SETUP_EMAIL'); // Go back to Email Setup
+            } else if (activeTab === 'viral') {
+                setActiveTab('trending');
+            } else if (activeTab === 'trending') {
+                setActiveTab('home');
+            }
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [searchStage, activeTab, user]);
+
     // Swipe Handling (For Mobile only)
     const touchStartX = useRef(0);
     const touchEndX = useRef(0);
@@ -62,6 +83,14 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
         } else if (swipeDistance < -threshold) {
             if (activeTab === 'viral') setActiveTab('home');
             else if (activeTab === 'home') setActiveTab('trending');
+        }
+    };
+
+    // ✅ ENTER KEY SUPPORT HELPER
+    const handleKeyDown = (e, action) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            action();
         }
     };
 
@@ -167,12 +196,14 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
 
     const renderSearchFlow = () => (
         <div className="search-flow-container">
-            <div className="search-card-glass">
+            {/* ✅ FIXED HEIGHT AND PADDING ISSUES HERE */}
+            <div className="search-card-glass" style={{ height: (searchStage === 'SETUP_EMAIL' || searchStage === 'SETUP_PASSWORD') ? 'auto' : '', minHeight: (searchStage === 'SETUP_EMAIL' || searchStage === 'SETUP_PASSWORD') ? '420px' : '', paddingBottom: (searchStage === 'SETUP_EMAIL' || searchStage === 'SETUP_PASSWORD') ? '30px' : '' }}>
+                
                 {searchStage === 'INPUT' && (
                     <>
                         <h3>Search Your Data</h3>
                         <p>Enter your registered mobile number to verify.</p>
-                        <input type="number" placeholder="Mobile Number" value={mobile} onChange={e=>setMobile(e.target.value)} />
+                        <input type="number" placeholder="Mobile Number" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearch)} autoFocus />
                         <button className="action-btn" onClick={handleSearch} disabled={loading}>{loading?'Searching...':'GET OTP'}</button>
                     </>
                 )}
@@ -181,7 +212,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                     <>
                         <h3>Enter OTP</h3>
                         <p>Sent to {mobile}</p>
-                        <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={e=>setOtp(e.target.value)} />
+                        <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerify)} autoFocus />
                         <button className="action-btn" onClick={handleVerify} disabled={loading}>{loading?'Verifying...':'VERIFY'}</button>
                         <button className="link-btn" onClick={()=>setSearchStage('INPUT')}>Change Number</button>
                     </>
@@ -196,7 +227,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         </div>
                         
                         <div style={{ position: 'relative', width: '100%' }}>
-                            <input type={showPass ? "text" : "password"} placeholder="Your Password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} style={{width: '100%', padding: '12px', boxSizing: 'border-box', margin: 0}} />
+                            <input type={showPass ? "text" : "password"} placeholder="Your Password" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handlePasswordLogin)} style={{width: '100%', padding: '12px', boxSizing: 'border-box', margin: 0}} autoFocus />
                             <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
                         </div>
 
@@ -216,10 +247,11 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                             <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Email Address</label>
-                            <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                            <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleEmailNext)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} autoFocus />
                         </div>
 
-                        <button className="action-btn" onClick={handleEmailNext} style={{ background: '#3498db', width: '100%', margin: '15px 0 0 0' }}>
+                        {/* Relative position to fix overlap */}
+                        <button className="action-btn" onClick={handleEmailNext} style={{ background: '#3498db', width: '100%', margin: '15px 0 0 0', position: 'relative', bottom: 'auto', transform: 'none', left: 'auto' }}>
                             Next ➡️
                         </button>
                     </div>
@@ -236,7 +268,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                             <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Create Password</label>
                             <div style={{ position: 'relative', width: '100%' }}>
-                                <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                                <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} autoFocus />
                                 <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
                                     {showPass ? '🙈' : '👁️'}
                                 </span>
@@ -246,7 +278,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                             <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Confirm Password</label>
                             <div style={{ position: 'relative', width: '100%' }}>
-                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSetupAccount)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
                                 <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
                                     {showConfirmPass ? '🙈' : '👁️'}
                                 </span>
@@ -254,10 +286,10 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         </div>
 
                         <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                            <button className="action-btn" onClick={() => setSearchStage('SETUP_EMAIL')} style={{ background: '#7f8c8d', width: '40%', margin: 0 }}>
+                            <button className="action-btn" onClick={() => setSearchStage('SETUP_EMAIL')} style={{ background: '#7f8c8d', width: '40%', margin: 0, position: 'relative', bottom: 'auto', transform: 'none', left: 'auto' }}>
                                 ⬅️ Back
                             </button>
-                            <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71', width: '60%', margin: 0 }}>
+                            <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71', width: '60%', margin: 0, position: 'relative', bottom: 'auto', transform: 'none', left: 'auto' }}>
                                 {loading ? 'Saving...' : 'FINISH 🚀'}
                             </button>
                         </div>

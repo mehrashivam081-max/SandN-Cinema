@@ -31,7 +31,7 @@ const LaptopView = ({
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); 
   const [newEmail, setNewEmail] = useState(''); 
   
-  // ✅ NEW: Confirm Password & Eye Icon States
+  // Confirm Password & Eye Icon States
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
@@ -49,6 +49,14 @@ const LaptopView = ({
       setConfirmPassword('');
       setShowPass(false);
       setShowConfirmPass(false);
+  };
+
+  // ✅ ENTER KEY SUPPORT HELPER
+  const handleKeyDown = (e, action) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          action();
+      }
   };
 
   // 1. Handle Search Click (Open Popup)
@@ -121,6 +129,7 @@ const LaptopView = ({
               if (res.data.success) { 
                   alert("Account Setup Successful! Logging in...");
                   setUserData(res.data.user); 
+                  sessionStorage.setItem('user', JSON.stringify(res.data.user)); // ✅ SECURE SESSION LOGIC
                   setSearchStep(3); 
               } else {
                   alert(res.data.message || "Setup Failed");
@@ -130,6 +139,7 @@ const LaptopView = ({
               const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
               if (res.data.success) { 
                   setUserData(res.data.user); 
+                  sessionStorage.setItem('user', JSON.stringify(res.data.user)); // ✅ SECURE SESSION LOGIC
                   setSearchStep(3); 
               } else {
                   alert(res.data.message || "Wrong Password");
@@ -154,8 +164,8 @@ const LaptopView = ({
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
 
   if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
-  if (viewState === 'AUTH') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} /></div>;
-  if (viewState === 'SIGNUP') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} /></div>;
+  if (viewState === 'AUTH') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
+  if (viewState === 'SIGNUP') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
   if (viewState === 'RECOVERY') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><ForgotPassword onLoginClick={() => setViewState('AUTH')} /></div>;
 
   return (
@@ -205,24 +215,25 @@ const LaptopView = ({
                  {searchStep === 0 && (
                     <>
                         <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                            <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} />
+                            {/* ✅ ADDED ENTER KEY SUPPORT */}
+                            <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} autoFocus />
                             <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'...':'Search'}</button>
                         </div>
                     </>
                  )}
                  {searchStep === 1 && (
                     <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} style={{flex:1}} />
+                        {/* ✅ ADDED ENTER KEY SUPPORT */}
+                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{flex:1}} autoFocus />
                         <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'...':'Verify'}</button>
                     </div>
                  )}
                  
-                 {/* ✅ FIXED: Dynamic Step 2 handles Password AND Setup elegantly */}
                  {searchStep === 2 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                         {isFirstTimeUser ? (
                             <>
-                                <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} />
+                                <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} autoFocus />
                                 
                                 <div style={{ position: 'relative', width: '100%' }}>
                                     <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
@@ -230,7 +241,8 @@ const LaptopView = ({
                                 </div>
 
                                 <div style={{ position: 'relative', width: '100%' }}>
-                                    <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="search-input" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
+                                    {/* ✅ ADDED ENTER KEY SUPPORT */}
+                                    <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="search-input" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', paddingRight: '40px'}} />
                                     <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
                                 </div>
                                 
@@ -241,7 +253,8 @@ const LaptopView = ({
                         ) : (
                             <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                                 <div style={{ position: 'relative', flex: 1 }}>
-                                    <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
+                                    {/* ✅ ADDED ENTER KEY SUPPORT */}
+                                    <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', paddingRight: '40px'}} autoFocus />
                                     <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showPass ? '🙈' : '👁️'}</span>
                                 </div>
                                 <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading}>
