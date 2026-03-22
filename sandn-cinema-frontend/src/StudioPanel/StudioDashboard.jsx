@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './StudioDashboard.css'; 
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
 const StudioDashboard = ({ user, onLogout }) => {
     // --- UI TABS STATES ---
@@ -19,10 +20,14 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
 
+    // ✅ NEW: SEARCH CLIENT STATE
+    const [clientSearchQuery, setClientSearchQuery] = useState('');
+
     // --- FOLDER & FILE COUNTER STATES ---
     const [folderName, setFolderName] = useState('');
+    const [useDateFolder, setUseDateFolder] = useState(false); // ✅ Added Date Append Logic
     
-    // ✅ NEW: LIMIT & EXPIRY STATES
+    // --- LIMIT & EXPIRY STATES ---
     const [expiryDays, setExpiryDays] = useState('');
     const [downloadLimit, setDownloadLimit] = useState('');
 
@@ -30,10 +35,15 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
     const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
 
-    // --- UPLOAD PROGRESS TRACKER STATES
+    // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadSpeed, setUploadSpeed] = useState('');
     const [uploadETA, setUploadETA] = useState('');
+
+    // ✅ NEW: STUDIO REMOVE TAB STATES
+    const [studioRemoveMobile, setStudioRemoveMobile] = useState('');
+    const [studioRemoveSearchSuggestions, setStudioRemoveSearchSuggestions] = useState(false);
+    const [studioRemoveUserObj, setStudioRemoveUserObj] = useState(null);
 
     // --- PROFILE EDIT STATES ---
     const [profileEdit, setProfileEdit] = useState({
@@ -85,7 +95,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // --- 2. DELETE CLIENT LOGIC ---
+    // --- 2. DELETE CLIENT LOGIC (Entire Account) ---
     const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
@@ -98,6 +108,7 @@ const StudioDashboard = ({ user, onLogout }) => {
             if (res.data.success) {
                 alert("✅ Client deleted successfully.");
                 fetchClients(); 
+                if (studioRemoveUserObj && studioRemoveUserObj.mobile === targetMobile) setStudioRemoveUserObj(null);
             } else {
                 alert("❌ Failed to delete: " + res.data.message);
             }
@@ -135,11 +146,19 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // 🚀 100% UPGRADED: DIRECT CLOUDINARY UPLOAD FUNCTION
+    // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
         if (currentFiles.length === 0) return alert("Please select files to upload.");
+
+        // ✅ Date Append Logic (Subfolder)
+        let baseFolder = folderName.trim() || 'Stranger Photography';
+        let targetSubFolder = '';
+        if (useDateFolder && !isFeed) {
+            targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
+        }
+        const displayFolder = targetSubFolder ? `${baseFolder} ➔ ${targetSubFolder}` : (isFeed ? 'Public Feed' : baseFolder);
 
         setLoading(true);
         setUploadProgress(0);
@@ -155,14 +174,12 @@ const StudioDashboard = ({ user, onLogout }) => {
         let lastTotalLoaded = 0;
 
         try {
-            // ✅ STEP 1: UPLOAD TO CLOUDINARY DIRECTLY
             for (let i = 0; i < currentFiles.length; i++) {
                 const file = currentFiles[i];
                 const fd = new FormData();
                 fd.append('file', file);
-                fd.append('upload_preset', 'xgujeuol'); // ☁️ Your Preset
+                fd.append('upload_preset', 'xgujeuol'); 
 
-                // ☁️ Your Cloud Name URL
                 const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                     onUploadProgress: (progressEvent) => {
                         const { loaded } = progressEvent;
@@ -170,7 +187,7 @@ const StudioDashboard = ({ user, onLogout }) => {
 
                         const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
                         const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
-                        setUploadProgress(Math.min(percentCompleted, 99)); // Cap at 99% until saving to DB
+                        setUploadProgress(Math.min(percentCompleted, 99)); 
 
                         const currentTime = Date.now();
                         const timeElapsedLimit = (currentTime - lastTime) / 1000; 
@@ -197,11 +214,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                     }
                 });
                 
-                // Store Secure Cloud URL
                 uploadedUrls.push(res.data.secure_url);
             }
 
-            // ✅ STEP 2: SEND FAST URLs TO YOUR BACKEND
             setUploadProgress(100);
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
@@ -210,15 +225,15 @@ const StudioDashboard = ({ user, onLogout }) => {
                 mobile: isFeed ? studioProfile.mobile : clientMobile,
                 name: isFeed ? studioProfile.studioName : (clientName || 'Client'),
                 type: isFeed ? 'STUDIO' : 'USER',
-                folderName: isFeed ? 'Public Feed Content' : folderName,
+                folderName: isFeed ? 'Public Feed Content' : baseFolder,
+                subFolderName: targetSubFolder, 
                 email: isFeed ? '' : clientEmail,
                 expiryDays: isFeed ? '' : expiryDays,
                 downloadLimit: isFeed ? '' : downloadLimit,
                 addedBy: user.mobile,
-                fileUrls: uploadedUrls // 🚀 Send Array of Cloudinary Links
+                fileUrls: uploadedUrls 
             };
 
-            // Calling the correct backend route
             const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
 
             if (backendRes.data.success) {
@@ -231,12 +246,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                         setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                     } else {
                         setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
-                        setExpiryDays(''); setDownloadLimit('');
+                        setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
                         setFiles([]);
                         document.getElementById('file-input-field').value = '';
                         setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
                     }
                     fetchClients();
+                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
                     setLoading(false);
                 }, 500);
             } else { 
@@ -262,8 +278,58 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
+    // ✅ NEW: STUDIO REMOVE SPECIFIC DATA LOGIC
+    const searchUserForRemoval = (mobile) => {
+        if(mobile.length !== 10) return alert("Please enter valid 10-digit mobile number.");
+        const foundUser = clients.find(a => a.mobile === mobile);
+        if (foundUser) {
+            setStudioRemoveUserObj(foundUser);
+            setStudioRemoveSearchSuggestions(false);
+        } else {
+            alert("No client found in your list with this mobile number.");
+            setStudioRemoveUserObj(null);
+        }
+    };
+
+    const handleAdvancedDelete = async (mobile, folderName, subFolderName = null, fileUrl = null) => {
+        let msg = "Are you sure you want to delete this ";
+        if (fileUrl) msg += "Specific File?";
+        else if (subFolderName) msg += `Sub-Folder "${subFolderName}" and ALL its files?`;
+        else msg += `Entire Main Folder "${folderName}" and ALL its contents?`;
+        
+        if (!window.confirm(`⚠️ WARNING: ${msg}\nThis action cannot be undone!`)) return;
+
+        try {
+            const res = await axios.post(`${API_BASE}/delete-specific-data`, { mobile, folderName, subFolderName, fileUrl });
+            if (res.data.success) {
+                alert("🗑️ Deleted successfully!");
+                setStudioRemoveUserObj(prev => ({ ...prev, uploadedData: res.data.updatedData }));
+                fetchClients(); 
+            } else {
+                alert(res.data.message || "Failed to delete.");
+            }
+        } catch (e) { alert("Error connecting to server."); }
+    };
+
+    const isVideo = (filePath) => {
+        if (!filePath || typeof filePath !== 'string') return false;
+        if (filePath.includes('/video/upload/')) return true; 
+        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
+    };
+
+    const getCleanUrl = (filePath) => {
+        if (!filePath) return '';
+        if (filePath.startsWith('http')) return filePath; 
+        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
+    };
+
     const filteredMobileSuggestions = clients.filter(c => c.mobile && c.mobile.includes(clientMobile));
+    const filteredRemoveSuggestions = clients.filter(c => c.mobile && c.mobile.includes(studioRemoveMobile));
     const selectedClient = clients.find(c => c.mobile === clientMobile);
+    
+    // ✅ Apply Search Filter on Clients List
+    const filteredClientsList = clients.filter(c => c.mobile && c.mobile.includes(clientSearchQuery));
+
     let existingFolders = [];
     if (selectedClient && selectedClient.uploadedData) {
         if(Array.isArray(selectedClient.uploadedData)){
@@ -308,12 +374,23 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 1: CLIENTS DASHBOARD */}
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
-                        <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                            <h2>👥 My Recent Clients</h2>
-                            <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer'}} onClick={fetchClients} disabled={fetching}>
-                                {fetching ? '...' : '🔄 Refresh List'}
-                            </button>
+                        {/* ✅ SEARCH BAR IN HEADER */}
+                        <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'}}>
+                            <h2 style={{margin: 0}}>👥 My Recent Clients</h2>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <input 
+                                    type="number" 
+                                    placeholder="🔍 Search Mobile No..." 
+                                    value={clientSearchQuery}
+                                    onChange={(e) => setClientSearchQuery(e.target.value)}
+                                    style={{ padding: '8px 15px', borderRadius: '5px', border: '1px solid #ccc', outline: 'none', width: '180px' }}
+                                />
+                                <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap'}} onClick={fetchClients} disabled={fetching}>
+                                    {fetching ? '...' : '🔄 Refresh List'}
+                                </button>
+                            </div>
                         </div>
+                        
                         <div className="data-table-container" style={{ marginTop: '20px' }}>
                             <table className="admin-table">
                                 <thead>
@@ -326,8 +403,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {clients.length > 0 ? (
-                                        clients.map((client, idx) => {
+                                    {filteredClientsList.length > 0 ? (
+                                        filteredClientsList.map((client, idx) => {
                                             let fileCount = 0;
                                             if(Array.isArray(client.uploadedData)) fileCount = client.uploadedData.length;
                                             return (
@@ -337,8 +414,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     <td><span className="status-badge normal">{fileCount} Folders</span></td>
                                                     <td>{new Date(client.joinedDate).toLocaleDateString()}</td>
                                                     <td>
-                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleDeleteClient(client.mobile)}>
-                                                            🗑️ Delete
+                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', marginRight: '5px', background: '#34495e' }} onClick={() => { setStudioRemoveMobile(client.mobile); searchUserForRemoval(client.mobile); }}>
+                                                            📂 Manage Data
+                                                        </button>
+                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }} onClick={() => handleDeleteClient(client.mobile)}>
+                                                            🗑️ Delete Client
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -346,12 +426,84 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#888' }}>No clients added yet. Start by uploading data.</td>
+                                            <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#888' }}>
+                                                {clientSearchQuery ? 'No clients found with this mobile number.' : 'No clients added yet. Start by uploading data.'}
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* DATA MANAGER SECTION (Visible when "Manage Data" clicked) */}
+                        {studioRemoveUserObj && (
+                            <div className="update-creation-container" style={{ maxWidth: '900px', margin: '30px auto', background: '#f8f9fa', border: '1px solid #ddd' }}>
+                                <h3 style={{ borderBottom: '2px solid #bdc3c7', paddingBottom: '10px', color: '#2c3e50', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>👤 Data for: {studioRemoveUserObj.name || studioRemoveUserObj.studioName} ({studioRemoveUserObj.mobile})</span>
+                                    <button onClick={() => setStudioRemoveUserObj(null)} style={{background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer'}}>✖</button>
+                                </h3>
+
+                                {studioRemoveUserObj.uploadedData && studioRemoveUserObj.uploadedData.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
+                                        {studioRemoveUserObj.uploadedData.map((folder, fIdx) => (
+                                            <div key={fIdx} style={{ background: '#fff', border: '1px solid #bdc3c7', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+                                                
+                                                {/* MAIN FOLDER HEADER */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecf0f1', padding: '10px', borderRadius: '5px' }}>
+                                                    <h4 style={{ margin: 0, color: '#2980b9' }}>📁 {folder.folderName}</h4>
+                                                    <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Delete Entire Folder</button>
+                                                </div>
+
+                                                {/* ROOT FILES IN MAIN FOLDER */}
+                                                {folder.files && folder.files.length > 0 && (
+                                                    <div style={{ padding: '10px', borderBottom: folder.subFolders?.length > 0 ? '1px dashed #ccc' : 'none' }}>
+                                                        <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Root Media Files:</p>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+                                                            {folder.files.map((fileUrl, idx) => (
+                                                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fdfefe', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
+                                                                    <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                                                                        {isVideo(fileUrl) ? (<><video src={getCleanUrl(fileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                    </div>
+                                                                    <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, null, fileUrl)} style={{ background: 'transparent', color: '#e74c3c', border: '1px solid #e74c3c', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* SUB-FOLDERS (DATES) */}
+                                                {folder.subFolders && folder.subFolders.length > 0 && (
+                                                    <div style={{ padding: '10px' }}>
+                                                        <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold', color: '#8e44ad' }}>Date Sub-Folders:</p>
+                                                        {folder.subFolders.map((sub, sIdx) => (
+                                                            <div key={sIdx} style={{ marginBottom: '15px', borderLeft: '3px solid #9b59b6', paddingLeft: '10px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5eef8', padding: '8px', borderRadius: '4px', marginBottom: '8px' }}>
+                                                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>🗓️ {sub.name}</span>
+                                                                    <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, sub.name)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>Delete Sub-Folder</button>
+                                                                </div>
+                                                                {sub.files && sub.files.length > 0 ? (
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+                                                                        {sub.files.map((subFileUrl, fidx) => (
+                                                                            <div key={fidx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
+                                                                                <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                                                                                    {isVideo(subFileUrl) ? (<><video src={getCleanUrl(subFileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(subFileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                                </div>
+                                                                                <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, sub.name, subFileUrl)} style={{ background: 'transparent', color: '#c0392b', border: '1px solid #c0392b', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : <p style={{fontSize: '11px', color: '#aaa', margin: 0}}>Empty sub-folder.</p>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>}
+                            </div>
+                        )}
+
                     </div>
                 )}
 
@@ -427,6 +579,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                                             ))}
                                         </ul>
                                     )}
+                                    
+                                    {/* ✅ SMART DATE APPEND CHECKBOX (Subfolder logic) */}
+                                    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input type="checkbox" id="useDateFolder" checked={useDateFolder} onChange={(e) => setUseDateFolder(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                                        <label htmlFor="useDateFolder" style={{ fontSize: '12px', color: '#333', cursor: 'pointer', fontWeight: 'bold' }}>🗓️ Save inside Today's Date Sub-Folder</label>
+                                    </div>
                                 </div>
 
                                 {/* ✅ EXPIRY AND LIMIT CONTROLS */}
