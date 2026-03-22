@@ -157,7 +157,9 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
 
     const renderSearchFlow = () => (
         <div className="search-flow-container">
-            <div className="search-card-glass">
+            {/* ✅ FIX: Added dynamic height so it expands when 3 inputs come */}
+            <div className="search-card-glass" style={{ height: searchStage === 'SETUP' ? 'auto' : '', minHeight: searchStage === 'SETUP' ? '420px' : '', paddingBottom: searchStage === 'SETUP' ? '30px' : '' }}>
+                
                 {searchStage === 'INPUT' && (
                     <>
                         <h3>Search Your Data</h3>
@@ -176,7 +178,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                     </>
                 )}
 
-                {/* ✅ NEW: ENTER PASSWORD STAGE (For Existing Users) */}
+                {/* ✅ ENTER PASSWORD STAGE (For Existing Users) */}
                 {searchStage === 'PASSWORD' && (
                     <div style={{ textAlign: 'left' }}>
                         <h3 style={{ color: '#3498db', textAlign: 'center', marginBottom: '5px' }}>Enter Password</h3>
@@ -193,32 +195,54 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                     </div>
                 )}
 
-                {/* ✅ SETUP PASSWORD STAGE (For Admin Added Users) */}
+                {/* ✅ SETUP PASSWORD STAGE (FIXED LAYOUT - 100% NO OVERLAP) */}
                 {searchStage === 'SETUP' && (
-                    <div style={{ textAlign: 'left' }}>
-                        <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '5px' }}>Setup Account</h3>
-                        <p style={{ fontSize: '12px', color: '#ccc', textAlign: 'center', marginBottom: '15px' }}>Number verified! Complete your profile to login.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%', textAlign: 'left' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '5px' }}>
+                            <h3 style={{ color: '#2ecc71', margin: '0 0 5px 0' }}>Setup Account</h3>
+                            <p style={{ fontSize: '12px', color: '#ccc', margin: 0 }}>Number verified! Complete your profile to login.</p>
+                        </div>
                         
-                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Email Address</label>
-                        <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '15px'}} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Email Address</label>
+                            <input type="email" placeholder="example@mail.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                        </div>
                         
-                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Create Password</label>
-                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
-                            <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%'}} />
-                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
-                                {showPass ? '🙈' : '👁️'}
-                            </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Create Password</label>
+                            <div style={{ position: 'relative', width: '100%' }}>
+                                <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                                <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
+                                    {showPass ? '🙈' : '👁️'}
+                                </span>
+                            </div>
                         </div>
 
-                        <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Confirm Password</label>
-                        <div style={{ position: 'relative', width: '100%', marginBottom: '20px' }}>
-                            <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{width: '100%'}} />
-                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
-                                {showConfirmPass ? '🙈' : '👁️'}
-                            </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            <label style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>Confirm Password</label>
+                            <div style={{ position: 'relative', width: '100%' }}>
+                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{ width: '100%', margin: 0, padding: '12px', boxSizing: 'border-box' }} />
+                                <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>
+                                    {showConfirmPass ? '🙈' : '👁️'}
+                                </span>
+                            </div>
                         </div>
 
-                        <button className="action-btn" onClick={handleSetupAccount} disabled={loading} style={{ background: '#2ecc71' }}>
+                        {/* ✅ OVERRIDING ABSOLUTE POSITION TO PREVENT OVERLAP */}
+                        <button 
+                            className="action-btn" 
+                            onClick={handleSetupAccount} 
+                            disabled={loading} 
+                            style={{ 
+                                background: '#2ecc71', 
+                                width: '100%', 
+                                position: 'relative', 
+                                bottom: 'auto', 
+                                transform: 'none', 
+                                left: 'auto',
+                                marginTop: '15px' 
+                            }}
+                        >
                             {loading ? 'Saving...' : 'COMPLETE SETUP'}
                         </button>
                     </div>
@@ -290,7 +314,7 @@ const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
                         )}
                     </div>
 
-                    {/* ✅ FIX: Hide Bottom Dock if User is Logged In (Kyunki UserDashboard ka apna bottom nav hai) */}
+                    {/* ✅ FIX: Hide Bottom Dock if User is Logged In */}
                     {!isDesktop && !user && (
                         <div className="nav-dock-3d">
                             <button className={`nav-tab ${activeTab==='trending'?'active':''}`} onClick={()=>setActiveTab('trending')}>🔥 Trending</button>

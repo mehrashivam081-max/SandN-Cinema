@@ -12,6 +12,7 @@
     align-items: center;
     min-height: 70vh;
     padding: 20px;
+    width: 100%;
 }
 
 .search-card-glass {
@@ -25,19 +26,28 @@
     width: 100%;
     max-width: 400px;
     animation: fadeInUp 0.5s ease;
+    display: flex; /* ✅ Added to keep inputs stacked */
+    flex-direction: column;
+    justify-content: center;
 }
 
 .search-card-glass h3 { color: var(--text-main); margin-bottom: 15px; }
 .search-card-glass p { color: var(--text-muted); margin-bottom: 25px; }
-.search-card-glass input { margin-bottom: 20px; text-align: center; font-size: 1.2rem; letter-spacing: 2px; }
+.search-card-glass input { margin-bottom: 20px; text-align: center; font-size: 1.2rem; letter-spacing: 2px; width: 100%; box-sizing: border-box; }
 
 .action-btn {
     width: 100%; padding: 15px; background: var(--gradient-main); color: white;
     border-radius: var(--radius-sm); font-weight: bold; margin-bottom: 15px;
-    box-shadow: 0 5px 15px var(--glow-color);
+    box-shadow: 0 5px 15px var(--glow-color); border: none; cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.link-btn { background: transparent; color: var(--text-muted); text-decoration: underline; }
-.error-msg { color: #ff4d4d; margin-top: 10px; }
+
+.action-btn:active {
+    transform: scale(0.98);
+}
+
+.link-btn { background: transparent; color: var(--text-muted); text-decoration: underline; border: none; cursor: pointer; margin-top: 10px; }
+.error-msg { color: #ff4d4d; margin-top: 10px; font-weight: bold; }
 
 /* --- 3D Dashboard UI (When Logged In) --- */
 .dashboard-3d {
@@ -66,12 +76,12 @@
 }
 .nav-tab {
     background: transparent; color: var(--text-muted); padding: 10px 20px;
-    font-weight: bold; transition: 0.3s;
+    font-weight: bold; transition: 0.3s; border: none; cursor: pointer;
 }
 .nav-tab.active { color: var(--text-main); text-shadow: 0 0 10px var(--glow-color); }
 .book-btn-wrapper { position: relative; top: -35px; }
 .book-now-3d {
-    width: 90px; height: 90px; border-radius: 50%;
+    width: 90px; height: 90px; border-radius: 50%; border: none; cursor: pointer;
     background: radial-gradient(circle at 30% 30%, #ffffff, #dcdcdc);
     color: var(--primary); font-weight: 900; font-size: 1rem; line-height: 1.2;
     box-shadow: 0 10px 25px var(--glow-color), 0 0 0 4px var(--primary);
