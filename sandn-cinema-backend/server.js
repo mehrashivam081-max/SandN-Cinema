@@ -1084,6 +1084,52 @@ app.post('/api/auth/deduct-coins', async (req, res) => {
         // Deduct Coins
         wallet.coins -= parseInt(amount);
 
+        // ==========================================
+// 💰 BATCH MONETIZATION (MULTIPLE UNLOCK & VALIDITY)
+// ==========================================
+app.post('/api/auth/deduct-coins-batch', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { amount, filesToUnlock, expiryDate, reason } = req.body; 
+
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [], unlockedFiles: [] };
+        
+        if (wallet.coins < parseInt(amount)) {
+            return res.json({ success: false, message: "Not enough coins!" });
+        }
+
+        // Deduct Total Coins
+        wallet.coins -= parseInt(amount);
+
+        // Add all selected files to unlocked array with Expiry Date
+        const newUnlocked = filesToUnlock.map(fileUrl => ({
+            fileUrl,
+            unlockTime: new Date().toISOString(),
+            expiry: expiryDate
+        }));
+
+        wallet.unlockedFiles = [...(wallet.unlockedFiles || []), ...newUnlocked];
+
+        const historyEntry = {
+            action: reason || `Unlocked ${filesToUnlock.length} Media Files`,
+            amount: `-${amount} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "debit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+
+        res.json({ success: true, wallet });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server error during purchase" });
+    }
+});
+
         // Add to history
         const historyEntry = {
             action: reason || "Unlocked Premium Media",
