@@ -495,11 +495,12 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 // ==============================================================
-// ✅ 8. UPLOAD LOGIC (WITH MONETIZATION RATES)
+// ✅ 8. UPLOAD LOGIC (MULTER - LOCAL) WITH SUBFOLDERS
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, imageCost, videoCost } = req.body; 
+    // ✅ Added subFolderName and unlockValidity
+    let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, imageCost, videoCost, unlockValidity } = req.body; 
     const files = req.files; 
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
@@ -543,23 +544,40 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
+                // ✅ Handle Subfolder Logic correctly
+                if (subFolderName) {
+                    if (!currentData[folderIndex].subFolders) currentData[folderIndex].subFolders = [];
+                    let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
+                    if (subIndex > -1) {
+                        currentData[folderIndex].subFolders[subIndex].files = [...(currentData[folderIndex].subFolders[subIndex].files || []), ...filePaths];
+                    } else {
+                        currentData[folderIndex].subFolders.push({ name: subFolderName, files: filePaths });
+                    }
+                } else {
+                    currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
+                }
+
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
-                currentData[folderIndex].downloadCount = 0; 
                 currentData[folderIndex].imageCost = iCost;
                 currentData[folderIndex].videoCost = vCost;
+                if (unlockValidity) currentData[folderIndex].unlockValidity = unlockValidity;
+
             } else {
-                currentData.push({
+                // CREATE NEW FOLDER
+                const newFolder = {
                     folderName: finalFolderName,
-                    files: filePaths,
+                    files: subFolderName ? [] : filePaths,
+                    subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
                     isDefault: finalFolderName === 'Stranger Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
                     downloadCount: 0,
                     imageCost: iCost,
-                    videoCost: vCost
-                });
+                    videoCost: vCost,
+                    unlockValidity: unlockValidity || '24 Hours'
+                };
+                currentData.push(newFolder);
             }
 
             const hasDummyEmail = !existingAccount.data.email || existingAccount.data.email.includes('dummy_');
@@ -584,13 +602,15 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
         
         const folderStructure = [{
             folderName: finalFolderName,
-            files: filePaths,
+            files: subFolderName ? [] : filePaths,
+            subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
             isDefault: finalFolderName === 'Stranger Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
             downloadCount: 0,
             imageCost: iCost,
-            videoCost: vCost
+            videoCost: vCost,
+            unlockValidity: unlockValidity || '24 Hours'
         }];
 
         const newUser = {
@@ -623,7 +643,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    // ✅ NEW: Corrected subFolderName fetching
+    // ✅ Extracting subFolderName and unlockValidity correctly
     let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity } = req.body; 
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
@@ -766,8 +786,9 @@ app.post('/api/auth/list-accounts', async (req, res) => {
 // 10. Delete an Account
 app.post('/api/auth/delete-account', async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
-    const { targetRole } = req.body;
+    const { targetRole } = req.body; // Studio will pass 'USER'
     try {
+        // Simple safe check: If targetRole is USER, we delete from User schema.
         if (targetRole === 'STUDIO') {
             await Studio.findOneAndDelete({ mobile: targetMobile });
         } else if (targetRole === 'ADMIN') {
@@ -1358,7 +1379,6 @@ app.post('/api/auth/claim-event', async (req, res) => {
         res.status(500).json({ success: false, message: "Server error claiming event" });
     }
 });
-
 
 // ==========================================
 // 🗑️ ADVANCED DELETE LOGIC (Folder, Sub-Folder, or Specific File)
