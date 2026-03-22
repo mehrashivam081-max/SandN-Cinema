@@ -223,7 +223,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const fileType = isVideo(filePath) ? 'Video' : 'Photo';
         const fileCost = fileType === 'Video' ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
         
-        setSelectedMedia({ url: filePath, type: fileType, cost: fileCost, isUnlocked: isFileUnlocked(filePath) });
+        setSelectedMedia({
+            url: filePath,
+            type: fileType,
+            cost: fileCost,
+            isUnlocked: isFileUnlocked(filePath)
+        });
     };
 
     const getCostLabel = (filePath) => {
@@ -434,7 +439,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 const newCount = (activeFolder.downloadCount || 0) + 1;
                 setActiveFolder({ ...activeFolder, downloadCount: newCount });
                 setFolders(folders.map(f => f.folderName === activeFolder.folderName ? { ...f, downloadCount: newCount } : f));
-                axios.post(`${API_BASE}/update-download-count`, { mobile: user.mobile, folderName: activeFolder.folderName }).catch(err => console.log("Failed to sync count"));
+                axios.post(`${API_BASE}/update-download-count`, { mobile: user.mobile, folderName: activeFolder.folderName }).catch(err => console.log("Failed to sync count", err));
             }
 
         } catch (error) {
@@ -589,7 +594,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => {
                             const isUnlocked = isFileUnlocked(filePath);
                             const isSelected = selectedMediaFiles.includes(filePath);
-
+                            
                             return (
                                 <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #3498db' : (isUnlocked ? '1px solid #2ecc71' : '1px solid #333') }}>
                                     
@@ -835,9 +840,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ PURCHASE CONFIRMATION MODAL (Handles Single & Batch) */}
+            {/* ✅ DETAILED PURCHASE CONFIRMATION MODAL (Z-INDEX FIXED: 9999999) */}
             {purchaseModal.show && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
                     <div style={{ background: '#fff', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', animation: 'popIn 0.3s ease' }}>
                         
                         <div style={{fontSize: '50px', marginBottom: '15px'}}>🔒</div>
@@ -921,7 +926,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             <button 
                                 onClick={() => {
                                     if (selectedMedia.isUnlocked) handleDownload(selectedMedia.url);
-                                    else setPurchaseModal({ show: true, file: selectedMedia.url, files: [selectedMedia.url], cost: selectedMedia.cost, type: selectedMedia.type, isBatch: false });
+                                    else {
+                                        setPurchaseModal({ show: true, file: selectedMedia.url, files: [selectedMedia.url], cost: selectedMedia.cost, type: selectedMedia.type, isBatch: false });
+                                    }
                                 }} 
                                 disabled={loading}
                                 style={{ background: selectedMedia.isUnlocked ? '#2ecc71' : '#3498db', color: '#fff', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
