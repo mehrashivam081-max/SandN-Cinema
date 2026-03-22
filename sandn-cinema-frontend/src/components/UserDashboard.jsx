@@ -840,7 +840,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ DETAILED PURCHASE CONFIRMATION MODAL (Z-INDEX FIXED: 9999999) */}
+            {/* ✅ DETAILED PURCHASE CONFIRMATION MODAL (Z-INDEX FIXED TO 9999999) */}
             {purchaseModal.show && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
                     <div style={{ background: '#fff', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', animation: 'popIn 0.3s ease' }}>
