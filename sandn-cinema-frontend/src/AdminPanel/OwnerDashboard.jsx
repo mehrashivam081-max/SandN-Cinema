@@ -3,6 +3,7 @@ import axios from 'axios';
 import './OwnerDashboard.css';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
 const OwnerDashboard = ({ user, onLogout }) => {
     // --- UI STATES ---
@@ -42,6 +43,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
     const [isEmailLocked, setIsEmailLocked] = useState(false); 
+    
+    // ✅ NEW: SMART DATE FOLDER STATE
+    const [useDateFolder, setUseDateFolder] = useState(false);
+
+    // ✅ NEW: GLOBAL REMOVE TAB STATES
+    const [globalRemoveMobile, setGlobalRemoveMobile] = useState('');
+    const [globalRemoveSearchSuggestions, setGlobalRemoveSearchSuggestions] = useState(false);
+    const [globalRemoveUserObj, setGlobalRemoveUserObj] = useState(null);
 
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -120,7 +129,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 if (res.data.data.socialLinks) setSocialLinks(res.data.data.socialLinks);
                 if (res.data.data.policies) setPolicyData(res.data.data.policies);
                 
-                // ✅ Load Advanced Monetization Data
                 if (res.data.data.defaultPricing) {
                     const globalRates = { 
                         imageCost: res.data.data.defaultPricing.imageCost.toString(), 
@@ -151,8 +159,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
 
     // ==========================================
-    // 🚀 ADMIN DP LOGIC
+    // 🚀 HELPERS
     // ==========================================
+    const isVideo = (filePath) => {
+        if (!filePath || typeof filePath !== 'string') return false;
+        if (filePath.includes('/video/upload/')) return true; 
+        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
+    };
+
+    const getCleanUrl = (filePath) => {
+        if (!filePath) return '';
+        if (filePath.startsWith('http')) return filePath; 
+        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
+    };
+
     const handleDpChange = (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -226,14 +246,22 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
-    // 🚀 CLOUDINARY UPLOAD WITH MANUAL PRICING OVERRIDE
+    // 🚀 CLOUDINARY UPLOAD WITH SMART DATE FOLDER LOGIC
     const handleAddManualUser = async (e) => {
         e.preventDefault();
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         if (formData.files.length === 0) return alert("Please select files to upload.");
         
+        let baseFolder = formData.folderName.trim() || 'Stranger Photography';
+        let submitFolderName = baseFolder;
+        if (useDateFolder) {
+            const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
+            submitFolderName = `${baseFolder} ➔ ${dateStr}`;
+        }
+        const displayFolder = submitFolderName;
+
         const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
-        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins`)) return;
+        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nTarget Folder: 📂 ${displayFolder}\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins`)) return;
 
         setLoading(true);
         setUploadProgress(0);
@@ -303,7 +331,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 name: formData.name,
                 mobile: formData.mobile,
                 email: formData.email, 
-                folderName: formData.folderName,
+                folderName: submitFolderName, // ✅ Modified folder name sent to server
                 expiryDays: formData.expiryDays,
                 downloadLimit: formData.downloadLimit,
                 addedBy: 'ADMIN',
@@ -317,10 +345,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
             if (res.data.success) {
                 setUploadETA('Complete!');
                 setTimeout(() => {
-                    alert(`✅ Success: ${res.data.message}\n📩 Notifications triggered!`);
+                    alert(`✅ Success: Data saved in folder "${displayFolder}"\n📩 Notifications triggered!`);
                     setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }); 
                     setPreviews([]); 
                     setIsEmailLocked(false);
+                    setUseDateFolder(false); // Reset checkbox
                     setFileStats({ photos: 0, videos: 0 });
                     document.getElementById('admin-file-input').value = '';
                     setUploadSubTab('BASIC');
@@ -341,13 +370,49 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // ==========================================
     // 🚀 MANAGE ACCOUNTS LOGIC
     // ==========================================
-    const handleDelete = async (mobile, role) => {
+    const handleDeleteAccount = async (mobile, role) => {
         if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete this ${role}?`)) return;
         try {
             const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role });
             if (res.data.success) { alert("🗑️ Account deleted!"); fetchAccounts(); }
         } catch (error) { alert("Error deleting account."); }
     };
+
+    // ==========================================
+    // 🗑️ GLOBAL REMOVE LOGIC WITH THUMBNAILS
+    // ==========================================
+    const searchUserForRemoval = (mobile) => {
+        if(mobile.length !== 10) return alert("Please enter valid 10-digit mobile number.");
+        const user = accounts.find(a => a.mobile === mobile);
+        if (user) {
+            setGlobalRemoveUserObj(user);
+            setGlobalRemoveSearchSuggestions(false);
+        } else {
+            alert("No account found with this mobile number in the database.");
+            setGlobalRemoveUserObj(null);
+        }
+    };
+
+    const handleAdvancedDelete = async (mobile, folderName, subFolderName = null, fileUrl = null) => {
+        let msg = "Are you sure you want to delete this ";
+        if (fileUrl) msg += "Specific File?";
+        else if (subFolderName) msg += `Sub-Folder "${subFolderName}" and ALL its files?`;
+        else msg += `Entire Main Folder "${folderName}" and ALL its contents?`;
+
+        if (!window.confirm(`⚠️ WARNING: ${msg}\nThis action cannot be undone!`)) return;
+
+        try {
+            const res = await axios.post(`${API_BASE}/delete-specific-data`, { mobile, folderName, subFolderName, fileUrl });
+            if (res.data.success) {
+                alert("🗑️ Deleted successfully!");
+                setGlobalRemoveUserObj(prev => ({ ...prev, uploadedData: res.data.updatedData }));
+                fetchAccounts(); 
+            } else {
+                alert(res.data.message || "Failed to delete.");
+            }
+        } catch (e) { alert("Error connecting to server."); }
+    };
+
 
     const toggleStudioApproval = async (mobile, currentStatus) => {
         const actionText = currentStatus ? "REVOKE" : "APPROVE";
@@ -379,7 +444,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error updating profile."); }
     };
 
-    // ✅ SAVE ALL GLOBAL CHARGES (Rates + Packages + Events)
     const handleSaveGlobalCharges = async () => {
         if (!window.confirm("Save all Global Charges, Coin Packages, and Events?")) return;
         try {
@@ -457,20 +521,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
+    const globalRemoveFilteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(globalRemoveMobile));
     const isExistingAccount = accounts.some(acc => acc.mobile === formData.mobile);
 
     const selectedAccount = accounts.find(acc => acc.mobile === formData.mobile);
     let existingFolders = [];
-    if (selectedAccount && selectedAccount.uploadedData) {
-        if (Array.isArray(selectedAccount.uploadedData)) {
-            existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
-        }
-    }
+    if (selectedAccount && Array.isArray(selectedAccount.uploadedData)) existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
     const totalUsers = accounts.filter(a => a.role === 'USER').length;
     const totalStudios = accounts.filter(a => a.role === 'STUDIO').length;
-    const totalAdmins = accounts.filter(a => a.role === 'ADMIN').length;
 
     return (
         <div className="owner-dashboard-container">
@@ -506,8 +566,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 <ul className="sidebar-menu">
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard</li>
                     <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
-                    {/* ✅ NEW TAB: GLOBAL CHARGES */}
                     <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_CHARGES')}>💰 Global Charges</li>
+                    <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_REMOVE')}>🗑️ Global Remove</li>
                     <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
                     <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => setActiveTab('BOOKINGS')}>📅 Direct Bookings</li>
                     <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
@@ -542,6 +602,140 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
+                {/* 🔴 NEW TAB: GLOBAL REMOVE (GRANULAR FILE/FOLDER DELETION) WITH PREVIEWS */}
+                {activeTab === 'GLOBAL_REMOVE' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🗑️ Global Data Remove (Pro)</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Search for any client and selectively delete their Main Folder, Sub-Folder, or Specific Media Files.</p>
+
+                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto 30px' }}>
+                            <div style={{ position: 'relative', display: 'flex', gap: '10px' }}>
+                                <div style={{flex: 1, position: 'relative'}}>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Enter 10-digit mobile number" 
+                                        value={globalRemoveMobile} 
+                                        onChange={(e) => {
+                                            setGlobalRemoveMobile(e.target.value);
+                                            setGlobalRemoveSearchSuggestions(e.target.value.length > 0);
+                                        }}
+                                        onBlur={() => setTimeout(() => setGlobalRemoveSearchSuggestions(false), 200)}
+                                        className="custom-admin-input" 
+                                        style={{margin: 0}}
+                                    />
+                                    {globalRemoveSearchSuggestions && globalRemoveMobile && globalRemoveFilteredSuggestions.length > 0 && (
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                            {globalRemoveFilteredSuggestions.map((acc, idx) => (
+                                                <li key={idx} onMouseDown={() => {
+                                                    setGlobalRemoveMobile(acc.mobile);
+                                                    searchUserForRemoval(acc.mobile);
+                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>
+                                                    {acc.mobile} - {acc.name || acc.studioName}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <button onClick={() => searchUserForRemoval(globalRemoveMobile)} className="global-update-btn" style={{margin: 0, width: 'auto', background: '#34495e'}}>Search Data</button>
+                            </div>
+                        </div>
+
+                        {globalRemoveUserObj && (
+                            <div className="update-creation-container" style={{ maxWidth: '900px', margin: '0 auto', background: '#f8f9fa', border: '1px solid #ddd' }}>
+                                <h3 style={{ borderBottom: '2px solid #bdc3c7', paddingBottom: '10px', color: '#2c3e50' }}>
+                                    👤 Data for: {globalRemoveUserObj.name || globalRemoveUserObj.studioName} ({globalRemoveUserObj.mobile})
+                                </h3>
+
+                                {globalRemoveUserObj.uploadedData && globalRemoveUserObj.uploadedData.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
+                                        {globalRemoveUserObj.uploadedData.map((folder, fIdx) => (
+                                            <div key={fIdx} style={{ background: '#fff', border: '1px solid #bdc3c7', borderRadius: '8px', padding: '15px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+                                                
+                                                {/* MAIN FOLDER HEADER */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ecf0f1', padding: '10px', borderRadius: '5px' }}>
+                                                    <h4 style={{ margin: 0, color: '#2980b9' }}>📁 {folder.folderName}</h4>
+                                                    <button onClick={() => handleAdvancedDelete(globalRemoveUserObj.mobile, folder.folderName)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>Delete Entire Folder</button>
+                                                </div>
+
+                                                {/* ROOT FILES IN MAIN FOLDER (WITH PREVIEWS) */}
+                                                {folder.files && folder.files.length > 0 && (
+                                                    <div style={{ padding: '10px', borderBottom: folder.subFolders?.length > 0 ? '1px dashed #ccc' : 'none' }}>
+                                                        <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Root Media Files:</p>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+                                                            {folder.files.map((fileUrl, idx) => (
+                                                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fdfefe', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
+                                                                    
+                                                                    {/* IMAGE / VIDEO THUMBNAIL */}
+                                                                    <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                                                                        {isVideo(fileUrl) ? (
+                                                                            <>
+                                                                                <video src={getCleanUrl(fileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                                <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                        )}
+                                                                    </div>
+
+                                                                    <button onClick={() => handleAdvancedDelete(globalRemoveUserObj.mobile, folder.folderName, null, fileUrl)} style={{ background: 'transparent', color: '#e74c3c', border: '1px solid #e74c3c', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* SUB-FOLDERS (DATES) WITH PREVIEWS */}
+                                                {folder.subFolders && folder.subFolders.length > 0 && (
+                                                    <div style={{ padding: '10px' }}>
+                                                        <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold', color: '#8e44ad' }}>Date Sub-Folders:</p>
+                                                        {folder.subFolders.map((sub, sIdx) => (
+                                                            <div key={sIdx} style={{ marginBottom: '15px', borderLeft: '3px solid #9b59b6', paddingLeft: '10px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5eef8', padding: '8px', borderRadius: '4px', marginBottom: '8px' }}>
+                                                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>🗓️ {sub.name}</span>
+                                                                    <button onClick={() => handleAdvancedDelete(globalRemoveUserObj.mobile, folder.folderName, sub.name)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>Delete Sub-Folder</button>
+                                                                </div>
+                                                                
+                                                                {/* SUB-FOLDER FILES PREVIEW */}
+                                                                {sub.files && sub.files.length > 0 ? (
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
+                                                                        {sub.files.map((subFileUrl, fidx) => (
+                                                                            <div key={fidx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
+                                                                                
+                                                                                {/* IMAGE / VIDEO THUMBNAIL */}
+                                                                                <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                                                                                    {isVideo(subFileUrl) ? (
+                                                                                        <>
+                                                                                            <video src={getCleanUrl(subFileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                                            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <img src={getCleanUrl(subFileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <button onClick={() => handleAdvancedDelete(globalRemoveUserObj.mobile, folder.folderName, sub.name, subFileUrl)} style={{ background: 'transparent', color: '#c0392b', border: '1px solid #c0392b', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p style={{fontSize: '11px', color: '#aaa', margin: 0}}>Empty sub-folder.</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 🔴 TAB: ACCOUNTS */}
                 {activeTab === 'ACCOUNTS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📋 Manage Users & Studios</h2></div>
@@ -567,7 +761,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                     <button onClick={() => toggleStudioApproval(acc.mobile, acc.isFeedApproved)} style={{ background: acc.isFeedApproved ? '#2ecc71' : '#f1c40f', border: 'none', padding: '5px 10px', borderRadius: '5px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>{acc.isFeedApproved ? '✅ Approved' : '🔒 Pending'}</button>
                                                 ) : <span style={{ color: '#ccc' }}>-</span>}
                                             </td>
-                                            <td><button onClick={() => handleDelete(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px' }}>Delete</button></td>
+                                            <td><button onClick={() => handleDeleteAccount(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }}>Delete Account</button></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -576,39 +770,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {activeTab === 'BOOKINGS' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>📅 Direct Bookings</h2></div>
-                        <div className="data-table-container">
-                            <table className="admin-table">
-                                <thead>
-                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
-                                </thead>
-                                <tbody>
-                                    {bookings.map(b => (
-                                        <tr key={b._id}>
-                                            <td><strong>{b.name}</strong></td>
-                                            <td>{b.mobile || 'N/A'}</td>
-                                            <td>{b.date}</td>
-                                            <td>{b.type}</td>
-                                            <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
-                                            <td>
-                                                {b.status === 'Pending' && (
-                                                    <>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
-                                                    </>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
+                {/* 🔴 TAB: UPLOAD DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
@@ -678,6 +840,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                     ))}
                                                 </ul>
                                             )}
+
+                                            {/* ✅ SMART DATE APPEND CHECKBOX */}
+                                            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input type="checkbox" id="useDateFolder" checked={useDateFolder} onChange={(e) => setUseDateFolder(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                                                <label htmlFor="useDateFolder" style={{ fontSize: '12px', color: '#333', cursor: 'pointer', fontWeight: 'bold' }}>🗓️ Auto-append Today's Date (e.g. {formData.folderName ? `${formData.folderName} - ` : ''}{new Date().toLocaleDateString('en-GB').replace(/\//g, '-')})</label>
+                                            </div>
                                         </div>
                                         
                                         <div style={{ border: '2px dashed #ccc', padding: '20px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
@@ -774,51 +942,36 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 NEW TAB: GLOBAL CHARGES & MONETIZATION */}
+                {/* 🔴 TAB: GLOBAL CHARGES */}
                 {activeTab === 'GLOBAL_CHARGES' && (
                     <div className="view-section">
                         <div className="section-header">
                             <h2>💰 Global Charges & Events Configuration</h2>
                             <button onClick={handleSaveGlobalCharges} className="global-update-btn" style={{ background: '#2ecc71', width: 'auto', padding: '8px 20px' }}>💾 Save Configs</button>
                         </div>
-
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-                            
-                            {/* 1. DEFAULT UPLOAD PRICING */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #3498db' }}>
                                 <h3>📂 1. Default Upload Pricing (Coins)</h3>
-                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Standard coin charge for unlocking newly uploaded media.</p>
-                                <div style={{display: 'flex', gap: '15px'}}>
-                                    <div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div>
-                                    <div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div>
-                                </div>
+                                <div style={{display: 'flex', gap: '15px'}}><div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div><div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div></div>
                             </div>
-
-                            {/* 2. REAL MONEY COIN PACKAGES */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #f1c40f' }}>
                                 <h3>🪙 2. Real Money Coin Packages</h3>
-                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Set offers for users to buy coins with Rupees (₹).</p>
-                                
                                 {coinPackages.map((pkg, i) => (
                                     <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center', background: '#f9f9f9', padding: '10px', borderRadius: '5px' }}>
                                         <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Coins to Give</label><input type="number" value={pkg.coins} onChange={e=>{let arr=[...coinPackages]; arr[i].coins=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Price (₹)</label><input type="number" value={pkg.price} onChange={e=>{let arr=[...coinPackages]; arr[i].price=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
-                                        <div style={{flex: 1.5}}><label style={{fontSize:'11px'}}>Offer Tag (e.g. Best Value!)</label><input type="text" value={pkg.tag} onChange={e=>{let arr=[...coinPackages]; arr[i].tag=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        <div style={{flex: 1.5}}><label style={{fontSize:'11px'}}>Offer Tag</label><input type="text" value={pkg.tag} onChange={e=>{let arr=[...coinPackages]; arr[i].tag=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         <button onClick={()=>{let arr=[...coinPackages]; arr.splice(i,1); setCoinPackages(arr)}} style={{background:'#e74c3c', color:'white', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', marginTop:'15px'}}>X</button>
                                     </div>
                                 ))}
                                 <button onClick={()=>setCoinPackages([...coinPackages, {coins: 100, price: 50, tag: ''}])} className="global-update-btn" style={{background: '#f39c12', padding: '10px', marginTop: '10px'}}>➕ Add New Package</button>
                             </div>
-
-                            {/* 3. MINI EVENTS / FREE COINS */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #9b59b6' }}>
                                 <h3>🎉 3. Mini Events (Earn Free Coins)</h3>
-                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Reward users for organic growth (e.g. Subscribe to YouTube, Follow Instagram).</p>
-
                                 {miniEvents.map((ev, i) => (
                                     <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px', background: '#f5eeef', padding: '15px', borderRadius: '5px' }}>
                                         <div style={{display: 'flex', gap: '10px'}}>
-                                            <div style={{flex: 2}}><label style={{fontSize:'11px'}}>Task Title</label><input type="text" placeholder="e.g. Follow us on Instagram!" value={ev.title} onChange={e=>{let arr=[...miniEvents]; arr[i].title=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                            <div style={{flex: 2}}><label style={{fontSize:'11px'}}>Task Title</label><input type="text" placeholder="Follow us on Instagram!" value={ev.title} onChange={e=>{let arr=[...miniEvents]; arr[i].title=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                             <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Reward Coins</label><input type="number" value={ev.reward} onChange={e=>{let arr=[...miniEvents]; arr[i].reward=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         </div>
                                         <div style={{display: 'flex', gap: '10px', alignItems:'center'}}>
@@ -829,148 +982,31 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 ))}
                                 <button onClick={()=>setMiniEvents([...miniEvents, { id: Date.now().toString(), title: '', reward: 5, link: ''}])} className="global-update-btn" style={{background: '#8e44ad', padding: '10px', marginTop: '10px'}}>➕ Add Mini Event</button>
                             </div>
-
                         </div>
                     </div>
                 )}
 
-                {activeTab === 'CRITERIA' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-                            <div className="setting-card" style={{background: '#f8f9f9'}}>
-                                <h3 style={{color:'#2980b9'}}>📊 Traffic Status</h3>
-                                <p>Real-time analytics of platform visitors.</p>
-                                <div style={{ marginTop: '15px' }}>
-                                    <p><strong>Total Accounts:</strong> {accounts.length}</p>
-                                    <p><strong>Today's Visitors:</strong> 1,240 (Simulated)</p>
-                                </div>
-                            </div>
-                            <div className="setting-card" style={{background: '#fcf3cf'}}>
-                                <h3 style={{color:'#d4ac0d'}}>📢 Business & Ads</h3>
-                                <p>Manage homepage banners and promotions.</p>
-                                <button className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px' }}>Manage Ad Banners</button>
-                            </div>
-                        </div>
-
-                        <div className="data-table-container">
-                            <h3 style={{ padding: '15px' }}>🤝 Collaboration Requests</h3>
-                            <table className="admin-table">
-                                <thead><tr><th>Name</th><th>Brand</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
-                                <tbody>
-                                    {collabRequests.map(req => (
-                                        <tr key={req._id}>
-                                            <td>{req.name}</td><td>{req.brand}</td><td>{req.email}</td>
-                                            <td><span className={`status-badge ${req.status === 'Accepted' ? 'active' : req.status === 'Declined' ? 'inactive' : 'normal'}`}>{req.status}</span></td>
-                                            <td>
-                                                {req.status === 'Pending' && (
-                                                    <>
-                                                        <button onClick={() => handleCollabAction(req._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => handleCollabAction(req._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
-                                                    </>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {collabRequests.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No new collab requests.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'SOCIAL' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
-                                <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Platform</label>
-                                    <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input">
-                                        <option value="Instagram">Instagram</option><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="WhatsApp">WhatsApp</option><option value="Twitter">Twitter</option>
-                                    </select>
-                                </div>
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" /></div>
-                                <button onClick={handleAddLink} className="global-update-btn">➕ Add to List</button>
-                            </div>
-                            
-                            <button onClick={saveLinksToServer} className="global-update-btn" style={{background: '#27ae60', marginBottom: '30px', width: '100%'}}>💾 SAVE ALL TO DATABASE</button>
-
-                            <h4>Current Links Saved</h4>
-                            <ul style={{ listStyle: 'none', padding: 0 }}>
-                                {socialLinks.filter(l => l.url !== '').map((link, i) => (
-                                    <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'5px', display:'flex', justifyContent:'space-between' }}><strong>{link.platform}</strong><a href={link.url} target="_blank" rel="noreferrer">{link.url.substring(0, 20)}...</a></li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'SECURITY' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>🔒 Security & App Policies</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto' }}>
-                            <form onSubmit={handlePolicySave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                <div>
-                                    <label style={{fontWeight:'bold'}}>Terms & Conditions</label>
-                                    <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="4" style={{resize:'vertical'}}></textarea>
-                                </div>
-                                <div>
-                                    <label style={{fontWeight:'bold'}}>Privacy Policy</label>
-                                    <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="4"></textarea>
-                                </div>
-                                <div>
-                                    <label style={{fontWeight:'bold'}}>How do we best for you? (USP Section)</label>
-                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="4"></textarea>
-                                </div>
-                                <button type="submit" className="global-update-btn" style={{background:'#e74c3c'}}>💾 Save Policies to App</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'INCOME' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>💰 Financial Overview</h2></div>
-                        <div className="stat-card green" style={{ padding: '30px', maxWidth: '400px' }}>
-                            <p style={{ color: '#555', fontWeight: 'bold' }}>Real-time Platform Earnings</p>
-                            <h3 style={{ fontSize: '45px', color: '#27ae60' }}>₹ {incomeData.total.toLocaleString()}</h3>
-                            <button className="global-update-btn" style={{ background: '#27ae60', marginTop: '15px' }}>🏦 Withdraw Funds</button>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'SUB_ADMIN' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
-                            <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>Sub-admins have limited access to manage user data.</p>
-                            <form onSubmit={handleCreateSubAdmin} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" /></div>
-                                <button type="submit" className="global-update-btn" style={{ background: '#27ae60', padding: '15px', marginTop:'10px' }}>+ Add Sub-Admin</button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
+                {/* 🔴 OTHER TABS (Accounts, Bookings, etc) */}
+                {activeTab === 'BOOKINGS' && (<div className="view-section"><div className="section-header"><h2>📅 Bookings</h2></div><div className="data-table-container"><table className="admin-table"><thead><tr><th>Name</th><th>Date</th><th>Status</th></tr></thead><tbody>{bookings.map(b=><tr key={b._id}><td>{b.name}</td><td>{b.date}</td><td>{b.status}</td></tr>)}</tbody></table></div></div>)}
+                {activeTab === 'CRITERIA' && (<div className="view-section"><div className="section-header"><h2>📈 Traffic</h2></div><p>Total Accounts: {accounts.length}</p></div>)}
+                {activeTab === 'SOCIAL' && (<div className="view-section"><div className="section-header"><h2>🌐 Manage Social Links</h2></div><button onClick={saveLinksToServer} className="global-update-btn">Save Links</button></div>)}
+                {activeTab === 'SECURITY' && (<div className="view-section"><div className="section-header"><h2>🔒 Security & App Policies</h2></div><button onClick={handlePolicySave} className="global-update-btn">Save Policies</button></div>)}
+                {activeTab === 'INCOME' && (<div className="view-section"><div className="section-header"><h2>💰 Financial Overview</h2></div><h3>₹ {incomeData.total.toLocaleString()}</h3></div>)}
+                {activeTab === 'SUB_ADMIN' && (<div className="view-section"><div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div></div>)}
+                
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
-                                <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
+                                <div><label>Admin Name</label><input type="text" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
+                                <div><label>Email</label><input type="email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label>New Password</label><input type="password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn">💾 Save Profile Details</button>
                             </form>
                         </div>
                     </div>
                 )}
-
             </main>
         </div>
     );

@@ -18,7 +18,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     
     // --- FOLDER & MEDIA STATES ---
     const [folders, setFolders] = useState([]);
-    const [activeFolder, setActiveFolder] = useState(null); 
+    
+    // ✅ Sub-folder Navigation Logic
+    const [activeFolder, setActiveFolder] = useState(null); // Main Folder
+    const [activeSubFolder, setActiveSubFolder] = useState(null); // Date-wise Sub Folder
+
     const [mediaFilter, setMediaFilter] = useState('ALL'); 
 
     // ✅ PREVIEW & UPLOADER PROFILE STATES
@@ -29,7 +33,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, cost: 0, type: '' });
     const [adLoading, setAdLoading] = useState(false);
 
-    // ✅ NEW: WALLET MODAL & GLOBAL CHARGES STATES
+    // ✅ WALLET MODAL & GLOBAL CHARGES STATES
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [walletTab, setWalletTab] = useState('BUY'); // 'BUY' or 'FREE'
     const [coinPackages, setCoinPackages] = useState([]);
@@ -51,11 +55,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
-    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10 };
+    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10 };
 
     // 🟢 FETCH LOGIC 
     useEffect(() => {
-        console.log("🔥 DASHBOARD LOAD HUA. User Data:", user);
         const fetchRealTimeData = async () => {
             if (!user || !user.mobile) {
                 setFolders([DEFAULT_FOLDER]);
@@ -84,7 +87,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         if (typeof folder === 'string') return null; 
                         return {
                             ...folder,
-                            files: Array.isArray(folder.files) ? folder.files : (typeof folder.files === 'string' ? [folder.files] : [])
+                            files: Array.isArray(folder.files) ? folder.files : (typeof folder.files === 'string' ? [folder.files] : []),
+                            // Ensure subFolders array exists
+                            subFolders: Array.isArray(folder.subFolders) ? folder.subFolders : []
                         };
                     }).filter(Boolean);
 
@@ -92,7 +97,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'stranger photography');
                     
                     const finalDefaultFolder = backendDefaultFolder 
-                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder, files: backendDefaultFolder.files || [] } 
+                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder, files: backendDefaultFolder.files || [], subFolders: backendDefaultFolder.subFolders || [] } 
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
@@ -184,8 +189,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ Process Purchase with Coins
     const processCoinPurchase = async () => {
         if (wallet.coins < purchaseModal.cost) {
-            alert("Not enough coins! Buy more or Watch Ads to earn.");
-            setShowWalletModal(true); // Direct user to wallet
+            alert("Not enough coins! Watch Ads to earn or buy more.");
+            setShowWalletModal(true); 
             return;
         }
 
@@ -227,7 +232,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 });
 
                 if (res.data.success) {
-                    setWallet(res.data.wallet);
+                    setWallet(res.data.wallet); 
                     alert("Reward Received! +1 Coin added to your wallet. 🪙");
                 }
             } catch (e) {
@@ -238,12 +243,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }, 5000); 
     };
 
-    // ✅ REAL MONEY PACKAGE PURCHASE (Simulated)
+    // ✅ REAL MONEY PACKAGE PURCHASE
     const handleBuyPackage = async (pkg) => {
         if (!window.confirm(`Proceed to pay ₹${pkg.price} for ${pkg.coins} Coins?`)) return;
         
         setLoading(true);
-        // Simulate Payment Gateway UI delay
         setTimeout(async () => {
             try {
                 const res = await axios.post(`${API_BASE}/purchase-coins`, {
@@ -426,8 +430,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     );
 
     const renderHomeTab = () => {
-        if (activeFolder) {
-            const displayedMedia = (activeFolder.files || []).filter(item => {
+        // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
+        if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
+            
+            let filesToDisplay = [];
+            let currentFolderName = '';
+
+            if (activeSubFolder) {
+                filesToDisplay = activeSubFolder.files || [];
+                currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
+            } else {
+                filesToDisplay = activeFolder.files || [];
+                currentFolderName = activeFolder.folderName;
+            }
+
+            const displayedMedia = filesToDisplay.filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
                 if (mediaFilter === 'VIDEOS') return isVideo(item);
                 return true;
@@ -442,8 +459,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folder-gallery-view">
                     <div className="folder-header-nav">
-                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Folders</button>
-                        <h3>{activeFolder.folderName}</h3>
+                        <button onClick={() => { 
+                            if(activeSubFolder) setActiveSubFolder(null); // Go back to sub-folders list
+                            else { setActiveFolder(null); setMediaFilter('ALL'); } // Go back to main folders
+                        }} className="back-btn">⬅ Back</button>
+                        <h3 style={{fontSize: '16px'}}>{currentFolderName}</h3>
                     </div>
 
                     {(hasExpiry || hasLimit) && (
@@ -520,6 +540,36 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
+        // ✅ SCENARIO 2: Viewing Sub-Folders inside a Main Folder
+        if (activeFolder && activeFolder.subFolders && activeFolder.subFolders.length > 0 && !activeSubFolder) {
+            return (
+                <div className="folders-view">
+                    <div className="folder-header-nav">
+                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button>
+                        <h3>{activeFolder.folderName}</h3>
+                    </div>
+                    
+                    {/* Display Root Files if any exist along with sub-folders */}
+                    {activeFolder.files && activeFolder.files.length > 0 && (
+                        <div className="folder-card" onClick={() => setActiveSubFolder({ name: "Root Media Files", files: activeFolder.files })} style={{ background: '#2c3e50', border: '1px solid #3498db', marginBottom: '20px' }}>
+                            <div className="folder-icon">📁</div><h4>General Uploads</h4><p>{activeFolder.files.length} Items</p>
+                        </div>
+                    )}
+
+                    <div className="folders-grid">
+                        {activeFolder.subFolders.map((sub, index) => (
+                            <div key={index} className="folder-card" onClick={() => setActiveSubFolder(sub)}>
+                                <div className="folder-icon">🗓️</div>
+                                <h4>{sub.name}</h4>
+                                <p>{sub.files?.length || 0} Items</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
         return (
             <div className="folders-view">
                 <div className="welcome-banner">
@@ -534,11 +584,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
                             const isLocked = isExpired || isLimitReached;
 
+                            // Calculate total files (Root files + all Subfolder files)
+                            let totalFiles = folder.files ? folder.files.length : 0;
+                            if (folder.subFolders) {
+                                folder.subFolders.forEach(sf => totalFiles += (sf.files ? sf.files.length : 0));
+                            }
+
                             return (
                                 <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1 }}>
                                     <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
                                     <h4>{folder.folderName}</h4>
-                                    <p>{folder.files?.length || 0} Items</p>
+                                    <p>{totalFiles} Total Items</p>
+                                    {folder.subFolders && folder.subFolders.length > 0 && <p style={{fontSize: '10px', color: '#3498db', marginTop: '2px'}}>🗓️ Contains Date Folders</p>}
                                     {folder.isDefault && <span className="default-badge">Premium</span>}
                                     {isExpired && <span style={{display:'block', fontSize:'11px', color:'#e74c3c', marginTop:'5px'}}>Expired</span>}
                                 </div>
@@ -553,7 +610,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     return (
         <div className="ud-container-vip">
 
-            {/* ✅ NEW: WALLET & COIN TOP-UP MODAL */}
+            {/* ✅ WALLET & COIN TOP-UP MODAL */}
             {showWalletModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }}>
                     <div style={{ background: '#1a1a2e', width: '90%', maxWidth: '400px', borderRadius: '25px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.7)', border: '1px solid #333' }}>
@@ -653,9 +710,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         
                         <div style={{fontSize: '50px', marginBottom: '15px'}}>🔒</div>
                         <h2 style={{ color: '#333', margin: '0 0 10px 0' }}>Unlock {purchaseModal.type}</h2>
-                        <p style={{ color: '#666', fontSize: '14px', marginBottom: '25px' }}>This is a premium file. Access it using your wallet coins.</p>
+                        <p style={{ color: '#666', fontSize: '14px', marginBottom: '25px' }}>This is a premium file. Choose how you want to access it below.</p>
                         
                         <div style={{ background: '#f4f6f9', padding: '15px', borderRadius: '15px', marginBottom: '20px', textAlign: 'left' }}>
+                            <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
+                                <span>Item Type:</span> <strong style={{color: '#333'}}>{purchaseModal.type}</strong>
+                            </p>
                             <p style={{margin: '0 0 8px 0', color: '#555', fontSize: '13px', display: 'flex', justifyContent: 'space-between'}}>
                                 <span>Your Balance:</span> <strong style={{color: wallet.coins >= purchaseModal.cost ? '#2ecc71' : '#e74c3c'}}>🪙 {wallet.coins} Coins</strong>
                             </p>
@@ -665,18 +725,26 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {wallet.coins >= purchaseModal.cost ? (
-                                <button onClick={processCoinPurchase} disabled={loading} style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: '#3498db', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>
-                                    {loading ? 'Processing...' : `Pay ${purchaseModal.cost} Coins to Unlock`}
-                                </button>
-                            ) : (
-                                <button onClick={() => { setPurchaseModal({ show: false, file: null, cost: 0, type: '' }); setShowWalletModal(true); }} style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>
-                                    Not enough coins. Get More!
-                                </button>
-                            )}
+                            <button 
+                                onClick={processCoinPurchase}
+                                disabled={loading || wallet.coins < purchaseModal.cost}
+                                style={{ width: '100%', padding: '15px', fontSize: '15px', borderRadius: '12px', border: 'none', background: wallet.coins >= purchaseModal.cost ? '#3498db' : '#ccc', color: '#fff', cursor: wallet.coins >= purchaseModal.cost ? 'pointer' : 'not-allowed', fontWeight: 'bold', transition: '0.3s' }}
+                            >
+                                {loading ? 'Processing...' : `Pay ${purchaseModal.cost} Coins to Unlock`}
+                            </button>
+
+                            <button 
+                                onClick={() => { setPurchaseModal({ show: false, file: null, cost: 0, type: '' }); setShowWalletModal(true); }}
+                                disabled={adLoading || loading}
+                                style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '12px', border: '2px solid #2ecc71', background: 'transparent', color: '#2ecc71', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            >
+                                🎬 Watch Ad to Earn Coins
+                            </button>
                         </div>
 
-                        <p onClick={() => setPurchaseModal({ show: false, file: null, cost: 0, type: '' })} style={{ marginTop: '25px', color: '#999', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel & Go Back</p>
+                        <p onClick={() => setPurchaseModal({ show: false, file: null, cost: 0, type: '' })} style={{ marginTop: '25px', color: '#999', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}>
+                            Cancel & Go Back
+                        </p>
                     </div>
                 </div>
             )}
@@ -701,7 +769,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 </div>
                             </div>
                         ) : (
-                            <button onClick={() => handleDownload(previewMedia)} style={{ background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}>
+                            <button 
+                                onClick={() => handleDownload(previewMedia)} 
+                                style={{ background: '#2ecc71', color: '#fff', padding: '12px 25px', borderRadius: '30px', fontSize: '15px', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}
+                            >
                                 ⬇️ Download Original Quality
                             </button>
                         )}
@@ -709,37 +780,49 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ UPLOADER (STUDIO/ADMIN) ID POPUP MODAL */}
+            {/* ✅ UPLOADER ID POPUP */}
             {uploaderProfile && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }} onClick={() => setUploaderProfile(null)}>
                     <div style={{ background: 'linear-gradient(145deg, #1a1a2e, #16213e)', padding: '30px', borderRadius: '25px', width: '300px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ width: '85px', height: '85px', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '35px', color: '#000', fontWeight: 'bold', border: '4px solid #1a1a2e', boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)' }}>{uploaderProfile.name.charAt(0).toUpperCase()}</div>
+                        <div style={{ width: '85px', height: '85px', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '35px', color: '#000', fontWeight: 'bold', border: '4px solid #1a1a2e', boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)' }}>
+                            {uploaderProfile.name.charAt(0).toUpperCase()}
+                        </div>
                         <h2 style={{ color: '#fff', margin: '0 0 8px 0', fontSize: '22px' }}>{uploaderProfile.name}</h2>
-                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #3498db' }}>✓ {uploaderProfile.role}</span>
+                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', border: '1px solid #3498db' }}>
+                            ✓ {uploaderProfile.role}
+                        </span>
+
                         <div style={{ marginTop: '25px', textAlign: 'left', background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '15px' }}>
                             <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📧</span> <span style={{color: '#fff'}}>{uploaderProfile.email}</span></p>
                             <p style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>🔒</span> <span style={{color: '#2ecc71'}}>Verified Secure Upload</span></p>
+                            <p style={{ margin: 0, color: '#aaa', fontSize: '13px', display: 'flex', gap: '8px' }}><span>📸</span> <span>Photography & Videography</span></p>
                         </div>
-                        <button onClick={() => setUploaderProfile(null)} style={{ marginTop: '25px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>Close Window</button>
+
+                        <button onClick={() => setUploaderProfile(null)} style={{ marginTop: '25px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '12px', cursor: 'pointer', width: '100%', fontWeight: 'bold', transition: '0.3s' }}>
+                            Close Window
+                        </button>
                     </div>
                 </div>
             )}
 
-            {/* 🎁 PROFESSIONAL COIN ANIMATION POPUP */}
+            {/* 🎁 DAILY REWARD POPUP */}
             {rewardPopup.show && (
                 <div className="reward-popup-overlay">
                     <div className={`reward-popup-box ${rewardPopup.type === 'EARNED' ? 'earned' : 'missed'}`}>
                         <div className="reward-icon">{rewardPopup.type === 'EARNED' ? '🪙' : '💔'}</div>
                         <h2 style={{color:'#fff', margin:'0 0 10px 0'}}>{rewardPopup.type === 'EARNED' ? 'Daily Reward!' : 'Streak Broken!'}</h2>
                         <p style={{color:'#aaa', margin:'0 0 20px 0', fontSize:'14px'}}>{rewardPopup.type === 'EARNED' ? `You earned +${rewardPopup.coins} Coin.` : 'You missed a day. Start again!'}</p>
-                        <div style={{background:'#f1c40f', color:'#000', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', display:'inline-block'}}>🔥 {rewardPopup.streak} Day Streak</div>
+                        <div style={{background:'#f1c40f', color:'#000', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', display:'inline-block'}}>
+                            🔥 {rewardPopup.streak} Day Streak
+                        </div>
                     </div>
                 </div>
             )}
 
             <header className="ud-header-vip">
-                <div className="brand-logo-vip"><h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span></div>
-                {/* ✅ COIN BADGE CLICKABLE FOR WALLET */}
+                <div className="brand-logo-vip">
+                    <h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span>
+                </div>
                 <div className="ud-coin-badge-vip" title="Click to add coins" onClick={() => setShowWalletModal(true)} style={{ cursor: 'pointer' }}>
                     <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS ➕</span>
                 </div>
@@ -750,11 +833,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             </main>
 
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setMediaFilter('ALL'); }}>🏠<span>Home</span></button>
-                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>📸<span>Services</span></button>
-                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>📅<span>Bookings</span></button>
-                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>📜<span>History</span></button>
-                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>👤<span>{(editName || 'User').split(' ')[0]}</span></button>
+                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); }}>
+                    🏠<span>Home</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
+                    📸<span>Services</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
+                    📅<span>Bookings</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>
+                    📜<span>History</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
+                    👤<span>{(editName || 'User').split(' ')[0]}</span>
+                </button>
             </nav>
         </div>
     );
