@@ -66,10 +66,60 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
 
+    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    useEffect(() => {
+        const handleOffline = () => {
+            alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
+            sessionStorage.removeItem('user'); 
+            localStorage.removeItem('user');
+            if (onLogout) onLogout();
+            else window.location.href = "/SandN-Cinema/"; 
+        };
+        window.addEventListener('offline', handleOffline);
+        return () => window.removeEventListener('offline', handleOffline);
+    }, [onLogout]);
+
+    // ✅ SMART BROWSER BACK BUTTON (Native App Experience)
+    useEffect(() => {
+        window.history.pushState(null, null, window.location.href);
+
+        const handlePopState = () => {
+            window.history.pushState(null, null, window.location.href);
+
+            if (selectedMedia) {
+                setSelectedMedia(null);
+            } else if (purchaseModal.show) {
+                setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
+            } else if (showWalletModal) {
+                setShowWalletModal(false);
+            } else if (showCollabModal) {
+                setShowCollabModal(false);
+            } else if (activeSubFolder) {
+                setActiveSubFolder(null);
+                setIsSelectionMode(false);
+                setSelectedMediaFiles([]);
+            } else if (activeFolder) {
+                setActiveFolder(null);
+                setMediaFilter('ALL');
+                setIsSelectionMode(false);
+                setSelectedMediaFiles([]);
+            } else if (currentTab !== 'HOME') {
+                setCurrentTab('HOME');
+            } else {
+                console.log("At root of dashboard. Logout prevented.");
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal]);
+
+
     // 🟢 FETCH LOGIC 
     useEffect(() => {
         const fetchRealTimeData = async () => {
-            if (!user || !user.mobile) {
+            let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
+            if (!activeUser || !activeUser.mobile) {
                 setFolders([DEFAULT_FOLDER]);
                 setLoading(false);
                 return; 
@@ -78,7 +128,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             setLoading(true);
             try {
                 // Fetch user data
-                const res = await axios.post(`${API_BASE}/search-account`, { mobile: user.mobile });
+                const res = await axios.post(`${API_BASE}/search-account`, { mobile: activeUser.mobile });
                 
                 if (res.data.success) {
                     const dbData = res.data.data;
@@ -113,7 +163,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
-                    localStorage.setItem('user', JSON.stringify({ ...user, name: dbData.name }));
+                    sessionStorage.setItem('user', JSON.stringify({ ...activeUser, name: dbData.name })); // Sync session
                 } else {
                     setFolders([DEFAULT_FOLDER]); 
                 }
@@ -135,7 +185,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         fetchRealTimeData();
         
-        const currentUserData = userData || user || {};
+        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
         const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         
         if (rewardResult.rewardAdded) {
@@ -185,7 +235,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setEditProfileMode(false);
         const updatedLocalUser = { ...syncUser, name: editName, email: profileData.email, location: profileData.location };
         setSyncUser(updatedLocalUser);
-        localStorage.setItem('user', JSON.stringify(updatedLocalUser));
+        sessionStorage.setItem('user', JSON.stringify(updatedLocalUser));
     };
 
     // ✅ NEW: BATCH SELECTION HELPERS
@@ -261,7 +311,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             // Use the Batch Deduction API for single and multiple files
             const res = await axios.post(`${API_BASE}/deduct-coins-batch`, {
-                mobile: user.mobile,
+                mobile: syncUser.mobile,
                 amount: targetCost,
                 filesToUnlock: targetFiles,
                 expiryDate: expiryDate,
@@ -321,7 +371,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setTimeout(async () => {
             try {
                 const res = await axios.post(`${API_BASE}/add-coins`, {
-                    mobile: user.mobile,
+                    mobile: syncUser.mobile,
                     amount: 1,
                     reason: "Watched Ad Video"
                 });
@@ -346,7 +396,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setTimeout(async () => {
             try {
                 const res = await axios.post(`${API_BASE}/purchase-coins`, {
-                    mobile: user.mobile, coinsToAdd: pkg.coins, pricePaid: pkg.price
+                    mobile: syncUser.mobile, coinsToAdd: pkg.coins, pricePaid: pkg.price
                 });
                 if (res.data.success) {
                     setWallet(res.data.wallet);
@@ -364,7 +414,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setLoading(true);
         try {
             const res = await axios.post(`${API_BASE}/claim-event`, {
-                mobile: user.mobile, eventId: ev.id || ev.title, rewardCoins: ev.reward, eventTitle: ev.title
+                mobile: syncUser.mobile, eventId: ev.id || ev.title, rewardCoins: ev.reward, eventTitle: ev.title
             });
             if (res.data.success) {
                 setWallet(res.data.wallet);
@@ -439,7 +489,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 const newCount = (activeFolder.downloadCount || 0) + 1;
                 setActiveFolder({ ...activeFolder, downloadCount: newCount });
                 setFolders(folders.map(f => f.folderName === activeFolder.folderName ? { ...f, downloadCount: newCount } : f));
-                axios.post(`${API_BASE}/update-download-count`, { mobile: user.mobile, folderName: activeFolder.folderName }).catch(err => console.log("Failed to sync count", err));
+                axios.post(`${API_BASE}/update-download-count`, { mobile: syncUser.mobile, folderName: activeFolder.folderName }).catch(err => console.log("Failed to sync count", err));
             }
 
         } catch (error) {

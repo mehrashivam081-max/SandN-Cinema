@@ -51,6 +51,33 @@ const LaptopView = ({
       setShowConfirmPass(false);
   };
 
+  // ✅ SMART BROWSER BACK BUTTON LOGIC (No Direct Logout)
+  useEffect(() => {
+      window.history.pushState(null, null, window.location.href);
+
+      const handlePopState = () => {
+          window.history.pushState(null, null, window.location.href); // Prevent default back
+
+          if (userData && searchStep === 3) {
+              // Prevent logout if user is in dashboard
+              console.log("Prevented logout from back button");
+          } else if (feedType) {
+              setFeedType(null); 
+          } else if (menuOpen) {
+              setMenuOpen(false); 
+          } else if (viewState !== 'HOME') {
+              setViewState('HOME'); 
+          } else if (searchStep > 0 && searchStep < 3) {
+              setSearchStep(prev => prev - 1); // Go back one step in login flow
+          } else if (showOtpPopup) {
+              setShowOtpPopup(false); 
+          }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+  }, [userData, searchStep, viewState, feedType, menuOpen, showOtpPopup, setFeedType, setViewState, setSearchStep]);
+
   // ✅ ENTER KEY SUPPORT HELPER
   const handleKeyDown = (e, action) => {
       if (e.key === 'Enter') {
@@ -156,7 +183,7 @@ const LaptopView = ({
   };
 
   const renderDashboard = () => {
-      if (userData.role === 'ADMIN') return <OwnerDashboard />; 
+      if (userData.role === 'ADMIN') return <OwnerDashboard user={userData} onLogout={handleLogout} />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
       return <UserDashboard user={userData} userData={userData} onLogout={handleLogout} />;
   };

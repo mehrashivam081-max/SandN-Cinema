@@ -25,7 +25,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [miniEvents, setMiniEvents] = useState([]);
 
     // --- UPLOAD DATA STATES ---
-    // ✅ ADDED `unlockValidity`
     const [formData, setFormData] = useState({ 
         type: 'USER', 
         name: '', 
@@ -33,11 +32,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
         email: '',          
         folderName: '', 
         files: [],
-        expiryDays: '30',       
+        expiryDays: '30',        
         downloadLimit: '0',
         imageCost: '5',
         videoCost: '10',
-        unlockValidity: '24 Hours' // Default unlock time for users
+        unlockValidity: '24 Hours' 
     });
     
     const [previews, setPreviews] = useState([]);
@@ -46,10 +45,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [uploadSubTab, setUploadSubTab] = useState('BASIC'); 
     const [isEmailLocked, setIsEmailLocked] = useState(false); 
     
-    // ✅ NEW: SMART DATE FOLDER STATE
     const [useDateFolder, setUseDateFolder] = useState(false);
 
-    // ✅ NEW: GLOBAL REMOVE TAB STATES
     const [globalRemoveMobile, setGlobalRemoveMobile] = useState('');
     const [globalRemoveSearchSuggestions, setGlobalRemoveSearchSuggestions] = useState(false);
     const [globalRemoveUserObj, setGlobalRemoveUserObj] = useState(null);
@@ -81,6 +78,49 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const calculatedTotal = accounts.length * 1500; 
     const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
+    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    useEffect(() => {
+        const handleOffline = () => {
+            alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
+            sessionStorage.removeItem('user'); 
+            localStorage.removeItem('user');
+            if (onLogout) onLogout();
+            else window.location.href = "/SandN-Cinema/"; 
+        };
+        window.addEventListener('offline', handleOffline);
+        return () => window.removeEventListener('offline', handleOffline);
+    }, [onLogout]);
+
+    // ✅ SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
+    useEffect(() => {
+        window.history.pushState(null, null, window.location.href);
+
+        const handlePopState = () => {
+            window.history.pushState(null, null, window.location.href); // Prevent default back
+
+            if (showLogoutPopup) {
+                setShowLogoutPopup(false);
+            } else if (globalRemoveUserObj) {
+                setGlobalRemoveUserObj(null); // Step back from client data popup
+            } else if (activeTab !== 'DASHBOARD') {
+                setActiveTab('DASHBOARD'); // Return to main tab
+            } else {
+                console.log("At root of Owner dashboard. Logout prevented.");
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [activeTab, globalRemoveUserObj, showLogoutPopup]);
+
+    // ✅ ENTER KEY SUPPORT HELPER
+    const handleKeyDown = (e, action) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            action(e);
+        }
+    };
+
     // 🟢 INITIAL FETCH & ADMIN SYNC
     useEffect(() => {
         fetchAccounts();
@@ -90,8 +130,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
         const syncAdminData = async () => {
             try {
+                let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
                 const res = await axios.post(`${API_BASE}/search-account`, { 
-                    mobile: user?.mobile || "0000000000CODEIS*@OWNER*",
+                    mobile: activeUser?.mobile || "0000000000CODEIS*@OWNER*",
                     roleFilter: "ADMIN"
                 });
                 if (res.data.success) {
@@ -101,7 +142,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         email: latestData.email || '',
                         password: ''
                     });
-                    const updatedUser = { ...user, name: latestData.name };
+                    const updatedUser = { ...activeUser, name: latestData.name };
+                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); // Sync session
                     localStorage.setItem('user', JSON.stringify(updatedUser));
                 }
             } catch (e) { console.log("Sync failed", e); }
@@ -445,6 +487,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 alert("✅ Admin Profile Updated Successfully!");
                 const updatedUser = { ...user, name: adminProfile.name };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
+                sessionStorage.setItem('user', JSON.stringify(updatedUser));
             }
             else alert("Update failed: " + res.data.message);
         } catch (error) { alert("Server error updating profile."); }
@@ -625,6 +668,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             setGlobalRemoveMobile(e.target.value);
                                             setGlobalRemoveSearchSuggestions(e.target.value.length > 0);
                                         }}
+                                        onKeyDown={(e) => handleKeyDown(e, () => searchUserForRemoval(globalRemoveMobile))}
                                         onBlur={() => setTimeout(() => setGlobalRemoveSearchSuggestions(false), 200)}
                                         className="custom-admin-input" 
                                         style={{margin: 0}}
@@ -648,8 +692,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                         {globalRemoveUserObj && (
                             <div className="update-creation-container" style={{ maxWidth: '900px', margin: '0 auto', background: '#f8f9fa', border: '1px solid #ddd' }}>
-                                <h3 style={{ borderBottom: '2px solid #bdc3c7', paddingBottom: '10px', color: '#2c3e50' }}>
-                                    👤 Data for: {globalRemoveUserObj.name || globalRemoveUserObj.studioName} ({globalRemoveUserObj.mobile})
+                                <h3 style={{ borderBottom: '2px solid #bdc3c7', paddingBottom: '10px', color: '#2c3e50', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>👤 Data for: {globalRemoveUserObj.name || globalRemoveUserObj.studioName} ({globalRemoveUserObj.mobile})</span>
+                                    <button onClick={() => setGlobalRemoveUserObj(null)} style={{background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer'}}>✖</button>
                                 </h3>
 
                                 {globalRemoveUserObj.uploadedData && globalRemoveUserObj.uploadedData.length > 0 ? (
@@ -718,14 +763,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                                                         <img src={getCleanUrl(subFileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                                                     )}
                                                                                 </div>
-
                                                                                 <button onClick={() => handleAdvancedDelete(globalRemoveUserObj.mobile, folder.folderName, sub.name, subFileUrl)} style={{ background: 'transparent', color: '#c0392b', border: '1px solid #c0392b', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
                                                                             </div>
                                                                         ))}
                                                                     </div>
-                                                                ) : (
-                                                                    <p style={{fontSize: '11px', color: '#aaa', margin: 0}}>Empty sub-folder.</p>
-                                                                )}
+                                                                ) : <p style={{fontSize: '11px', color: '#aaa', margin: 0}}>Empty sub-folder.</p>}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -733,9 +775,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>
-                                )}
+                                ) : <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>}
                             </div>
                         )}
                     </div>
@@ -802,6 +842,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to select existing or create new.</p>
                                             <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} onFocus={() => setShowFolderSuggestions(true)} onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} className="custom-admin-input" />
                                             
+                                            {(!formData.folderName || formData.folderName.trim() === '') && (
+                                                <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                    <span>⚠️</span> Default folder "Stranger Photography" will be used.
+                                                </div>
+                                            )}
+
                                             {showFolderSuggestions && existingFolders.length > 0 && (
                                                 <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
                                                     {filteredFolderSuggestions.map((folder, idx) => (
@@ -874,7 +920,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         </div>
 
                                         <button type="button" onClick={() => setUploadSubTab('CHARGES')} className="global-update-btn" style={{ padding: '15px', background: '#3498db' }}>Next: Set Charges 💰 ➡️</button>
-                                        <button type="button" onClick={() => setUploadSubTab('BASIC')} style={{ width: '100%', padding: '10px', marginTop: '5px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>⬅️ Back to Basic Info</button>
+                                        <button type="button" onClick={() => setUploadSubTab('BASIC')} style={{ width: '100%', padding: '10px', marginTop: '5px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
+                                            ⬅️ Back to Basic Info
+                                        </button>
                                     </>
                                 )}
 

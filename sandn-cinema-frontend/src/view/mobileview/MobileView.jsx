@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios'; 
 import './MobileView.css';
 
@@ -34,7 +34,7 @@ const MobileView = ({
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   
-  // ✅ NEW: Confirm Password & Eye Icon States
+  // Confirm Password & Eye Icon States
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
@@ -60,6 +60,36 @@ const MobileView = ({
 
   const magnetRef = useRef(null);
   const [magnetStyle, setMagnetStyle] = useState({ transform: 'translate(0px, 0px)', transition: 'transform 0.3s ease-out' });
+
+  // ✅ SMART BROWSER BACK BUTTON LOGIC (No Direct Logout)
+  useEffect(() => {
+      // Har bar state change hone par dummy state history me daalte hain
+      window.history.pushState(null, null, window.location.href);
+
+      const handlePopState = () => {
+          // Default browser back rokne ke liye
+          window.history.pushState(null, null, window.location.href);
+
+          if (userData && searchStep === 3) {
+              // Agar user Dashboard me hai, to logout NAHI hona chahiye
+              // Aap chahein to yahan ek custom popup dikha sakte hain, abhi silently rok diya hai.
+              console.log("Prevented logout from back button");
+          } else if (feedType) {
+              setFeedType(null); // Feed band karke Home par wapas
+          } else if (menuOpen) {
+              setMenuOpen(false); // Menu close
+          } else if (viewState !== 'HOME') {
+              setViewState('HOME'); // Kisi bhi dusre page se wapas Home pe
+          } else if (searchStep > 0 && searchStep < 3) {
+              setSearchStep(prev => prev - 1); // Search Steps reverse karna (Setup/Login -> OTP -> Input)
+          } else if (showOtpPopup) {
+              setShowOtpPopup(false); // Popup band karna
+          }
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+  }, [userData, searchStep, viewState, feedType, menuOpen, showOtpPopup, setFeedType, setViewState, setSearchStep]);
 
   // --- SWIPE HANDLERS ---
   const handleTouchStart = (e) => { 
@@ -99,6 +129,14 @@ const MobileView = ({
 
   const handleMagnetLeave = () => {
     setMagnetStyle({ transform: 'translate(0px, 0px)', transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)' });
+  };
+
+  // ✅ ENTER KEY SUPPORT HELPER
+  const handleKeyDown = (e, action) => {
+      if (e.key === 'Enter') {
+          e.preventDefault();
+          action();
+      }
   };
 
   // --- API LOGIC ---
@@ -191,7 +229,7 @@ const MobileView = ({
 
   // ✅ Real Dashboard Routing
   const renderDashboard = () => {
-      if (userData.role === 'ADMIN') return <OwnerDashboard />; 
+      if (userData.role === 'ADMIN') return <OwnerDashboard user={userData} onLogout={handleLogout} />; 
       if (userData.role === 'STUDIO') return <StudioDashboard user={userData} onLogout={handleLogout} />;
       return <UserDashboard user={userData} userData={userData} onLogout={handleLogout} />;
   };
@@ -277,24 +315,23 @@ const MobileView = ({
 
                         {searchStep === 0 && (
                             <>
-                                <input type="number" placeholder="Search registered mobile no." className="mobile-input-field" value={mobile} onChange={e=>setMobile(e.target.value)} />
+                                <input type="number" placeholder="Search registered mobile no." className="mobile-input-field" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} autoFocus />
                                 <button className="mobile-blue-btn" onClick={handleSearchClick} disabled={loading}>{loading?'Searching...':'Search'}</button>
                             </>
                         )}
                         {searchStep === 1 && (
                             <>
-                                <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} />
+                                <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} autoFocus />
                                 <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
                             </>
                         )}
 
-                        {/* ✅ FIXED: Step 2 handles Password AND Setup elegantly */}
                         {searchStep === 2 && (
                             <div style={{ textAlign: 'left', width: '100%' }}>
                                 {isFirstTimeUser ? (
                                     <>
                                         <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '15px' }}>Setup Account</h3>
-                                        <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} />
+                                        <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} autoFocus />
                                         
                                         <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
                                             <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} style={{marginBottom: 0}} />
@@ -302,7 +339,7 @@ const MobileView = ({
                                         </div>
 
                                         <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
-                                            <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="mobile-input-field" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{marginBottom: 0}} />
+                                            <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="mobile-input-field" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{marginBottom: 0}} />
                                             <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
                                         </div>
                                     </>
@@ -310,7 +347,7 @@ const MobileView = ({
                                     <>
                                         <h3 style={{ color: '#3498db', textAlign: 'center', marginBottom: '15px' }}>Enter Password</h3>
                                         <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
-                                            <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} style={{marginBottom: 0}} />
+                                            <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{marginBottom: 0}} autoFocus />
                                             <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
                                         </div>
                                     </>

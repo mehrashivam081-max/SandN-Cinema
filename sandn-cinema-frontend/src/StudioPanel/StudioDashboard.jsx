@@ -62,18 +62,36 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     }, [user]);
 
+    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    useEffect(() => {
+        const handleOffline = () => {
+            alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
+            sessionStorage.removeItem('user'); 
+            localStorage.removeItem('user');
+            if (onLogout) onLogout();
+            else window.location.href = "/SandN-Cinema/"; 
+        };
+        window.addEventListener('offline', handleOffline);
+        return () => window.removeEventListener('offline', handleOffline);
+    }, [onLogout]);
+
     // ✅ SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href); // Prevent default back
-            if (activeTab !== 'DASHBOARD') {
+            
+            if (studioRemoveUserObj) {
+                setStudioRemoveUserObj(null); // Step back from client data popup
+            } else if (activeTab !== 'DASHBOARD') {
                 setActiveTab('DASHBOARD'); // Return to main tab instead of logging out
+            } else {
+                console.log("At root of Studio dashboard. Logout prevented.");
             }
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeTab]);
+    }, [activeTab, studioRemoveUserObj]);
 
     // ✅ ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
@@ -95,6 +113,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                     password: '',
                     location: res.data.data.location || ''
                 });
+                sessionStorage.setItem('user', JSON.stringify(res.data.data)); // Sync session
             }
         } catch (e) {}
     };
@@ -530,7 +549,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 ) : <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>}
                             </div>
                         )}
-
                     </div>
                 )}
 
