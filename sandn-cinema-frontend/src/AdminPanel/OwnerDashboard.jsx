@@ -25,6 +25,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [miniEvents, setMiniEvents] = useState([]);
 
     // --- UPLOAD DATA STATES ---
+    // ✅ ADDED `unlockValidity`
     const [formData, setFormData] = useState({ 
         type: 'USER', 
         name: '', 
@@ -35,7 +36,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
         expiryDays: '30',       
         downloadLimit: '0',
         imageCost: '5',
-        videoCost: '10'
+        videoCost: '10',
+        unlockValidity: '24 Hours' // Default unlock time for users
     });
     
     const [previews, setPreviews] = useState([]);
@@ -129,6 +131,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 if (res.data.data.socialLinks) setSocialLinks(res.data.data.socialLinks);
                 if (res.data.data.policies) setPolicyData(res.data.data.policies);
                 
+                // ✅ Load Advanced Monetization Data
                 if (res.data.data.defaultPricing) {
                     const globalRates = { 
                         imageCost: res.data.data.defaultPricing.imageCost.toString(), 
@@ -252,6 +255,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         if (formData.files.length === 0) return alert("Please select files to upload.");
         
+        // ✅ Calculate Final Folder Name dynamically based on Date Checkbox
         let baseFolder = formData.folderName.trim() || 'Stranger Photography';
         let submitFolderName = baseFolder;
         if (useDateFolder) {
@@ -261,7 +265,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         const displayFolder = submitFolderName;
 
         const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
-        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nTarget Folder: 📂 ${displayFolder}\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins`)) return;
+        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nTarget Folder: 📂 ${displayFolder}\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins\nUnlock Validity: ${formData.unlockValidity}`)) return;
 
         setLoading(true);
         setUploadProgress(0);
@@ -326,6 +330,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
 
+            // ✅ Added unlockValidity
             const payloadData = {
                 type: formData.type,
                 name: formData.name,
@@ -337,7 +342,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 addedBy: 'ADMIN',
                 fileUrls: uploadedUrls,
                 imageCost: formData.imageCost,
-                videoCost: formData.videoCost
+                videoCost: formData.videoCost,
+                unlockValidity: formData.unlockValidity 
             };
 
             const res = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData);
@@ -346,7 +352,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 setUploadETA('Complete!');
                 setTimeout(() => {
                     alert(`✅ Success: Data saved in folder "${displayFolder}"\n📩 Notifications triggered!`);
-                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost }); 
+                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' }); 
                     setPreviews([]); 
                     setIsEmailLocked(false);
                     setUseDateFolder(false); // Reset checkbox
@@ -735,41 +741,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB: ACCOUNTS */}
-                {activeTab === 'ACCOUNTS' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2>📋 Manage Users & Studios</h2></div>
-                        <div className="admin-filter-tabs">
-                            <button className={filterRole === 'ALL' ? 'active' : ''} onClick={() => setFilterRole('ALL')}>All Accounts</button>
-                            <button className={filterRole === 'USER' ? 'active' : ''} onClick={() => setFilterRole('USER')}>Users Only</button>
-                            <button className={filterRole === 'STUDIO' ? 'active' : ''} onClick={() => setFilterRole('STUDIO')}>Studios Only</button>
-                            <button className={filterRole === 'ADMIN' ? 'active' : ''} onClick={() => setFilterRole('ADMIN')}>Sub-Admins</button>
-                        </div>
-                        <div className="data-table-container" style={{ marginTop: '20px' }}>
-                            <table className="admin-table">
-                                <thead>
-                                    <tr><th>Role</th><th>Name</th><th>Mobile</th><th>Feed Approval</th><th>Action</th></tr>
-                                </thead>
-                                <tbody>
-                                    {displayedAccounts.map((acc, index) => (
-                                        <tr key={index}>
-                                            <td><span className={`status-badge ${acc.role === 'STUDIO' ? 'active' : acc.role === 'ADMIN' ? 'inactive' : 'normal'}`}>{acc.role}</span></td>
-                                            <td>{acc.name || acc.studioName || acc.ownerName}</td>
-                                            <td>{acc.mobile}</td>
-                                            <td>
-                                                {acc.role === 'STUDIO' ? (
-                                                    <button onClick={() => toggleStudioApproval(acc.mobile, acc.isFeedApproved)} style={{ background: acc.isFeedApproved ? '#2ecc71' : '#f1c40f', border: 'none', padding: '5px 10px', borderRadius: '5px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>{acc.isFeedApproved ? '✅ Approved' : '🔒 Pending'}</button>
-                                                ) : <span style={{ color: '#ccc' }}>-</span>}
-                                            </td>
-                                            <td><button onClick={() => handleDeleteAccount(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }}>Delete Account</button></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
                 {/* 🔴 TAB: UPLOAD DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
@@ -870,7 +841,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>Auto-delete data after selected time to save server storage. You can also restrict how many times the user can download.</p>
                                             
                                             <div style={{ marginBottom: '15px' }}>
-                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Time Duration (Auto Delete)</label>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Folder Auto-Delete (Time)</label>
                                                 <select value={formData.expiryDays} onChange={(e) => setFormData({ ...formData, expiryDays: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px' }}>
                                                     <option value="7">7 Days</option>
                                                     <option value="15">15 Days</option>
@@ -889,6 +860,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                     <option value="5">Max 5 Times</option>
                                                 </select>
                                             </div>
+                                            
+                                            {/* ✅ NEW: UNLOCK VALIDITY DROPDOWN */}
+                                            <div style={{ background: '#fff', padding: '10px', borderRadius: '5px', border: '1px dashed #e74c3c' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#e74c3c' }}>🔓 Media Unlock Validity (For User)</label>
+                                                <select value={formData.unlockValidity} onChange={(e) => setFormData({ ...formData, unlockValidity: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px', border: '1px solid #e74c3c' }}>
+                                                    <option value="24 Hours">24 Hours (Default)</option>
+                                                    <option value="7 Days">7 Days</option>
+                                                    <option value="Permanent">Permanent</option>
+                                                </select>
+                                                <p style={{fontSize: '11px', color: '#777', margin: '3px 0 0 0'}}>Once user pays coins, how long can they access it?</p>
+                                            </div>
                                         </div>
 
                                         <button type="button" onClick={() => setUploadSubTab('CHARGES')} className="global-update-btn" style={{ padding: '15px', background: '#3498db' }}>Next: Set Charges 💰 ➡️</button>
@@ -900,7 +882,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 {uploadSubTab === 'CHARGES' && (
                                     <>
                                         <div style={{ background: '#e8f8f5', padding: '20px', borderRadius: '8px', border: '1px solid #2ecc71' }}>
-                                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>💰 Set Charges for this Folder</h3>
+                                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>💰 Set Folder Charges</h3>
                                             <p style={{ fontSize: '12px', color: '#555', marginBottom: '20px' }}>These values are pre-filled with your Global Default Pricing. You can change them specifically for this client/folder.</p>
 
                                             <div style={{ marginBottom: '15px' }}>
@@ -949,29 +931,44 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <h2>💰 Global Charges & Events Configuration</h2>
                             <button onClick={handleSaveGlobalCharges} className="global-update-btn" style={{ background: '#2ecc71', width: 'auto', padding: '8px 20px' }}>💾 Save Configs</button>
                         </div>
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+                            
+                            {/* 1. DEFAULT UPLOAD PRICING */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #3498db' }}>
                                 <h3>📂 1. Default Upload Pricing (Coins)</h3>
-                                <div style={{display: 'flex', gap: '15px'}}><div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div><div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div></div>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Standard coin charge for unlocking newly uploaded media.</p>
+                                <div style={{display: 'flex', gap: '15px'}}>
+                                    <div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div>
+                                    <div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div>
+                                </div>
                             </div>
+
+                            {/* 2. REAL MONEY COIN PACKAGES */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #f1c40f' }}>
                                 <h3>🪙 2. Real Money Coin Packages</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Set offers for users to buy coins with Rupees (₹).</p>
+                                
                                 {coinPackages.map((pkg, i) => (
                                     <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center', background: '#f9f9f9', padding: '10px', borderRadius: '5px' }}>
                                         <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Coins to Give</label><input type="number" value={pkg.coins} onChange={e=>{let arr=[...coinPackages]; arr[i].coins=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Price (₹)</label><input type="number" value={pkg.price} onChange={e=>{let arr=[...coinPackages]; arr[i].price=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
-                                        <div style={{flex: 1.5}}><label style={{fontSize:'11px'}}>Offer Tag</label><input type="text" value={pkg.tag} onChange={e=>{let arr=[...coinPackages]; arr[i].tag=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                        <div style={{flex: 1.5}}><label style={{fontSize:'11px'}}>Offer Tag (e.g. Best Value!)</label><input type="text" value={pkg.tag} onChange={e=>{let arr=[...coinPackages]; arr[i].tag=e.target.value; setCoinPackages(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         <button onClick={()=>{let arr=[...coinPackages]; arr.splice(i,1); setCoinPackages(arr)}} style={{background:'#e74c3c', color:'white', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', marginTop:'15px'}}>X</button>
                                     </div>
                                 ))}
                                 <button onClick={()=>setCoinPackages([...coinPackages, {coins: 100, price: 50, tag: ''}])} className="global-update-btn" style={{background: '#f39c12', padding: '10px', marginTop: '10px'}}>➕ Add New Package</button>
                             </div>
+
+                            {/* 3. MINI EVENTS / FREE COINS */}
                             <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #9b59b6' }}>
                                 <h3>🎉 3. Mini Events (Earn Free Coins)</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Reward users for organic growth (e.g. Subscribe to YouTube, Follow Instagram).</p>
+
                                 {miniEvents.map((ev, i) => (
                                     <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px', background: '#f5eeef', padding: '15px', borderRadius: '5px' }}>
                                         <div style={{display: 'flex', gap: '10px'}}>
-                                            <div style={{flex: 2}}><label style={{fontSize:'11px'}}>Task Title</label><input type="text" placeholder="Follow us on Instagram!" value={ev.title} onChange={e=>{let arr=[...miniEvents]; arr[i].title=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
+                                            <div style={{flex: 2}}><label style={{fontSize:'11px'}}>Task Title</label><input type="text" placeholder="e.g. Follow us on Instagram!" value={ev.title} onChange={e=>{let arr=[...miniEvents]; arr[i].title=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                             <div style={{flex: 1}}><label style={{fontSize:'11px'}}>Reward Coins</label><input type="number" value={ev.reward} onChange={e=>{let arr=[...miniEvents]; arr[i].reward=e.target.value; setMiniEvents(arr)}} className="custom-admin-input" style={{margin:0, padding:'5px'}}/></div>
                                         </div>
                                         <div style={{display: 'flex', gap: '10px', alignItems:'center'}}>
@@ -982,27 +979,212 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 ))}
                                 <button onClick={()=>setMiniEvents([...miniEvents, { id: Date.now().toString(), title: '', reward: 5, link: ''}])} className="global-update-btn" style={{background: '#8e44ad', padding: '10px', marginTop: '10px'}}>➕ Add Mini Event</button>
                             </div>
+
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 TAB: ACCOUNTS */}
+                {activeTab === 'ACCOUNTS' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>📋 Manage Users & Studios</h2></div>
+                        <div className="admin-filter-tabs">
+                            <button className={filterRole === 'ALL' ? 'active' : ''} onClick={() => setFilterRole('ALL')}>All Accounts</button>
+                            <button className={filterRole === 'USER' ? 'active' : ''} onClick={() => setFilterRole('USER')}>Users Only</button>
+                            <button className={filterRole === 'STUDIO' ? 'active' : ''} onClick={() => setFilterRole('STUDIO')}>Studios Only</button>
+                            <button className={filterRole === 'ADMIN' ? 'active' : ''} onClick={() => setFilterRole('ADMIN')}>Sub-Admins</button>
+                        </div>
+                        <div className="data-table-container" style={{ marginTop: '20px' }}>
+                            <table className="admin-table">
+                                <thead>
+                                    <tr><th>Role</th><th>Name</th><th>Mobile</th><th>Feed Approval</th><th>Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    {displayedAccounts.map((acc, index) => (
+                                        <tr key={index}>
+                                            <td><span className={`status-badge ${acc.role === 'STUDIO' ? 'active' : acc.role === 'ADMIN' ? 'inactive' : 'normal'}`}>{acc.role}</span></td>
+                                            <td>{acc.name || acc.studioName || acc.ownerName}</td>
+                                            <td>{acc.mobile}</td>
+                                            <td>
+                                                {acc.role === 'STUDIO' ? (
+                                                    <button onClick={() => toggleStudioApproval(acc.mobile, acc.isFeedApproved)} style={{ background: acc.isFeedApproved ? '#2ecc71' : '#f1c40f', border: 'none', padding: '5px 10px', borderRadius: '5px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>{acc.isFeedApproved ? '✅ Approved' : '🔒 Pending'}</button>
+                                                ) : <span style={{ color: '#ccc' }}>-</span>}
+                                            </td>
+                                            <td><button onClick={() => handleDeleteAccount(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }}>Delete Account</button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
 
                 {/* 🔴 OTHER TABS (Accounts, Bookings, etc) */}
-                {activeTab === 'BOOKINGS' && (<div className="view-section"><div className="section-header"><h2>📅 Bookings</h2></div><div className="data-table-container"><table className="admin-table"><thead><tr><th>Name</th><th>Date</th><th>Status</th></tr></thead><tbody>{bookings.map(b=><tr key={b._id}><td>{b.name}</td><td>{b.date}</td><td>{b.status}</td></tr>)}</tbody></table></div></div>)}
-                {activeTab === 'CRITERIA' && (<div className="view-section"><div className="section-header"><h2>📈 Traffic</h2></div><p>Total Accounts: {accounts.length}</p></div>)}
-                {activeTab === 'SOCIAL' && (<div className="view-section"><div className="section-header"><h2>🌐 Manage Social Links</h2></div><button onClick={saveLinksToServer} className="global-update-btn">Save Links</button></div>)}
-                {activeTab === 'SECURITY' && (<div className="view-section"><div className="section-header"><h2>🔒 Security & App Policies</h2></div><button onClick={handlePolicySave} className="global-update-btn">Save Policies</button></div>)}
-                {activeTab === 'INCOME' && (<div className="view-section"><div className="section-header"><h2>💰 Financial Overview</h2></div><h3>₹ {incomeData.total.toLocaleString()}</h3></div>)}
-                {activeTab === 'SUB_ADMIN' && (<div className="view-section"><div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div></div>)}
-                
+                {activeTab === 'BOOKINGS' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>📅 Direct Bookings</h2></div>
+                        <div className="data-table-container">
+                            <table className="admin-table">
+                                <thead>
+                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+                                </thead>
+                                <tbody>
+                                    {bookings.map(b => (
+                                        <tr key={b._id}>
+                                            <td><strong>{b.name}</strong></td>
+                                            <td>{b.mobile || 'N/A'}</td>
+                                            <td>{b.date}</td>
+                                            <td>{b.type}</td>
+                                            <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
+                                            <td>
+                                                {b.status === 'Pending' && (
+                                                    <>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'CRITERIA' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+                            <div className="setting-card" style={{background: '#f8f9f9'}}>
+                                <h3 style={{color:'#2980b9'}}>📊 Traffic Status</h3>
+                                <p>Real-time analytics of platform visitors.</p>
+                                <div style={{ marginTop: '15px' }}>
+                                    <p><strong>Total Accounts:</strong> {accounts.length}</p>
+                                    <p><strong>Today's Visitors:</strong> 1,240 (Simulated)</p>
+                                </div>
+                            </div>
+                            <div className="setting-card" style={{background: '#fcf3cf'}}>
+                                <h3 style={{color:'#d4ac0d'}}>📢 Business & Ads</h3>
+                                <p>Manage homepage banners and promotions.</p>
+                                <button className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px' }}>Manage Ad Banners</button>
+                            </div>
+                        </div>
+
+                        <div className="data-table-container">
+                            <h3 style={{ padding: '15px' }}>🤝 Collaboration Requests</h3>
+                            <table className="admin-table">
+                                <thead><tr><th>Name</th><th>Brand</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {collabRequests.map(req => (
+                                        <tr key={req._id}>
+                                            <td>{req.name}</td><td>{req.brand}</td><td>{req.email}</td>
+                                            <td><span className={`status-badge ${req.status === 'Accepted' ? 'active' : req.status === 'Declined' ? 'inactive' : 'normal'}`}>{req.status}</span></td>
+                                            <td>
+                                                {req.status === 'Pending' && (
+                                                    <>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {collabRequests.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No new collab requests.</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'SOCIAL' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
+                                <div>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Platform</label>
+                                    <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input">
+                                        <option value="Instagram">Instagram</option><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="WhatsApp">WhatsApp</option><option value="Twitter">Twitter</option>
+                                    </select>
+                                </div>
+                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" /></div>
+                                <button onClick={handleAddLink} className="global-update-btn">➕ Add to List</button>
+                            </div>
+                            
+                            <button onClick={saveLinksToServer} className="global-update-btn" style={{background: '#27ae60', marginBottom: '30px', width: '100%'}}>💾 SAVE ALL TO DATABASE</button>
+
+                            <h4>Current Links Saved</h4>
+                            <ul style={{ listStyle: 'none', padding: 0 }}>
+                                {socialLinks.filter(l => l.url !== '').map((link, i) => (
+                                    <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'5px', display:'flex', justifyContent:'space-between' }}><strong>{link.platform}</strong><a href={link.url} target="_blank" rel="noreferrer">{link.url.substring(0, 20)}...</a></li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'SECURITY' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🔒 Security & App Policies</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto' }}>
+                            <form onSubmit={handlePolicySave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                <div>
+                                    <label style={{fontWeight:'bold'}}>Terms & Conditions</label>
+                                    <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="4" style={{resize:'vertical'}}></textarea>
+                                </div>
+                                <div>
+                                    <label style={{fontWeight:'bold'}}>Privacy Policy</label>
+                                    <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="4"></textarea>
+                                </div>
+                                <div>
+                                    <label style={{fontWeight:'bold'}}>How do we best for you? (USP Section)</label>
+                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="4"></textarea>
+                                </div>
+                                <button type="submit" className="global-update-btn" style={{background:'#e74c3c'}}>💾 Save Policies to App</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'INCOME' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>💰 Financial Overview</h2></div>
+                        <div className="stat-card green" style={{ padding: '30px', maxWidth: '400px' }}>
+                            <p style={{ color: '#555', fontWeight: 'bold' }}>Real-time Platform Earnings</p>
+                            <h3 style={{ fontSize: '45px', color: '#27ae60' }}>₹ {incomeData.total.toLocaleString()}</h3>
+                            <button className="global-update-btn" style={{ background: '#27ae60', marginTop: '15px' }}>🏦 Withdraw Funds</button>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'SUB_ADMIN' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
+                            <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>Sub-admins have limited access to manage user data.</p>
+                            <form onSubmit={handleCreateSubAdmin} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn" style={{ background: '#27ae60', padding: '15px', marginTop:'10px' }}>+ Add Sub-Admin</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label>Admin Name</label><input type="text" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
-                                <div><label>Email</label><input type="email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label>New Password</label><input type="password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
-                                <button type="submit" className="global-update-btn">💾 Save Profile Details</button>
+                                <div><label>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
+                                <div><label>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
                             </form>
                         </div>
                     </div>
