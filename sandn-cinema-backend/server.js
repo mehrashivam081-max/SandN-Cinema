@@ -623,7 +623,8 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    let { type, name, location, addedBy, folderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost } = req.body; 
+    // ✅ NEW: Corrected subFolderName fetching
+    let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity } = req.body; 
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
@@ -663,23 +664,40 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
+                // ✅ Handle Subfolder Logic correctly
+                if (subFolderName) {
+                    if (!currentData[folderIndex].subFolders) currentData[folderIndex].subFolders = [];
+                    let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
+                    if (subIndex > -1) {
+                        currentData[folderIndex].subFolders[subIndex].files = [...(currentData[folderIndex].subFolders[subIndex].files || []), ...filePaths];
+                    } else {
+                        currentData[folderIndex].subFolders.push({ name: subFolderName, files: filePaths });
+                    }
+                } else {
+                    currentData[folderIndex].files = [...(currentData[folderIndex].files || []), ...filePaths];
+                }
+
                 currentData[folderIndex].expiryDate = expiryDate;
                 currentData[folderIndex].downloadLimit = dLimit;
-                currentData[folderIndex].downloadCount = 0; 
                 currentData[folderIndex].imageCost = iCost;
                 currentData[folderIndex].videoCost = vCost;
+                if (unlockValidity) currentData[folderIndex].unlockValidity = unlockValidity;
+
             } else {
-                currentData.push({
+                // CREATE NEW FOLDER
+                const newFolder = {
                     folderName: finalFolderName,
-                    files: filePaths,
+                    files: subFolderName ? [] : filePaths,
+                    subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
                     isDefault: finalFolderName === 'Stranger Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
                     downloadCount: 0,
                     imageCost: iCost,
-                    videoCost: vCost
-                });
+                    videoCost: vCost,
+                    unlockValidity: unlockValidity || '24 Hours'
+                };
+                currentData.push(newFolder);
             }
 
             const hasDummyEmail = !existingAccount.data.email || existingAccount.data.email.includes('dummy_');
@@ -695,17 +713,20 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
             return res.json({ success: true, message: `Cloud Data appended to '${finalFolderName}' successfully!` });
         }
 
+        // COMPLETELY NEW USER
         const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
         
         const folderStructure = [{
             folderName: finalFolderName,
-            files: filePaths,
+            files: subFolderName ? [] : filePaths,
+            subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
             isDefault: finalFolderName === 'Stranger Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
             downloadCount: 0,
             imageCost: iCost,
-            videoCost: vCost
+            videoCost: vCost,
+            unlockValidity: unlockValidity || '24 Hours'
         }];
 
         const newUser = { mobile, password: "temp123", email: targetEmail, role: type || 'USER', location: location || "", addedBy: addedBy || "ADMIN", uploadedData: folderStructure };
