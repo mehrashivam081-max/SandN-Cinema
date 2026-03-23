@@ -9,6 +9,19 @@ const path = require('path');
 // ✅ Added New Models Here
 const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require('./models');
 
+// ✅ NEW: Service Model for App Services (Defined here to avoid crashing if not in models.js)
+const serviceSchema = new mongoose.Schema({
+    title: String,
+    startingPrice: Number,
+    imageUrl: String,
+    shortDescription: String,
+    fullDescription: String,
+    features: String,
+    addedBy: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const Service = mongoose.models.Service || mongoose.model('Service', serviceSchema);
+
 // ✅ Setup Multer for MULTIPLE File Uploads
 const multer = require('multer');
 const uploadDir = path.join(__dirname, 'uploads');
@@ -1431,6 +1444,52 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
     } catch (e) {
         console.error("Delete Data Error:", e);
         res.status(500).json({ success: false, message: "Server Error deleting data." });
+    }
+});
+
+// ==========================================
+// ✅ 21. MANAGE SERVICES LOGIC (NEW APP FEATURES)
+// ==========================================
+
+// Add a new service (From Admin Panel)
+app.post('/api/auth/add-service', async (req, res) => {
+    try {
+        const newService = await Service.create(req.body);
+        res.json({ success: true, message: "Service added successfully to App!", data: newService });
+    } catch (e) {
+        console.error("Add Service Error:", e);
+        res.status(500).json({ success: false, message: "Failed to add service." });
+    }
+});
+
+// Fetch all available services (For App users to explore)
+app.get('/api/auth/get-available-services', async (req, res) => {
+    try {
+        const services = await Service.find().sort({ createdAt: -1 });
+        res.json({ success: true, data: services });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch services." });
+    }
+});
+
+// Delete a service (From Admin Panel)
+app.post('/api/auth/delete-service', async (req, res) => {
+    try {
+        await Service.findByIdAndDelete(req.body.id);
+        res.json({ success: true, message: "Service removed from App successfully!" });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to delete service." });
+    }
+});
+
+// Fetch specific user's bookings (For User Dashboard)
+app.post('/api/auth/get-user-services', async (req, res) => {
+    try {
+        const mobile = getCleanMobile(req.body.mobile);
+        const userBookings = await Booking.find({ mobile: mobile }).sort({ createdAt: -1 });
+        res.json({ success: true, data: userBookings });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch user bookings." });
     }
 });
 
