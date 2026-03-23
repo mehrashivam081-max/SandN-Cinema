@@ -591,19 +591,58 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to update booking"); }
     };
 
-    // ✅ NEW: MANAGE SERVICES ADD LOGIC
+   // ✅ NEW & REAL: MANAGE SERVICES ADD LOGIC
     const handleAddService = async (e) => {
         if(e) e.preventDefault();
         if(!newService.title || !newService.startingPrice) return alert("Title and Price are required.");
+        
         setLoading(true);
-        // Temporary Simulation - API to be connected next
-        setTimeout(() => {
-            alert("Service added successfully! (API Integration Pending)");
-            setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
-            setLoading(false);
-        }, 1000);
-    };
+        try {
+            let uploadedImageUrl = '';
 
+            // Step 1: Agar image select ki hai, toh pehle Cloudinary pe upload karo
+            if (serviceImage) {
+                const fd = new FormData();
+                fd.append('file', serviceImage);
+                fd.append('upload_preset', 'xgujeuol'); // Aapka Cloudinary preset
+
+                const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd);
+                uploadedImageUrl = cloudRes.data.secure_url;
+            }
+
+            // Step 2: Cloudinary se URL milne ke baad Backend DB me save karo
+            const payloadData = {
+                title: newService.title,
+                startingPrice: newService.startingPrice,
+                shortDescription: newService.shortDescription,
+                fullDescription: newService.fullDescription,
+                features: newService.features,
+                imageUrl: uploadedImageUrl, // Real image link
+                addedBy: 'ADMIN'
+            };
+
+            const res = await axios.post(`${API_BASE}/add-service`, payloadData);
+
+            if (res.data.success) {
+                alert("✅ Service published successfully and is now Live on the App!");
+                
+                // Form ko reset karo
+                setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+                setServiceImage(null);
+                
+                // Nayi service ko turant table me dikhane ke liye state update karo
+                setAvailableServices(prev => [res.data.data, ...prev]);
+            } else {
+                alert("Failed to add service: " + res.data.message);
+            }
+        } catch (error) {
+            console.error("Add Service Error:", error);
+            alert("Upload Error. Please check your connection.");
+        } finally {
+            setLoading(false);
+        }
+    };
+    
     // ✅ DROPDOWN TOGGLE LOGIC
     const toggleMenu = (menuName) => {
         setOpenDropdown(openDropdown === menuName ? null : menuName);
