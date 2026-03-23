@@ -123,10 +123,11 @@ const bookingSchema = new mongoose.Schema({
     mobile: String,
     startDate: String,
     endDate: String,
-    type: String,
+    type: String, // E.g., Wedding, Pre-Wedding
     location: String,
     eventPlaceName: String,
-    status: { type: String, default: 'Pending' },
+    amount: { type: Number }, // To track estimated cost
+    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
     createdAt: { type: Date, default: Date.now } 
 });
 
@@ -166,6 +167,19 @@ const platformSettingSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now }
 });
 
+// ✅ 9. APP SERVICES SCHEMA (NEW)
+const serviceSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    startingPrice: { type: Number, required: true },
+    imageUrl: { type: String, default: '' },
+    shortDescription: { type: String, default: '' },
+    fullDescription: { type: String, default: '' },
+    features: { type: String, default: '' }, // Comma separated list
+    isPopular: { type: Boolean, default: false }, // Tag for UI
+    addedBy: { type: String, default: 'ADMIN' },
+    createdAt: { type: Date, default: Date.now }
+});
+
 module.exports = {
     User: mongoose.model('User', userSchema),
     Studio: mongoose.model('Studio', studioSchema),
@@ -174,5 +188,6 @@ module.exports = {
     Offer: mongoose.model('Offer', offerSchema),
     Booking: mongoose.model('Booking', bookingSchema),
     CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
-    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema)
+    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
+    Service: mongoose.model('Service', serviceSchema) // Exporting new model
 };
