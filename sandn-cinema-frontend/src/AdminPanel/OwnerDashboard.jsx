@@ -12,6 +12,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [accounts, setAccounts] = useState([]);
     const [filterRole, setFilterRole] = useState('ALL'); 
     
+    // ✅ NEW: DROPDOWN MENU STATE FOR SIDEBAR
+    const [openDropdown, setOpenDropdown] = useState('GLOBAL'); // 'GLOBAL', 'USER', 'STUDIO', 'ADMIN'
+
     // --- LOGOUT POPUP STATE ---
     const [showLogoutPopup, setShowLogoutPopup] = useState(false);
 
@@ -78,7 +81,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const calculatedTotal = accounts.length * 1500; 
     const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
-    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    // ✅ NEW: MANAGE SERVICES STATES (For User Platform)
+    const [newService, setNewService] = useState({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+    const [serviceImage, setServiceImage] = useState(null);
+    const [availableServices, setAvailableServices] = useState([]);
+
+    // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
         const handleOffline = () => {
             alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
@@ -91,7 +99,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ SMART BROWSER BACK BUTTON (Native App Experience)
+    // ✅ FEATURE 2: SMART BROWSER BACK BUTTON (FIXED with useRef to prevent infinite loop)
     const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab });
     useEffect(() => {
         stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab };
@@ -124,7 +132,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
-    // ✅ ENTER KEY SUPPORT HELPER
+    // ✅ FEATURE 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -137,7 +145,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchAccounts();
         fetchPlatformSettings(); 
         fetchBookings();         
-        fetchCollabs();          
+        fetchCollabs();
+        fetchServices(); // Fetch active services       
 
         const syncAdminData = async () => {
             try {
@@ -154,8 +163,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         password: ''
                     });
                     const updatedUser = { ...activeUser, name: latestData.name };
+                    // ✅ FEATURE 4: SESSION STORAGE SYNC
+                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
                     localStorage.setItem('user', JSON.stringify(updatedUser));
-                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); // ✅ Sync Session Memory
                 }
             } catch (e) { console.log("Sync failed", e); }
         };
@@ -213,6 +223,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch(e) { console.log("Failed to fetch collabs"); }
     };
 
+    const fetchServices = async () => { 
+        try { const res = await axios.get(`${API_BASE}/get-available-services`); if (res.data.success) setAvailableServices(res.data.data || []); } catch(e) {} 
+    };
 
     // ==========================================
     // 🚀 HELPERS
@@ -304,7 +317,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     // 🚀 CLOUDINARY UPLOAD WITH SMART DATE FOLDER LOGIC
     const handleAddManualUser = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault(); // ✅ Safe form submit integration
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         if (formData.files.length === 0) return alert("Please select files to upload.");
         
@@ -488,7 +501,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 ADMIN SETTINGS & PRICING
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault(); // ✅ Safe form submit integration
         if (!window.confirm("Are you sure you want to save these profile changes?")) return;
 
         try {
@@ -498,7 +511,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 alert("✅ Admin Profile Updated Successfully!");
                 const updatedUser = { ...user, name: adminProfile.name };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                sessionStorage.setItem('user', JSON.stringify(updatedUser)); // ✅ Sync Session Memory
+                sessionStorage.setItem('user', JSON.stringify(updatedUser));
             }
             else alert("Update failed: " + res.data.message);
         } catch (error) { alert("Server error updating profile."); }
@@ -522,7 +535,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const handleCreateSubAdmin = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault(); // ✅ Safe form submit integration
         if (!window.confirm(`Create new Sub-Admin: ${subAdmin.name}?`)) return;
 
         try {
@@ -554,7 +567,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const handlePolicySave = async (e) => {
-        e.preventDefault();
+        if(e) e.preventDefault(); // ✅ Safe form submit integration
         if (!window.confirm("Are you sure you want to update Platform Policies?")) return;
         try {
             await axios.post(`${API_BASE}/update-policies`, { policies: policyData });
@@ -576,6 +589,24 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const res = await axios.post(`${API_BASE}/update-booking-status`, { bookingId: id, status: newStatus });
             if(res.data.success) { alert(`✅ Booking marked as ${newStatus}!`); fetchBookings(); }
         } catch (e) { alert("Failed to update booking"); }
+    };
+
+    // ✅ NEW: MANAGE SERVICES ADD LOGIC
+    const handleAddService = async (e) => {
+        if(e) e.preventDefault();
+        if(!newService.title || !newService.startingPrice) return alert("Title and Price are required.");
+        setLoading(true);
+        // Temporary Simulation - API to be connected next
+        setTimeout(() => {
+            alert("Service added successfully! (API Integration Pending)");
+            setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+            setLoading(false);
+        }, 1000);
+    };
+
+    // ✅ DROPDOWN TOGGLE LOGIC
+    const toggleMenu = (menuName) => {
+        setOpenDropdown(openDropdown === menuName ? null : menuName);
     };
 
 
@@ -623,21 +654,73 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <p style={{ margin: 0, fontSize: '13px', color: '#4dabf7', fontWeight: 'bold' }}>{adminProfile.name}</p>
                 </div>
 
+                {/* ✅ NEW: CATEGORIZED DROPDOWN SIDEBAR */}
                 <ul className="sidebar-menu">
-                    <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard</li>
-                    <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
-                    <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_CHARGES')}>💰 Global Charges</li>
-                    <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_REMOVE')}>🗑️ Global Remove</li>
-                    <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
-                    <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => setActiveTab('BOOKINGS')}>📅 Direct Bookings</li>
-                    <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
-                    <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
-                    <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => setActiveTab('SECURITY')}>🔒 Security Policy</li>
-                    <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income</li>
-                    <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => setActiveTab('SUB_ADMIN')}>🧑‍💼 Sub-Admins</li> 
-                    <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => setActiveTab('SETTINGS')}>⚙️ Settings</li>
+                    
+                    {/* 🌍 GLOBAL PLATFORM */}
+                    <div className="menu-group">
+                        <div className={`menu-group-header ${openDropdown === 'GLOBAL' ? 'open' : ''}`} onClick={() => toggleMenu('GLOBAL')} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#1a1a2e', cursor: 'pointer', fontWeight: 'bold', color: '#fff', borderRadius: '5px', marginBottom: '5px' }}>
+                            <span>🌍 Global Platform</span>
+                            <span>{openDropdown === 'GLOBAL' ? '▲' : '▼'}</span>
+                        </div>
+                        {openDropdown === 'GLOBAL' && (
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard</li>
+                                <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
+                                <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_CHARGES')}>💰 Global Charges</li>
+                                <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_REMOVE')}>🗑️ Global Remove</li>
+                                <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
+                                <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
+                                <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income</li>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 📱 USER PLATFORM */}
+                    <div className="menu-group">
+                        <div className={`menu-group-header ${openDropdown === 'USER' ? 'open' : ''}`} onClick={() => toggleMenu('USER')} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#1a1a2e', cursor: 'pointer', fontWeight: 'bold', color: '#fff', borderRadius: '5px', marginBottom: '5px' }}>
+                            <span>📱 User Platform</span>
+                            <span>{openDropdown === 'USER' ? '▲' : '▼'}</span>
+                        </div>
+                        {openDropdown === 'USER' && (
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => setActiveTab('BOOKINGS')}>📅 Direct Bookings</li>
+                                <li className={activeTab === 'MANAGE_SERVICES' ? 'active' : ''} onClick={() => setActiveTab('MANAGE_SERVICES')} style={{ color: '#f1c40f' }}>🛠️ Manage Services</li>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 🎥 STUDIO PLATFORM */}
+                    <div className="menu-group">
+                        <div className={`menu-group-header ${openDropdown === 'STUDIO' ? 'open' : ''}`} onClick={() => toggleMenu('STUDIO')} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#1a1a2e', cursor: 'pointer', fontWeight: 'bold', color: '#fff', borderRadius: '5px', marginBottom: '5px' }}>
+                            <span>🎥 Studio Platform</span>
+                            <span>{openDropdown === 'STUDIO' ? '▲' : '▼'}</span>
+                        </div>
+                        {openDropdown === 'STUDIO' && (
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li style={{color:'#7f8c8d', fontSize:'12px', listStyle:'none', padding:'10px'}}>Future Studio Features</li>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ⚙️ MYSELF (ADMIN) */}
+                    <div className="menu-group">
+                        <div className={`menu-group-header ${openDropdown === 'ADMIN' ? 'open' : ''}`} onClick={() => toggleMenu('ADMIN')} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#1a1a2e', cursor: 'pointer', fontWeight: 'bold', color: '#fff', borderRadius: '5px', marginBottom: '5px' }}>
+                            <span>⚙️ Myself (Admin)</span>
+                            <span>{openDropdown === 'ADMIN' ? '▲' : '▼'}</span>
+                        </div>
+                        {openDropdown === 'ADMIN' && (
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
+                                <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => setActiveTab('SECURITY')}>🔒 Security Policy</li>
+                                <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => setActiveTab('SUB_ADMIN')}>🧑‍💼 Sub-Admins</li> 
+                                <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => setActiveTab('SETTINGS')}>⚙️ Settings</li>
+                            </div>
+                        )}
+                    </div>
+
                 </ul>
-                <button onClick={() => setShowLogoutPopup(true)} className="admin-logout-btn">Log Out</button> 
+                <button onClick={() => setShowLogoutPopup(true)} className="admin-logout-btn" style={{marginTop: '20px'}}>Log Out</button> 
             </aside>
 
             <main className="admin-main-content">
@@ -658,6 +741,48 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <div className="stat-card red" onClick={() => setActiveTab('BOOKINGS')} style={{cursor:'pointer'}}>
                                 <h3>{bookings.length}</h3><p>Total Bookings</p>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 NEW TAB: MANAGE SERVICES (UNDER USER PLATFORM) */}
+                {activeTab === 'MANAGE_SERVICES' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🛠️ Manage App Services</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Add or remove premium services that users can view and book directly from their app.</p>
+
+                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+                            <form onSubmit={handleAddService} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Service Title</label><input type="text" placeholder="e.g. Pre-Wedding Shoot" value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} className="custom-admin-input" required/></div>
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div style={{flex: 1}}><label style={{fontSize: '13px', fontWeight: 'bold'}}>Starting Price (₹)</label><input type="number" placeholder="e.g. 15000" value={newService.startingPrice} onChange={e => setNewService({...newService, startingPrice: e.target.value})} className="custom-admin-input" required/></div>
+                                    <div style={{flex: 1}}><label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Cover Image</label><input type="file" accept="image/*" onChange={e => setServiceImage(e.target.files[0])} className="custom-admin-input" style={{padding: '9px'}}/></div>
+                                </div>
+                                <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Short Description (For Card View)</label><textarea placeholder="Brief overview (max 2 lines)" value={newService.shortDescription} onChange={e => setNewService({...newService, shortDescription: e.target.value})} className="custom-admin-input" rows="2"></textarea></div>
+                                <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Full Description (For Detail View)</label><textarea placeholder="Detailed explanation of what the user gets..." value={newService.fullDescription} onChange={e => setNewService({...newService, fullDescription: e.target.value})} className="custom-admin-input" rows="4"></textarea></div>
+                                <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Included Features (Comma Separated)</label><input type="text" placeholder="e.g. 50 Edited Photos, Drone Shoot, 3 Outfits" value={newService.features} onChange={e => setNewService({...newService, features: e.target.value})} className="custom-admin-input"/></div>
+                                
+                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#f39c12', padding: '15px', marginTop: '10px' }}>
+                                    {loading ? 'Publishing Service...' : '➕ Publish New Service to App'}
+                                </button>
+                            </form>
+                        </div>
+
+                        <h3 style={{ padding: '15px' }}>📦 Live Services on App</h3>
+                        <div className="data-table-container">
+                            <table className="admin-table">
+                                <thead><tr><th>Service Title</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {availableServices.length > 0 ? availableServices.map((srv, idx) => (
+                                        <tr key={idx}>
+                                            <td><strong>{srv.title}</strong></td>
+                                            <td>₹{srv.startingPrice}</td>
+                                            <td><span className="status-badge active">Live</span></td>
+                                            <td><button className="pdf-btn" style={{background: '#e74c3c', padding: '5px 10px'}}>Remove</button></td>
+                                        </tr>
+                                    )) : <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No services published yet.</td></tr>}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
@@ -817,7 +942,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     <>
                                         <div style={{ position: 'relative' }}>
                                             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number (Auto-suggest)</label>
-                                            <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className="custom-admin-input" />
+                                            <input type="number" placeholder="e.g. 9876543210" required value={formData.mobile} onChange={handleMobileChange} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} onKeyDown={(e) => handleKeyDown(e, () => setUploadSubTab('LIMITS'))} className="custom-admin-input" />
                                             {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
                                                 <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', borderRadius: '5px' }}>
                                                     {filteredSuggestions.map((acc, idx) => (
@@ -829,7 +954,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         
                                         <div>
                                             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Client Name {isExistingAccount && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
-                                            <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="custom-admin-input" />
+                                            <input type="text" placeholder="Enter Full Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} onKeyDown={(e) => handleKeyDown(e, () => setUploadSubTab('LIMITS'))} className="custom-admin-input" />
                                         </div>
 
                                         <div>
@@ -837,7 +962,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                 Client Email Address 
                                                 {isEmailLocked && <span style={{color: '#2ecc71', fontSize: '11px'}}> (Locked)</span>}
                                             </label>
-                                            <input type="email" placeholder="example@mail.com (Optional for notification)" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="custom-admin-input" disabled={isEmailLocked} style={{ background: isEmailLocked ? '#f5f5f5' : '#fff', cursor: isEmailLocked ? 'not-allowed' : 'text' }} />
+                                            <input type="email" placeholder="example@mail.com (Optional for notification)" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} disabled={isEmailLocked} onKeyDown={(e) => handleKeyDown(e, () => setUploadSubTab('LIMITS'))} className="custom-admin-input" style={{ background: isEmailLocked ? '#f5f5f5' : '#fff', cursor: isEmailLocked ? 'not-allowed' : 'text' }} />
                                             <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>Client will receive an email notification when data is uploaded.</p>
                                         </div>
                                         
@@ -851,7 +976,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <div style={{ background: '#ebf5fb', padding: '15px', borderRadius: '8px', border: '1px solid #bce0fd', position: 'relative' }}>
                                             <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#2b5876' }}>📂 Folder Name</label>
                                             <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 10px 0' }}>Type to select existing or create new.</p>
-                                            <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} onFocus={() => setShowFolderSuggestions(true)} onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} className="custom-admin-input" />
+                                            <input type="text" placeholder="Leave blank for 'Stranger Photography' or type name" value={formData.folderName} onChange={(e) => { setFormData({ ...formData, folderName: e.target.value }); setShowFolderSuggestions(true); }} onFocus={() => setShowFolderSuggestions(true)} onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} onKeyDown={(e) => handleKeyDown(e, () => setUploadSubTab('LIMITS'))} className="custom-admin-input" />
                                             
                                             {(!formData.folderName || formData.folderName.trim() === '') && (
                                                 <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -918,7 +1043,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                 </select>
                                             </div>
                                             
-                                            {/* ✅ NEW: UNLOCK VALIDITY DROPDOWN */}
                                             <div style={{ background: '#fff', padding: '10px', borderRadius: '5px', border: '1px dashed #e74c3c' }}>
                                                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#e74c3c' }}>🔓 Media Unlock Validity (For User)</label>
                                                 <select value={formData.unlockValidity} onChange={(e) => setFormData({ ...formData, unlockValidity: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px', border: '1px solid #e74c3c' }}>
@@ -1169,7 +1293,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <option value="Instagram">Instagram</option><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="WhatsApp">WhatsApp</option><option value="Twitter">Twitter</option>
                                     </select>
                                 </div>
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleAddLink)} className="custom-admin-input" /></div>
                                 <button onClick={handleAddLink} className="global-update-btn">➕ Add to List</button>
                             </div>
                             

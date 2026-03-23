@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './UserDashboard.css';
 import { calculateDailyReward } from '../utils/coinLogic';
@@ -64,6 +64,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
+    // ✅ NATIVE SERVICES & BOOKINGS STATES
+    const [availableServices, setAvailableServices] = useState([]);
+    const [userBookings, setUserBookings] = useState([]);
+    const [bookingFilter, setBookingFilter] = useState('ALL'); // 'ALL', 'Pending', 'Accepted', 'Declined'
+    const [selectedServiceModal, setSelectedServiceModal] = useState(null);
+    const [servicesLoading, setServicesLoading] = useState(false);
+
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
@@ -86,7 +93,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href);
 
-            if (selectedMedia) {
+            if (selectedServiceModal) {
+                setSelectedServiceModal(null);
+            } else if (selectedMedia) {
                 setSelectedMedia(null);
             } else if (purchaseModal.show) {
                 setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
@@ -112,7 +121,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal]);
+    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal]);
 
 
     // 🟢 FETCH LOGIC 
@@ -175,6 +184,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     setMiniEvents(platformRes.data.data.miniEvents || []);
                 }
 
+                // ✅ FETCH SERVICES & BOOKINGS
+                fetchServicesAndBookings(activeUser.mobile);
+
             } catch (error) {
                 console.error("Fetch error:", error);
                 setFolders([DEFAULT_FOLDER]); 
@@ -198,6 +210,25 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             setTimeout(() => setRewardPopup({ show: false }), 4000);
         }
     }, [user?.mobile]); 
+
+    // --- FETCH SERVICES AND BOOKINGS ---
+    const fetchServicesAndBookings = async (userMobile) => {
+        setServicesLoading(true);
+        try {
+            // 1. Fetch Available Services
+            const servRes = await axios.get(`${API_BASE}/get-available-services`);
+            if (servRes.data.success) setAvailableServices(servRes.data.data || []);
+
+            // 2. Fetch User's Bookings
+            const bookRes = await axios.post(`${API_BASE}/get-user-services`, { mobile: userMobile });
+            if (bookRes.data.success) setUserBookings(bookRes.data.data || []);
+            
+        } catch (e) {
+            console.error("Failed to load services/bookings", e);
+        } finally {
+            setServicesLoading(false);
+        }
+    };
 
     // --- HELPERS ---
     const isVideo = (filePath) => {
@@ -502,11 +533,141 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // --- RENDER TABS ---
     const renderContent = () => {
-        if (currentTab === 'SERVICES') return <div className="tab-placeholder"><h2>Our Services</h2><p>Booking modules coming soon...</p></div>;
-        if (currentTab === 'BOOKINGS') return <div className="tab-placeholder"><h2>Booking History</h2><p>No past bookings found.</p></div>;
+        if (currentTab === 'SERVICES') return renderServicesTab();
+        if (currentTab === 'BOOKINGS') return renderBookingsTab();
         if (currentTab === 'HISTORY') return renderHistoryTab();
         if (currentTab === 'PROFILE') return renderProfileTab();
         return renderHomeTab();
+    };
+
+    // ✅ NATIVE SERVICES TAB
+    const renderServicesTab = () => {
+        return (
+            <div className="services-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
+                <div className="section-header" style={{ marginBottom: '20px' }}>
+                    <h2 style={{ color: '#fff', fontSize: '22px', margin: 0 }}>Explore Services</h2>
+                    <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Discover premium packages curated just for you.</p>
+                </div>
+
+                {servicesLoading ? (
+                    // Native Skeleton Loading
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {[1, 2, 3].map(i => (
+                            <div key={i} style={{ background: '#1a1a2e', borderRadius: '15px', padding: '15px', display: 'flex', gap: '15px', opacity: 0.7, animation: 'pulse 1.5s infinite' }}>
+                                <div style={{ width: '80px', height: '80px', background: '#333', borderRadius: '10px' }}></div>
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <div style={{ height: '15px', width: '80%', background: '#333', borderRadius: '5px' }}></div>
+                                    <div style={{ height: '10px', width: '50%', background: '#333', borderRadius: '5px' }}></div>
+                                    <div style={{ height: '30px', width: '90px', background: '#333', borderRadius: '8px', alignSelf: 'flex-end', marginTop: 'auto' }}></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {availableServices.length > 0 ? availableServices.map((service, idx) => (
+                            <div key={idx} onClick={() => setSelectedServiceModal(service)} style={{ background: '#1a1a2e', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.3)', cursor: 'pointer', transition: 'transform 0.2s', position: 'relative' }}>
+                                {service.imageUrl && (
+                                    <div style={{ height: '140px', width: '100%', overflow: 'hidden' }}>
+                                        <img src={service.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={service.title} />
+                                    </div>
+                                )}
+                                <div style={{ padding: '15px' }}>
+                                    <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '18px' }}>{service.title}</h3>
+                                    <p style={{ color: '#aaa', margin: '0 0 15px 0', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{service.shortDescription}</p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ color: '#f1c40f', fontWeight: 'bold', fontSize: '15px' }}>₹{service.startingPrice}</span>
+                                        <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View & Book</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
+                                <div style={{ fontSize: '40px', marginBottom: '10px' }}>🚧</div>
+                                <h3>No Services Available</h3>
+                                <p style={{ fontSize: '13px' }}>We are updating our catalog. Please check back later!</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ✅ NATIVE BOOKINGS TAB (WITH FILTER)
+    const renderBookingsTab = () => {
+        const filteredBookings = bookingFilter === 'ALL' 
+            ? userBookings 
+            : userBookings.filter(b => b.status.toUpperCase() === bookingFilter.toUpperCase());
+
+        return (
+            <div className="bookings-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
+                <div className="section-header" style={{ marginBottom: '20px' }}>
+                    <h2 style={{ color: '#fff', fontSize: '22px', margin: 0 }}>My Bookings</h2>
+                    <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Track the status of your active and past services.</p>
+                </div>
+
+                {/* Native Filter Chips */}
+                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
+                    {['ALL', 'PENDING', 'ACCEPTED', 'DECLINED'].map(type => (
+                        <button 
+                            key={type} 
+                            onClick={() => setBookingFilter(type)} 
+                            style={{ 
+                                padding: '8px 15px', 
+                                borderRadius: '20px', 
+                                border: 'none', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                                background: bookingFilter === type ? '#3498db' : '#2c3e50',
+                                color: bookingFilter === type ? '#fff' : '#aaa'
+                            }}
+                        >
+                            {type}
+                        </button>
+                    ))}
+                </div>
+
+                {servicesLoading ? (
+                    <p style={{ color: '#888', textAlign: 'center', marginTop: '30px' }}>Loading bookings...</p>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {filteredBookings.length > 0 ? filteredBookings.map((booking, idx) => {
+                            let statusColor = '#f1c40f'; // Pending
+                            if(booking.status === 'Accepted') statusColor = '#2ecc71';
+                            if(booking.status === 'Declined') statusColor = '#e74c3c';
+
+                            return (
+                                <div key={idx} style={{ background: '#1a1a2e', borderRadius: '15px', padding: '15px', borderLeft: `5px solid ${statusColor}`, position: 'relative' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                        <h3 style={{ color: '#fff', margin: 0, fontSize: '16px' }}>{booking.type}</h3>
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: statusColor, background: 'rgba(255,255,255,0.1)', padding: '3px 8px', borderRadius: '5px' }}>
+                                            {booking.status}
+                                        </span>
+                                    </div>
+                                    <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '12px' }}>📅 Date: {booking.date}</p>
+                                    <p style={{ color: '#aaa', margin: 0, fontSize: '12px' }}>💰 Estimated: ₹{booking.amount || 'TBD'}</p>
+                                    
+                                    {/* Small Action Button */}
+                                    <div style={{ textAlign: 'right', marginTop: '10px' }}>
+                                        <button style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>View Details</button>
+                                    </div>
+                                </div>
+                            );
+                        }) : (
+                            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
+                                <div style={{ fontSize: '40px', marginBottom: '10px' }}>📅</div>
+                                <h3>No Bookings Found</h3>
+                                <p style={{ fontSize: '13px' }}>You don't have any bookings matching this filter.</p>
+                                <button onClick={() => setCurrentTab('SERVICES')} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', marginTop: '10px', cursor: 'pointer' }}>Explore Services</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     const renderHistoryTab = () => {
@@ -796,6 +957,47 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     return (
         <div className="ud-container-vip">
+
+            {/* ✅ SERVICES MODAL (NATIVE BOTTOM SHEET) */}
+            {selectedServiceModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', width: '100%', maxHeight: '85vh', borderTopLeftRadius: '25px', borderTopRightRadius: '25px', padding: '20px', overflowY: 'auto', animation: 'slideUp 0.3s ease-out' }}>
+                        <div style={{ width: '40px', height: '5px', background: '#444', borderRadius: '10px', margin: '0 auto 20px auto' }}></div>
+                        
+                        {selectedServiceModal.imageUrl && (
+                            <img src={selectedServiceModal.imageUrl} alt="Service" style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '15px', marginBottom: '15px' }} />
+                        )}
+                        
+                        <h2 style={{ color: '#fff', margin: '0 0 10px 0' }}>{selectedServiceModal.title}</h2>
+                        
+                        <div style={{ background: 'rgba(52, 152, 219, 0.1)', border: '1px solid #3498db', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
+                            <span style={{ color: '#aaa', fontSize: '13px' }}>Estimated Price</span>
+                            <div style={{ color: '#fff', fontSize: '24px', fontWeight: 'bold', marginTop: '5px' }}>₹{selectedServiceModal.startingPrice}</div>
+                        </div>
+
+                        <h4 style={{ color: '#f1c40f', marginBottom: '10px' }}>Description</h4>
+                        <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.5', marginBottom: '20px' }}>
+                            {selectedServiceModal.fullDescription || selectedServiceModal.shortDescription}
+                        </p>
+
+                        <h4 style={{ color: '#f1c40f', marginBottom: '10px' }}>Features Included</h4>
+                        <ul style={{ paddingLeft: '0', listStyle: 'none', color: '#ccc', fontSize: '13px', marginBottom: '30px' }}>
+                            {selectedServiceModal.features ? selectedServiceModal.features.split(',').map((f, i) => (
+                                <li key={i} style={{ marginBottom: '8px' }}>✅ {f.trim()}</li>
+                            )) : <li>✅ Premium Quality Service</li>}
+                        </ul>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={() => setSelectedServiceModal(null)} style={{ flex: 1, padding: '15px', background: '#333', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={() => {
+                                alert(`Booking request sent for ${selectedServiceModal.title}! Admin will contact you soon.`);
+                                setSelectedServiceModal(null);
+                                setCurrentTab('BOOKINGS');
+                            }} style={{ flex: 2, padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Confirm Booking</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ✅ WALLET & COIN TOP-UP MODAL */}
             {showWalletModal && (
