@@ -91,27 +91,38 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
+    // ✅ SMART BROWSER BACK BUTTON (Native App Experience)
+    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab });
+    useEffect(() => {
+        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab };
+    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab]);
+
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
 
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href); // Prevent default back
 
-            if (showLogoutPopup) {
+            const current = stateRefs.current;
+
+            if (current.showLogoutPopup) {
                 setShowLogoutPopup(false);
-            } else if (globalRemoveUserObj) {
+            } else if (current.globalRemoveUserObj) {
                 setGlobalRemoveUserObj(null); // Step back from client data popup
-            } else if (activeTab !== 'DASHBOARD') {
+            } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'CHARGES') {
+                setUploadSubTab('LIMITS'); // Step back in upload form
+            } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'LIMITS') {
+                setUploadSubTab('BASIC'); // Step back in upload form
+            } else if (current.activeTab !== 'DASHBOARD') {
                 setActiveTab('DASHBOARD'); // Return to main tab
             } else {
-                console.log("At root of Owner dashboard. Logout prevented.");
+                setShowLogoutPopup(true); // Show logout confirmation instead of throwing out
             }
         };
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeTab, globalRemoveUserObj, showLogoutPopup]);
+    }, []);
 
     // ✅ ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
@@ -143,8 +154,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         password: ''
                     });
                     const updatedUser = { ...activeUser, name: latestData.name };
-                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); // Sync session
                     localStorage.setItem('user', JSON.stringify(updatedUser));
+                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); // ✅ Sync Session Memory
                 }
             } catch (e) { console.log("Sync failed", e); }
         };
@@ -378,7 +389,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 name: formData.name,
                 mobile: formData.mobile,
                 email: formData.email, 
-                folderName: submitFolderName, // ✅ Modified folder name sent to server
+                folderName: submitFolderName, 
                 expiryDays: formData.expiryDays,
                 downloadLimit: formData.downloadLimit,
                 addedBy: 'ADMIN',
@@ -487,7 +498,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 alert("✅ Admin Profile Updated Successfully!");
                 const updatedUser = { ...user, name: adminProfile.name };
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                sessionStorage.setItem('user', JSON.stringify(updatedUser));
+                sessionStorage.setItem('user', JSON.stringify(updatedUser)); // ✅ Sync Session Memory
             }
             else alert("Update failed: " + res.data.message);
         } catch (error) { alert("Server error updating profile."); }
@@ -987,8 +998,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <h3>📂 1. Default Upload Pricing (Coins)</h3>
                                 <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Standard coin charge for unlocking newly uploaded media.</p>
                                 <div style={{display: 'flex', gap: '15px'}}>
-                                    <div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} className="custom-admin-input"/></div>
-                                    <div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} className="custom-admin-input"/></div>
+                                    <div style={{flex: 1}}><label>Image Cost</label><input type="number" value={globalPricing.imageCost} onChange={e=>setGlobalPricing({...globalPricing, imageCost: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleSaveGlobalCharges)} className="custom-admin-input"/></div>
+                                    <div style={{flex: 1}}><label>Video Cost</label><input type="number" value={globalPricing.videoCost} onChange={e=>setGlobalPricing({...globalPricing, videoCost: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleSaveGlobalCharges)} className="custom-admin-input"/></div>
                                 </div>
                             </div>
 

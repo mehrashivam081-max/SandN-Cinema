@@ -62,7 +62,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     }, [user]);
 
-    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    // ✅ NEW 1: SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
         const handleOffline = () => {
             alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
@@ -75,15 +75,22 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
+    // ✅ NEW 2: SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
+    const stateRefs = useRef({ activeTab, studioRemoveUserObj });
+    useEffect(() => {
+        stateRefs.current = { activeTab, studioRemoveUserObj };
+    }, [activeTab, studioRemoveUserObj]);
+
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href); // Prevent default back
             
-            if (studioRemoveUserObj) {
+            const current = stateRefs.current;
+            
+            if (current.studioRemoveUserObj) {
                 setStudioRemoveUserObj(null); // Step back from client data popup
-            } else if (activeTab !== 'DASHBOARD') {
+            } else if (current.activeTab !== 'DASHBOARD') {
                 setActiveTab('DASHBOARD'); // Return to main tab instead of logging out
             } else {
                 console.log("At root of Studio dashboard. Logout prevented.");
@@ -91,9 +98,9 @@ const StudioDashboard = ({ user, onLogout }) => {
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeTab, studioRemoveUserObj]);
+    }, []);
 
-    // ✅ ENTER KEY SUPPORT HELPER
+    // ✅ NEW 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -113,7 +120,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                     password: '',
                     location: res.data.data.location || ''
                 });
-                sessionStorage.setItem('user', JSON.stringify(res.data.data)); // Sync session
+                // ✅ NEW 4: Session Storage Sync
+                sessionStorage.setItem('user', JSON.stringify(res.data.data)); 
             }
         } catch (e) {}
     };
@@ -429,6 +437,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     placeholder="🔍 Search Mobile No..." 
                                     value={clientSearchQuery}
                                     onChange={(e) => setClientSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => handleKeyDown(e, fetchClients)}
                                     style={{ padding: '8px 15px', borderRadius: '5px', border: '1px solid #ccc', outline: 'none', width: '180px' }}
                                 />
                                 <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap'}} onClick={fetchClients} disabled={fetching}>
@@ -569,7 +578,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onFocus={() => setShowMobileSuggestions(true)} 
                                         onBlur={() => setTimeout(() => setShowMobileSuggestions(false), 200)}
                                         className="custom-admin-input" 
-                                        onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))}
                                     />
                                     {showMobileSuggestions && clientMobile && filteredMobileSuggestions.length > 0 && (
                                         <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
