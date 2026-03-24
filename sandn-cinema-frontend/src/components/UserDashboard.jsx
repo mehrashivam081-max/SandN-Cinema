@@ -71,11 +71,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [selectedServiceModal, setSelectedServiceModal] = useState(null);
     const [servicesLoading, setServicesLoading] = useState(false);
 
-    // ✅ NEW: CART & EMERGENCY STATES
+    // ✅ NEW: CART, EMERGENCY & PROPOSAL STATES
     const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('userCart')) || []);
     const [showCartModal, setShowCartModal] = useState(false);
     const [showEmergencyModal, setShowEmergencyModal] = useState(false);
     const [emergencyData, setEmergencyData] = useState({ reason: '', location: '' });
+    
+    // ✅ NEW: ACCEPT PROPOSAL MODAL
+    const [viewProposalBooking, setViewProposalBooking] = useState(null);
 
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
 
@@ -104,7 +107,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href);
 
-            if (showEmergencyModal) {
+            if (viewProposalBooking) {
+                setViewProposalBooking(null);
+            } else if (showEmergencyModal) {
                 setShowEmergencyModal(false);
             } else if (showCartModal) {
                 setShowCartModal(false);
@@ -136,7 +141,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal, showCartModal, showEmergencyModal]);
+    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal, showCartModal, showEmergencyModal, viewProposalBooking]);
 
 
     // 🟢 FETCH LOGIC 
@@ -173,7 +178,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         return {
                             ...folder,
                             files: Array.isArray(folder.files) ? folder.files : (typeof folder.files === 'string' ? [folder.files] : []),
-                            // Ensure subFolders array exists
                             subFolders: Array.isArray(folder.subFolders) ? folder.subFolders : [],
                             unlockValidity: folder.unlockValidity || '24 Hours' // Validity fetched from admin settings
                         };
@@ -230,11 +234,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const fetchServicesAndBookings = async (userMobile) => {
         setServicesLoading(true);
         try {
-            // 1. Fetch Available Services
             const servRes = await axios.get(`${API_BASE}/get-available-services`);
             if (servRes.data.success) setAvailableServices(servRes.data.data || []);
 
-            // 2. Fetch User's Bookings
             const bookRes = await axios.post(`${API_BASE}/get-user-services`, { mobile: userMobile });
             if (bookRes.data.success) setUserBookings(bookRes.data.data || []);
             
@@ -347,7 +349,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         setLoading(true);
         try {
-            // Determine Expiry based on Admin Folder Setting
             let expiryDate = 'Permanent';
             if (activeFolder?.unlockValidity === '24 Hours') {
                 expiryDate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString();
@@ -355,7 +356,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 expiryDate = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
             }
 
-            // Use the Batch Deduction API for single and multiple files
             const res = await axios.post(`${API_BASE}/deduct-coins-batch`, {
                 mobile: syncUser.mobile,
                 amount: targetCost,
@@ -588,7 +588,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         if (hasChangedItems) {
             alert("⚠️ Some items in your cart have been updated by the provider. Please recheck the details and continue.");
-            // Update cart to match live data
             const updatedCart = cart.map(cartItem => {
                 const liveItem = availableServices.find(s => s._id === cartItem._id);
                 return liveItem ? { ...liveItem, addedAt: cartItem.addedAt, isChanged: true } : cartItem;
@@ -606,7 +605,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             if (res.data.success) {
                 alert(`Successfully checked out ${cart.length} items! Request routing to providers...`);
-                setCart([]); // Empty cart after checkout
+                setCart([]); 
                 setShowCartModal(false);
                 setCurrentTab('BOOKINGS');
                 fetchServicesAndBookings(syncUser.mobile);
@@ -618,7 +617,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     };
 
-    // ✅ EMERGENCY BOOKING LOGIC
+    // ✅ EMERGENCY BOOKING LOGIC WITH GPS LIVE LOCATION
     const processEmergencyBooking = async (e) => {
         e.preventDefault();
         if (wallet.coins < 50) {
@@ -628,26 +627,71 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return;
         }
 
+        setLoading(true);
+
+        // Fetch GPS Location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    sendEmergencyToBackend(position.coords.latitude, position.coords.longitude);
+                },
+                async (error) => {
+                    alert("Location access denied. Using only typed location.");
+                    sendEmergencyToBackend(null, null); // Send without GPS
+                }
+            );
+        } else {
+            sendEmergencyToBackend(null, null); // Geolocation not supported
+        }
+    };
+
+    const sendEmergencyToBackend = async (lat, long) => {
         try {
-            setLoading(true);
             const res = await axios.post(`${API_BASE}/emergency-booking`, {
                 mobile: syncUser.mobile,
                 reason: emergencyData.reason,
-                location: emergencyData.location
+                location: emergencyData.location,
+                lat: lat,
+                long: long
             });
 
             if (res.data.success) {
-                setWallet(res.data.wallet); // Update local wallet instantly
+                setWallet(res.data.wallet); 
                 alert("Payment Successful! Connecting to Customer Care...");
                 setShowEmergencyModal(false);
                 setEmergencyData({ reason: '', location: '' });
                 fetchServicesAndBookings(syncUser.mobile);
                 
                 // Connect Call
-                window.location.href = "tel:+919999999999"; // Replace with real customer care number
+                window.location.href = "tel:+917828011282"; 
             }
         } catch (err) {
             alert("Failed to process payment.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ✅ USER ACCEPTS PROPOSAL & PAYS ADVANCE
+    const handleAcceptProposal = async () => {
+        if (!viewProposalBooking) return;
+        if (!window.confirm(`Are you sure you want to pay ₹${viewProposalBooking.proposal?.advanceAmount} to confirm this booking?`)) return;
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/accept-proposal`, {
+                bookingId: viewProposalBooking._id
+            });
+
+            if (res.data.success) {
+                alert(`✅ Booking Confirmed Successfully!\nAn email receipt has been sent to you.`);
+                setViewProposalBooking(null);
+                fetchServicesAndBookings(syncUser.mobile);
+            } else {
+                alert(res.data.message || "Failed to confirm booking.");
+            }
+        } catch (e) {
+            alert("Error confirming booking.");
         } finally {
             setLoading(false);
         }
@@ -700,7 +744,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <p style={{ color: '#aaa', margin: '0 0 15px 0', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{service.shortDescription}</p>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ color: '#f1c40f', fontWeight: 'bold', fontSize: '15px' }}>₹{service.startingPrice}</span>
-                                        <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View Details</button>
+                                        <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View & Book</button>
                                     </div>
                                 </div>
                             </div>
@@ -721,7 +765,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const renderBookingsTab = () => {
         const filteredBookings = bookingFilter === 'ALL' 
             ? userBookings 
-            : userBookings.filter(b => b.status.toUpperCase() === bookingFilter.toUpperCase());
+            : userBookings.filter(b => {
+                if (bookingFilter === 'PENDING PAYMENT') return b.status === 'Pending Payment';
+                return b.status.toUpperCase() === bookingFilter.toUpperCase();
+            });
 
         return (
             <div className="bookings-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
@@ -730,11 +777,23 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Track the status of your active and past services.</p>
                 </div>
 
+                {/* Native Filter Chips */}
                 <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
-                    {['ALL', 'PENDING', 'ACCEPTED', 'DECLINED'].map(type => (
+                    {['ALL', 'PENDING', 'PENDING PAYMENT', 'CONFIRMED', 'DECLINED'].map(type => (
                         <button 
-                            key={type} onClick={() => setBookingFilter(type)} 
-                            style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: 'pointer', background: bookingFilter === type ? '#3498db' : '#2c3e50', color: bookingFilter === type ? '#fff' : '#aaa' }}
+                            key={type} 
+                            onClick={() => setBookingFilter(type)} 
+                            style={{ 
+                                padding: '8px 15px', 
+                                borderRadius: '20px', 
+                                border: 'none', 
+                                fontSize: '12px', 
+                                fontWeight: 'bold',
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                                background: bookingFilter === type ? '#3498db' : '#2c3e50',
+                                color: bookingFilter === type ? '#fff' : '#aaa'
+                            }}
                         >
                             {type}
                         </button>
@@ -746,18 +805,32 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {filteredBookings.length > 0 ? filteredBookings.map((booking, idx) => {
-                            let statusColor = '#f1c40f'; 
-                            if(booking.status === 'Accepted') statusColor = '#2ecc71';
+                            let statusColor = '#f1c40f'; // Pending
+                            if(booking.status === 'Confirmed' || booking.status === 'Accepted') statusColor = '#2ecc71';
+                            if(booking.status === 'Pending Payment') statusColor = '#e67e22'; // Orange for Payment Pending
                             if(booking.status === 'Declined') statusColor = '#e74c3c';
 
                             return (
                                 <div key={idx} style={{ background: '#1a1a2e', borderRadius: '15px', padding: '15px', borderLeft: `5px solid ${statusColor}`, position: 'relative' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                         <h3 style={{ color: '#fff', margin: 0, fontSize: '16px' }}>{booking.type}</h3>
-                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: statusColor, background: 'rgba(255,255,255,0.1)', padding: '3px 8px', borderRadius: '5px' }}>{booking.status}</span>
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: statusColor, background: 'rgba(255,255,255,0.1)', padding: '3px 8px', borderRadius: '5px', textAlign: 'right' }}>
+                                            {booking.status}
+                                        </span>
                                     </div>
                                     <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '12px' }}>📅 Date: {new Date(booking.createdAt).toLocaleDateString()}</p>
                                     <p style={{ color: '#aaa', margin: 0, fontSize: '12px' }}>💰 Estimated: ₹{booking.amount || 'TBD'}</p>
+                                    
+                                    {/* Action Buttons depending on status */}
+                                    <div style={{ textAlign: 'right', marginTop: '10px' }}>
+                                        {booking.status === 'Pending Payment' ? (
+                                            <button onClick={() => setViewProposalBooking(booking)} style={{ background: '#f39c12', border: 'none', color: '#fff', padding: '8px 15px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', animation: 'pulse 2s infinite' }}>
+                                                ⚠️ View Proposal & Pay
+                                            </button>
+                                        ) : (
+                                            <button style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>View Details</button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         }) : (
@@ -824,9 +897,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     );
 
     const renderHomeTab = () => {
+        // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
         if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
-            let filesToDisplay = activeSubFolder ? activeSubFolder.files || [] : activeFolder.files || [];
-            let currentFolderName = activeSubFolder ? `${activeFolder.folderName} ➔ ${activeSubFolder.name}` : activeFolder.folderName;
+            
+            let filesToDisplay = [];
+            let currentFolderName = '';
+
+            if (activeSubFolder) {
+                filesToDisplay = activeSubFolder.files || [];
+                currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
+            } else {
+                filesToDisplay = activeFolder.files || [];
+                currentFolderName = activeFolder.folderName;
+            }
 
             const displayedMedia = filesToDisplay.filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
@@ -843,7 +926,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folder-gallery-view">
                     <div className="folder-header-nav">
-                        <button onClick={() => { if(activeSubFolder) { setActiveSubFolder(null); setIsSelectionMode(false); setSelectedMediaFiles([]); } else { setActiveFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); } }} className="back-btn">⬅ Back</button>
+                        <button onClick={() => { 
+                            if(activeSubFolder) { setActiveSubFolder(null); setIsSelectionMode(false); setSelectedMediaFiles([]); }
+                            else { setActiveFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); } 
+                        }} className="back-btn">⬅ Back</button>
                         <h3 style={{fontSize: '16px'}}>{currentFolderName}</h3>
                     </div>
 
@@ -854,6 +940,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </div>
                     )}
 
+                    {/* ✅ MULTI-SELECT & FILTER BAR */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                         <div className="filter-group-vip" style={{margin: 0}}>
                             <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All</button>
@@ -865,30 +952,93 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </button>
                     </div>
 
+                    {/* ✅ FLOATING BATCH UNLOCK BAR */}
                     {isSelectionMode && selectedMediaFiles.length > 0 && (
                         <div style={{ background: '#f1c40f', padding: '12px 15px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', position: 'sticky', top: '10px', zIndex: 50, boxShadow: '0 10px 20px rgba(0,0,0,0.3)' }}>
                             <span style={{ color: '#000', fontWeight: 'bold', fontSize: '13px' }}>{selectedMediaFiles.length} Selected</span>
-                            <button onClick={triggerBatchMonetization} style={{ background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔓 Unlock ({getBatchCost()} Coins)</button>
+                            <button onClick={triggerBatchMonetization} style={{ background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                🔓 Unlock ({getBatchCost()} Coins)
+                            </button>
                         </div>
                     )}
 
                     <div className="ud-grid-vip mt-20">
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => {
-                            const isUnlocked = isFileUnlocked(filePath); const isSelected = selectedMediaFiles.includes(filePath);
+                            const isUnlocked = isFileUnlocked(filePath);
+                            const isSelected = selectedMediaFiles.includes(filePath);
+                            
                             return (
                                 <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #3498db' : (isUnlocked ? '1px solid #2ecc71' : '1px solid #333') }}>
+                                    
+                                    {/* 1. MEDIA CLICK AREA */}
                                     <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => isSelectionMode ? toggleSelection(filePath) : openMediaInterface(filePath)}>
-                                        {isSelectionMode && <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20, background: '#fff', borderRadius: '50%', padding: '2px', display: 'flex', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}><input type="checkbox" checked={isSelected} readOnly style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: '#3498db' }} /></div>}
-                                        {isVideo(filePath) ? ( <><video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div></> ) : ( <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} /> )}
-                                        {!isUnlocked && !isSelectionMode && <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>🔒 Locked</div>}
+                                        
+                                        {/* CHECKBOX FOR SELECTION */}
+                                        {isSelectionMode && (
+                                            <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20, background: '#fff', borderRadius: '50%', padding: '2px', display: 'flex', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
+                                                <input type="checkbox" checked={isSelected} readOnly style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: '#3498db' }} />
+                                            </div>
+                                        )}
+
+                                        {isVideo(filePath) ? (
+                                            <>
+                                                <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
+                                            </>
+                                        ) : (
+                                            <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
+                                        )}
+
+                                        {!isUnlocked && !isSelectionMode && (
+                                            <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>
+                                                🔒 Locked
+                                            </div>
+                                        )}
+
+                                        {/* Download Progress Overlay */}
+                                        {downloadingFile === filePath && (
+                                            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: 'rgba(0,0,0,0.85)', padding: '10px', textAlign: 'center', zIndex: 10 }}>
+                                                <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
+                                                <div style={{ width: '100%', background: '#eee', height: '4px', borderRadius: '5px', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {/* 2. UPLOADER & PRICE STRIP */}
                                     <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
-                                        <div onClick={() => setUploaderProfile({ name: activeFolder.uploadedBy || 'SandN Cinema', role: activeFolder.uploaderRole || 'Premium Studio', email: activeFolder.uploaderEmail || 'contact@sandncinema.com' })} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>{(activeFolder.uploadedBy || 'S')[0].toUpperCase()}</div>
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span><span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span></div>
+                                        <div 
+                                            onClick={() => setUploaderProfile({
+                                                name: activeFolder.uploadedBy || 'SandN Cinema',
+                                                role: activeFolder.uploaderRole || 'Premium Studio',
+                                                email: activeFolder.uploaderEmail || 'contact@sandncinema.com'
+                                            })}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                                        >
+                                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>
+                                                {(activeFolder.uploadedBy || 'S')[0].toUpperCase()}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span>
+                                                <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span>
+                                            </div>
                                         </div>
+
+                                        {/* Badge Area */}
                                         <div style={{ textAlign: 'right' }}>
-                                            {isUnlocked ? <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>✅ Unlocked</span> : <><span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span><span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>🪙 {getCostLabel(filePath)}</span></>}
+                                            {isUnlocked ? (
+                                                <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                    ✅ Unlocked
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
+                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        🪙 {getCostLabel(filePath)}
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -899,31 +1049,61 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
+        // ✅ SCENARIO 2: Viewing Sub-Folders inside a Main Folder
         if (activeFolder && activeFolder.subFolders && activeFolder.subFolders.length > 0 && !activeSubFolder) {
             return (
                 <div className="folders-view">
-                    <div className="folder-header-nav"><button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button><h3>{activeFolder.folderName}</h3></div>
-                    {activeFolder.files && activeFolder.files.length > 0 && <div className="folder-card" onClick={() => setActiveSubFolder({ name: "Root Media Files", files: activeFolder.files })} style={{ background: '#2c3e50', border: '1px solid #3498db', marginBottom: '20px' }}><div className="folder-icon">📁</div><h4>General Uploads</h4><p>{activeFolder.files.length} Items</p></div>}
+                    <div className="folder-header-nav">
+                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button>
+                        <h3>{activeFolder.folderName}</h3>
+                    </div>
+                    
+                    {/* Display Root Files if any exist along with sub-folders */}
+                    {activeFolder.files && activeFolder.files.length > 0 && (
+                        <div className="folder-card" onClick={() => setActiveSubFolder({ name: "Root Media Files", files: activeFolder.files })} style={{ background: '#2c3e50', border: '1px solid #3498db', marginBottom: '20px' }}>
+                            <div className="folder-icon">📁</div><h4>General Uploads</h4><p>{activeFolder.files.length} Items</p>
+                        </div>
+                    )}
+
                     <div className="folders-grid">
                         {activeFolder.subFolders.map((sub, index) => (
-                            <div key={index} className="folder-card" onClick={() => setActiveSubFolder(sub)}><div className="folder-icon">🗓️</div><h4>{sub.name}</h4><p>{sub.files?.length || 0} Items</p></div>
+                            <div key={index} className="folder-card" onClick={() => setActiveSubFolder(sub)}>
+                                <div className="folder-icon">🗓️</div>
+                                <h4>{sub.name}</h4>
+                                <p>{sub.files?.length || 0} Items</p>
+                            </div>
                         ))}
                     </div>
                 </div>
             );
         }
 
+        // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
         return (
             <div className="folders-view">
-                <div className="welcome-banner"><h1>Your Digital Memories</h1><p>Select a folder to view your curated albums.</p></div>
+                <div className="welcome-banner">
+                    <h1>Your Digital Memories</h1>
+                    <p>Select a folder to view your curated albums.</p>
+                </div>
+                
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid">
                         {folders.map((folder, index) => {
-                            const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date(); const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit; const isLocked = isExpired || isLimitReached;
-                            let totalFiles = folder.files ? folder.files.length : 0; if (folder.subFolders) folder.subFolders.forEach(sf => totalFiles += (sf.files ? sf.files.length : 0));
+                            const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
+                            const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
+                            const isLocked = isExpired || isLimitReached;
+
+                            // Calculate total files (Root files + all Subfolder files)
+                            let totalFiles = folder.files ? folder.files.length : 0;
+                            if (folder.subFolders) {
+                                folder.subFolders.forEach(sf => totalFiles += (sf.files ? sf.files.length : 0));
+                            }
+
                             return (
                                 <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1 }}>
-                                    <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div><h4>{folder.folderName}</h4><p>{totalFiles} Total Items</p>
+                                    <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
+                                    <h4>{folder.folderName}</h4>
+                                    <p>{totalFiles} Total Items</p>
                                     {folder.subFolders && folder.subFolders.length > 0 && <p style={{fontSize: '10px', color: '#3498db', marginTop: '2px'}}>🗓️ Contains Date Folders</p>}
                                     {folder.isDefault && <span className="default-badge">Premium</span>}
                                     {isExpired && <span style={{display:'block', fontSize:'11px', color:'#e74c3c', marginTop:'5px'}}>Expired</span>}
@@ -979,26 +1159,81 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }
             `}</style>
 
-            {/* ✅ EMERGENCY MODAL */}
+            {/* ✅ VIEW & ACCEPT PROPOSAL MODAL */}
+            {viewProposalBooking && viewProposalBooking.proposal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+                    <div style={{ background: '#fff', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '450px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ color: '#2c3e50', margin: 0 }}>📋 Custom Proposal</h2>
+                            <button onClick={() => setViewProposalBooking(null)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#555', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        
+                        <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '10px', marginBottom: '20px', borderLeft: '5px solid #3498db' }}>
+                            <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#7f8c8d' }}>Deliverables</p>
+                            <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#2c3e50' }}>{viewProposalBooking.proposal.deliverables}</p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+                            <div style={{ flex: 1, background: '#fdfefe', border: '1px solid #ddd', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                                <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#7f8c8d' }}>Total Estimate</p>
+                                <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#27ae60' }}>₹{viewProposalBooking.proposal.totalPrice}</p>
+                            </div>
+                            <div style={{ flex: 1, background: '#fdfefe', border: '1px dashed #e74c3c', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                                <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#e74c3c', fontWeight: 'bold' }}>Advance to Pay</p>
+                                <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>₹{viewProposalBooking.proposal.advanceAmount}</p>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '25px' }}>
+                            <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>Terms & Conditions</h4>
+                            <div style={{ background: '#eee', padding: '15px', borderRadius: '8px', fontSize: '12px', color: '#555', maxHeight: '100px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                                {viewProposalBooking.proposal.terms}
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleAcceptProposal} 
+                            disabled={loading}
+                            style={{ width: '100%', padding: '15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}
+                        >
+                            {loading ? 'Processing...' : `Accept & Pay ₹${viewProposalBooking.proposal.advanceAmount}`}
+                        </button>
+                        <p style={{ textAlign: 'center', fontSize: '11px', color: '#aaa', marginTop: '10px' }}>
+                            Proposal Expires: {new Date(viewProposalBooking.proposal.expiryTime).toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ EMERGENCY MODAL WITH GPS */}
             {showEmergencyModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
                     <div style={{ background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(231,76,60,0.3)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                             <h2 style={{ color: '#e74c3c', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🚨 Emergency Booking</h2>
-                            <button onClick={() => setShowEmergencyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+                            <button onClick={() => setShowEmergencyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#333', cursor: 'pointer' }}>✖</button>
                         </div>
                         <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Instantly connect with our customer care for urgent booking requests. Cost: <strong>50 Coins</strong>.</p>
                         
                         <form onSubmit={processEmergencyBooking} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            <input type="text" required placeholder="Your Location / City" value={emergencyData.location} onChange={e => setEmergencyData({...emergencyData, location: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px' }} />
-                            <textarea required placeholder="Why do you need emergency service?" rows="3" value={emergencyData.reason} onChange={e => setEmergencyData({...emergencyData, reason: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', resize: 'vertical' }}></textarea>
+                            <input 
+                                type="text" required placeholder="Your Location / City" 
+                                value={emergencyData.location} onChange={e => setEmergencyData({...emergencyData, location: e.target.value})} 
+                                style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', color: '#333', backgroundColor: '#fff' }} 
+                            />
+                            
+                            <textarea 
+                                required placeholder="Why do you need emergency service?" rows="3" 
+                                value={emergencyData.reason} onChange={e => setEmergencyData({...emergencyData, reason: e.target.value})} 
+                                style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', resize: 'vertical', color: '#333', backgroundColor: '#fff' }}
+                            ></textarea>
                             
                             <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#d4ac0d', fontWeight: 'bold' }}>
                                 Wallet Balance: 🪙 {wallet.coins} Coins
                             </div>
 
                             <button type="submit" disabled={loading} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                {loading ? 'Connecting...' : 'Pay 50 Coins & Call Now 📞'}
+                                {loading ? 'Fetching GPS & Connecting...' : 'Pay 50 Coins & Call Now 📞'}
                             </button>
                         </form>
                     </div>

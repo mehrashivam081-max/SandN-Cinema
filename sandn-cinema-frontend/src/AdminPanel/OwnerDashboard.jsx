@@ -85,6 +85,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [newService, setNewService] = useState({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
     const [serviceImage, setServiceImage] = useState(null);
     const [availableServices, setAvailableServices] = useState([]);
+    const [editingServiceId, setEditingServiceId] = useState(null); // ✅ ADDED
+
+    // ✅ ADDED: PROPOSAL STATES
+    const [showProposalModal, setShowProposalModal] = useState(false);
+    const [proposalData, setProposalData] = useState({ bookingId: '', clientName: '', deliverables: '', totalPrice: '', advanceAmount: '', terms: '', expiryHours: '24' });
 
     // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
@@ -100,10 +105,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     }, [onLogout]);
 
     // ✅ FEATURE 2: SMART BROWSER BACK BUTTON (FIXED with useRef to prevent infinite loop)
-    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab });
+    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal });
     useEffect(() => {
-        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab };
-    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab]);
+        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal };
+    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal]);
 
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
@@ -113,7 +118,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
             const current = stateRefs.current;
 
-            if (current.showLogoutPopup) {
+            if (current.showProposalModal) {
+                setShowProposalModal(false);
+            } else if (current.showLogoutPopup) {
                 setShowLogoutPopup(false);
             } else if (current.globalRemoveUserObj) {
                 setGlobalRemoveUserObj(null); // Step back from client data popup
@@ -146,7 +153,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchPlatformSettings(); 
         fetchBookings();         
         fetchCollabs();
-        fetchServices(); // Fetch active services       
+        fetchServices(); // Fetch active services        
 
         const syncAdminData = async () => {
             try {
@@ -591,8 +598,30 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to update booking"); }
     };
 
-   // ✅ NEW & REAL: MANAGE SERVICES ADD LOGIC
-    const handleAddService = async (e) => {
+    // ==========================================
+    // ✅ ADDED: EDIT SERVICE & SEND PROPOSAL LOGIC
+    // ==========================================
+
+    const startEditingService = (service) => {
+        setEditingServiceId(service._id);
+        setNewService({
+            title: service.title,
+            shortDescription: service.shortDescription,
+            fullDescription: service.fullDescription,
+            startingPrice: service.startingPrice,
+            features: service.features
+        });
+        setServiceImage(null); 
+        document.getElementById('service-form-section')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const cancelEditing = () => {
+        setEditingServiceId(null);
+        setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+        setServiceImage(null);
+    };
+
+    const handleAddOrUpdateService = async (e) => {
         if(e) e.preventDefault();
         if(!newService.title || !newService.startingPrice) return alert("Title and Price are required.");
         
@@ -600,49 +629,100 @@ const OwnerDashboard = ({ user, onLogout }) => {
         try {
             let uploadedImageUrl = '';
 
-            // Step 1: Agar image select ki hai, toh pehle Cloudinary pe upload karo
             if (serviceImage) {
                 const fd = new FormData();
                 fd.append('file', serviceImage);
-                fd.append('upload_preset', 'xgujeuol'); // Aapka Cloudinary preset
-
+                fd.append('upload_preset', 'xgujeuol'); 
                 const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd);
                 uploadedImageUrl = cloudRes.data.secure_url;
             }
 
-            // Step 2: Cloudinary se URL milne ke baad Backend DB me save karo
             const payloadData = {
                 title: newService.title,
                 startingPrice: newService.startingPrice,
                 shortDescription: newService.shortDescription,
                 fullDescription: newService.fullDescription,
                 features: newService.features,
-                imageUrl: uploadedImageUrl, // Real image link
                 addedBy: 'ADMIN'
             };
 
-            const res = await axios.post(`${API_BASE}/add-service`, payloadData);
+            if (uploadedImageUrl) payloadData.imageUrl = uploadedImageUrl;
+
+            let res;
+            if (editingServiceId) {
+                payloadData.id = editingServiceId;
+                res = await axios.post(`${API_BASE}/update-service`, payloadData);
+            } else {
+                res = await axios.post(`${API_BASE}/add-service`, payloadData);
+            }
 
             if (res.data.success) {
-                alert("✅ Service published successfully and is now Live on the App!");
-                
-                // Form ko reset karo
-                setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
-                setServiceImage(null);
-                
-                // Nayi service ko turant table me dikhane ke liye state update karo
-                setAvailableServices(prev => [res.data.data, ...prev]);
+                alert(`✅ Service ${editingServiceId ? 'updated' : 'published'} successfully!`);
+                cancelEditing();
+                fetchServices(); 
             } else {
-                alert("Failed to add service: " + res.data.message);
+                alert("Failed to save service: " + res.data.message);
             }
         } catch (error) {
-            console.error("Add Service Error:", error);
+            console.error("Save Service Error:", error);
             alert("Upload Error. Please check your connection.");
         } finally {
             setLoading(false);
         }
     };
-    
+
+    const handleDeleteService = async (id) => {
+        if (!window.confirm("Are you sure you want to completely remove this service from the App?")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/delete-service`, { id });
+            if (res.data.success) {
+                alert("Service Removed.");
+                fetchServices();
+            }
+        } catch (e) {
+            alert("Failed to delete.");
+        }
+    };
+
+    // ✅ OPEN PROPOSAL MODAL
+    const openProposalModal = (booking) => {
+        setProposalData({
+            bookingId: booking._id,
+            clientName: booking.name,
+            totalPrice: booking.amount || '',
+            advanceAmount: '',
+            deliverables: booking.type || '',
+            terms: '1. Advance is non-refundable.\n2. Final deliverables within 15 days.',
+            expiryHours: '24'
+        });
+        setShowProposalModal(true);
+    };
+
+    // ✅ SEND PROPOSAL
+    const handleSendProposal = async (e) => {
+        if(e) e.preventDefault();
+        if(!proposalData.totalPrice || !proposalData.advanceAmount) return alert("Pricing details are required.");
+
+        if (!window.confirm(`Send this proposal to ${proposalData.clientName}? An email will be sent immediately.`)) return;
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/send-proposal`, proposalData);
+            if (res.data.success) {
+                alert("✅ Proposal sent to User. Status is now 'Pending Payment'.");
+                setShowProposalModal(false);
+                fetchBookings(); 
+            } else {
+                alert("Failed to send proposal.");
+            }
+        } catch (e) {
+            alert("Error connecting to server.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     // ✅ DROPDOWN TOGGLE LOGIC
     const toggleMenu = (menuName) => {
         setOpenDropdown(openDropdown === menuName ? null : menuName);
@@ -673,6 +753,57 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <button onClick={() => onLogout()} style={{background:'#e74c3c', color:'#fff', padding:'10px 25px', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'16px'}}>Yes</button>
                             <button onClick={() => setShowLogoutPopup(false)} style={{background:'#bdc3c7', color:'#333', padding:'10px 25px', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold', fontSize:'16px'}}>No</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ SEND PROPOSAL MODAL */}
+            {showProposalModal && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#1a1a2e', padding:'25px', borderRadius:'15px', width:'90%', maxWidth:'500px', border: '1px solid #333', boxShadow:'0 20px 50px rgba(0,0,0,0.5)'}}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{color:'#f39c12', margin: 0}}>Create Custom Proposal</h2>
+                            <button onClick={() => setShowProposalModal(false)} style={{background:'transparent', color:'#fff', border:'none', fontSize:'20px', cursor:'pointer'}}>✖</button>
+                        </div>
+
+                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '15px' }}>Client: <strong style={{ color: '#fff' }}>{proposalData.clientName}</strong></p>
+
+                        <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div>
+                                <label style={{color: '#aaa', fontSize: '12px'}}>Deliverables / Package Type</label>
+                                <input type="text" required value={proposalData.deliverables} onChange={e => setProposalData({...proposalData, deliverables: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <div style={{flex: 1}}>
+                                    <label style={{color: '#aaa', fontSize: '12px'}}>Total Price (₹)</label>
+                                    <input type="number" required value={proposalData.totalPrice} onChange={e => setProposalData({...proposalData, totalPrice: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                </div>
+                                <div style={{flex: 1}}>
+                                    <label style={{color: '#aaa', fontSize: '12px'}}>Advance Required (₹)</label>
+                                    <input type="number" required value={proposalData.advanceAmount} onChange={e => setProposalData({...proposalData, advanceAmount: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{color: '#aaa', fontSize: '12px'}}>Terms & Conditions (User must agree)</label>
+                                <textarea required rows="3" value={proposalData.terms} onChange={e => setProposalData({...proposalData, terms: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px', resize: 'vertical' }}></textarea>
+                            </div>
+
+                            <div>
+                                <label style={{color: '#aaa', fontSize: '12px'}}>Proposal Expiry Time</label>
+                                <select value={proposalData.expiryHours} onChange={e => setProposalData({...proposalData, expiryHours: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                    <option value="12">12 Hours</option>
+                                    <option value="24">24 Hours (1 Day)</option>
+                                    <option value="48">48 Hours (2 Days)</option>
+                                    <option value="168">7 Days</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" disabled={loading} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
+                                {loading ? 'Sending...' : '📤 Send Proposal & Email'}
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}
@@ -780,30 +911,43 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <div className="stat-card red" onClick={() => setActiveTab('BOOKINGS')} style={{cursor:'pointer'}}>
                                 <h3>{bookings.length}</h3><p>Total Bookings</p>
                             </div>
+                            
+                            <div className="stat-card" onClick={() => { setActiveTab('MANAGE_SERVICES'); setOpenDropdown('USER'); }} style={{cursor:'pointer', background: '#e67e22', color: 'white', borderRadius: '10px', padding: '20px', textAlign: 'center'}}>
+                                <h3 style={{margin: 0, fontSize: '28px', color: 'white'}}>{availableServices.length}</h3>
+                                <p style={{margin: '5px 0 0 0', fontSize: '14px', color: 'white', fontWeight: 'bold'}}>Total Services</p>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* 🔴 NEW TAB: MANAGE SERVICES (UNDER USER PLATFORM) */}
+                {/* 🔴 MANAGE SERVICES (UNDER USER PLATFORM) */}
                 {activeTab === 'MANAGE_SERVICES' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🛠️ Manage App Services</h2></div>
-                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Add or remove premium services that users can view and book directly from their app.</p>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Add or Edit premium services that users can view and book directly from their app.</p>
 
-                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
-                            <form onSubmit={handleAddService} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <div id="service-form-section" className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px', borderTop: editingServiceId ? '4px solid #f1c40f' : 'none' }}>
+                            {editingServiceId && <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', color: '#d4ac0d', fontWeight: 'bold', marginBottom: '15px', textAlign: 'center' }}>✏️ You are editing an existing service</div>}
+                            
+                            <form onSubmit={handleAddOrUpdateService} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Service Title</label><input type="text" placeholder="e.g. Pre-Wedding Shoot" value={newService.title} onChange={e => setNewService({...newService, title: e.target.value})} className="custom-admin-input" required/></div>
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <div style={{flex: 1}}><label style={{fontSize: '13px', fontWeight: 'bold'}}>Starting Price (₹)</label><input type="number" placeholder="e.g. 15000" value={newService.startingPrice} onChange={e => setNewService({...newService, startingPrice: e.target.value})} className="custom-admin-input" required/></div>
-                                    <div style={{flex: 1}}><label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Cover Image</label><input type="file" accept="image/*" onChange={e => setServiceImage(e.target.files[0])} className="custom-admin-input" style={{padding: '9px'}}/></div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Cover Image {editingServiceId && <span style={{fontSize: '10px', color: '#aaa'}}>(Leave blank to keep old)</span>}</label>
+                                        <input type="file" accept="image/*" onChange={e => setServiceImage(e.target.files[0])} className="custom-admin-input" style={{padding: '9px'}}/>
+                                    </div>
                                 </div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Short Description (For Card View)</label><textarea placeholder="Brief overview (max 2 lines)" value={newService.shortDescription} onChange={e => setNewService({...newService, shortDescription: e.target.value})} className="custom-admin-input" rows="2"></textarea></div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Full Description (For Detail View)</label><textarea placeholder="Detailed explanation of what the user gets..." value={newService.fullDescription} onChange={e => setNewService({...newService, fullDescription: e.target.value})} className="custom-admin-input" rows="4"></textarea></div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Included Features (Comma Separated)</label><input type="text" placeholder="e.g. 50 Edited Photos, Drone Shoot, 3 Outfits" value={newService.features} onChange={e => setNewService({...newService, features: e.target.value})} className="custom-admin-input"/></div>
                                 
-                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#f39c12', padding: '15px', marginTop: '10px' }}>
-                                    {loading ? 'Publishing Service...' : '➕ Publish New Service to App'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {editingServiceId && <button type="button" onClick={cancelEditing} style={{ background: '#95a5a6', color: '#fff', border: 'none', padding: '15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>}
+                                    <button type="submit" disabled={loading} className="global-update-btn" style={{ background: editingServiceId ? '#2ecc71' : '#f39c12', padding: '15px', marginTop: editingServiceId ? 0 : '10px', flex: 1 }}>
+                                        {loading ? 'Processing...' : (editingServiceId ? '💾 Update Live Service' : '➕ Publish New Service')}
+                                    </button>
+                                </div>
                             </form>
                         </div>
 
@@ -817,7 +961,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <td><strong>{srv.title}</strong></td>
                                             <td>₹{srv.startingPrice}</td>
                                             <td><span className="status-badge active">Live</span></td>
-                                            <td><button className="pdf-btn" style={{background: '#e74c3c', padding: '5px 10px'}}>Remove</button></td>
+                                            <td>
+                                                <button onClick={() => startEditingService(srv)} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px'}}>✏️ Edit</button>
+                                                <button onClick={() => handleDeleteService(srv._id)} className="pdf-btn" style={{background: '#e74c3c', padding: '5px 10px'}}>Remove</button>
+                                            </td>
                                         </tr>
                                     )) : <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No services published yet.</td></tr>}
                                 </tbody>
@@ -1033,7 +1180,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                 </ul>
                                             )}
 
-                                            {/* ✅ SMART DATE APPEND CHECKBOX */}
                                             <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <input type="checkbox" id="useDateFolder" checked={useDateFolder} onChange={(e) => setUseDateFolder(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
                                                 <label htmlFor="useDateFolder" style={{ fontSize: '12px', color: '#333', cursor: 'pointer', fontWeight: 'bold' }}>🗓️ Auto-append Today's Date (e.g. {formData.folderName ? `${formData.folderName} - ` : ''}{new Date().toLocaleDateString('en-GB').replace(/\//g, '-')})</label>
@@ -1241,34 +1387,45 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 OTHER TABS (Accounts, Bookings, etc) */}
+                {/* 🔴 TAB: BOOKINGS (WITH EMERGENCY HIGHLIGHT & SEND PROPOSAL) */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📅 Direct Bookings</h2></div>
+                        <div className="section-header"><h2>📅 Direct Bookings & Emergencies</h2></div>
                         <div className="data-table-container">
                             <table className="admin-table">
                                 <thead>
-                                    <tr><th>Client Name</th><th>Mobile</th><th>Date</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+                                    <tr><th>Client Details</th><th>Date/Time</th><th>Type & Request</th><th>Status</th><th>Actions</th></tr>
                                 </thead>
                                 <tbody>
-                                    {bookings.map(b => (
-                                        <tr key={b._id}>
-                                            <td><strong>{b.name}</strong></td>
-                                            <td>{b.mobile || 'N/A'}</td>
-                                            <td>{b.date}</td>
-                                            <td>{b.type}</td>
-                                            <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
+                                    {bookings.map(b => {
+                                        const isEmergency = b.isEmergency;
+                                        return (
+                                        <tr key={b._id} style={{ background: isEmergency ? 'rgba(231, 76, 60, 0.1)' : 'transparent' }}>
                                             <td>
+                                                <strong>{b.name}</strong><br/>
+                                                <span style={{fontSize:'12px', color:'#666'}}>{b.mobile}</span><br/>
+                                                {isEmergency && <span style={{color:'#e74c3c', fontSize:'11px', fontWeight:'bold'}}>🚨 Location: {b.location}</span>}
+                                            </td>
+                                            <td style={{fontSize:'13px'}}>{b.startDate || new Date(b.createdAt).toLocaleDateString()}</td>
+                                            <td>
+                                                {isEmergency ? <span style={{color: '#c0392b', fontWeight:'bold'}}>EMERGENCY CALL</span> : b.type}<br/>
+                                                <span style={{fontSize:'11px', color:'#777'}}>{b.reason || b.eventPlaceName}</span>
+                                            </td>
+                                            <td><span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span></td>
+                                            <td style={{display:'flex', flexDirection:'column', gap:'5px'}}>
                                                 {b.status === 'Pending' && (
                                                     <>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Accept</button>
                                                         <button onClick={() => handleBookingStatus(b._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
                                                     </>
                                                 )}
+                                                {b.status === 'Accepted' && (
+                                                    <button onClick={() => openProposalModal(b)} style={{background:'#f39c12', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>✉️ Send Proposal</button>
+                                                )}
                                             </td>
                                         </tr>
-                                    ))}
-                                    {bookings.length === 0 && <tr><td colSpan="6" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
+                                    )})}
+                                    {bookings.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No bookings yet.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -1388,10 +1545,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>Sub-admins have limited access to manage user data.</p>
                             <form onSubmit={handleCreateSubAdmin} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
                                 <button type="submit" className="global-update-btn" style={{ background: '#27ae60', padding: '15px', marginTop:'10px' }}>+ Add Sub-Admin</button>
                             </form>
                         </div>
@@ -1403,9 +1560,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} className="custom-admin-input"/></div>
-                                <div><label>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} className="custom-admin-input" /></div>
-                                <div><label>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} className="custom-admin-input" /></div>
+                                <div><label>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input"/></div>
+                                <div><label>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" /></div>
+                                <div><label>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" /></div>
                                 <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
                             </form>
                         </div>
