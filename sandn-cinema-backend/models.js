@@ -117,16 +117,23 @@ const offerSchema = new mongoose.Schema({
 // 🚀 NAYE SCHEMAS (Database Tables)
 // ==========================================
 
-// --- 6. BOOKING SCHEMA ---
+// --- 6. BOOKING SCHEMA (UPDATED FOR CART & EMERGENCY) ---
 const bookingSchema = new mongoose.Schema({
     name: String,
     mobile: String,
     startDate: String,
     endDate: String,
-    type: String, // E.g., Wedding, Pre-Wedding
+    type: String, // E.g., Wedding, Pre-Wedding, App Service, Emergency
     location: String,
     eventPlaceName: String,
     amount: { type: Number }, // To track estimated cost
+    
+    // ✅ NEW PARAMS FOR ADVANCED ROUTING
+    isEmergency: { type: Boolean, default: false },
+    reason: { type: String, default: '' }, // For Emergency context
+    cartItems: { type: Array, default: [] }, // Store multiple selected services here
+    providerTarget: { type: String, default: 'ADMIN' }, // Route to specific studio or admin
+    
     status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
     createdAt: { type: Date, default: Date.now } 
 });
@@ -167,7 +174,7 @@ const platformSettingSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now }
 });
 
-// ✅ 9. APP SERVICES SCHEMA (NEW)
+// ✅ 9. APP SERVICES SCHEMA
 const serviceSchema = new mongoose.Schema({
     title: { type: String, required: true },
     startingPrice: { type: Number, required: true },
@@ -189,5 +196,5 @@ module.exports = {
     Booking: mongoose.model('Booking', bookingSchema),
     CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
     PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
-    Service: mongoose.model('Service', serviceSchema) // Exporting new model
+    Service: mongoose.model('Service', serviceSchema) 
 };

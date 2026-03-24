@@ -1493,6 +1493,91 @@ app.post('/api/auth/get-user-services', async (req, res) => {
     }
 });
 
+// ==========================================
+// ✅ 22. CART CHECKOUT & EMERGENCY BOOKING
+// ==========================================
+
+// Process Cart Checkout
+app.post('/api/auth/checkout-cart', async (req, res) => {
+    try {
+        const { mobile, items } = req.body;
+        const account = await findAccount(mobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        // Calculate total amount from live items
+        let totalAmount = items.reduce((acc, item) => acc + (item.startingPrice || 0), 0);
+
+        // Group item titles for the booking type
+        const itemTitles = items.map(i => i.title).join(", ");
+
+        const newBooking = await Booking.create({
+            name: account.data.name || account.data.ownerName,
+            mobile: mobile,
+            type: `Cart Order: ${itemTitles}`,
+            amount: totalAmount,
+            cartItems: items,
+            status: 'Pending',
+            providerTarget: items[0].addedBy || 'ADMIN' // Default route to the first item's provider
+        });
+
+        res.json({ success: true, message: "Cart checkout successful!", data: newBooking });
+    } catch (e) {
+        console.error("Cart Checkout Error:", e);
+        res.status(500).json({ success: false, message: "Failed to process checkout." });
+    }
+});
+
+// Process Emergency Booking (Deducts 50 Coins)
+app.post('/api/auth/emergency-booking', async (req, res) => {
+    try {
+        const { mobile, reason, location } = req.body;
+        const account = await findAccount(mobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        
+        if (wallet.coins < 50) {
+            return res.json({ success: false, message: "Not enough coins for emergency booking." });
+        }
+
+        // Deduct 50 Coins
+        wallet.coins -= 50;
+
+        const historyEntry = {
+            action: "Emergency Booking Call",
+            amount: "-50 Coins",
+            date: new Date().toLocaleDateString(),
+            type: "debit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        // Create Emergency Booking Record
+        const emergencyBooking = await Booking.create({
+            name: account.data.name || account.data.ownerName,
+            mobile: mobile,
+            type: "🚨 EMERGENCY BOOKING",
+            location: location,
+            reason: reason,
+            isEmergency: true,
+            status: 'Pending',
+            amount: 0, // Since paid via coins
+            providerTarget: 'ADMIN' // Always goes to admin
+        });
+
+        res.json({ success: true, message: "Emergency call initiated!", wallet, data: emergencyBooking });
+    } catch (e) {
+        console.error("Emergency Booking Error:", e);
+        res.status(500).json({ success: false, message: "Failed to process emergency booking." });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
