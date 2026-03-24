@@ -81,16 +81,23 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const calculatedTotal = accounts.length * 1500; 
     const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
-    // ✅ NEW: MANAGE SERVICES STATES (For User Platform)
-    const [newService, setNewService] = useState({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+    // ✅ MANAGE SERVICES STATES (Updated for Discount & Offer)
+    const [newService, setNewService] = useState({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '', discountPercentage: '', offerText: '' });
     const [serviceImage, setServiceImage] = useState(null);
     const [availableServices, setAvailableServices] = useState([]);
-    const [editingServiceId, setEditingServiceId] = useState(null); // ✅ ADDED
+    const [editingServiceId, setEditingServiceId] = useState(null);
 
-    // ✅ ADDED: PROPOSAL STATES
+    // ✅ PROPOSAL STATES
     const [showProposalModal, setShowProposalModal] = useState(false);
     const [proposalData, setProposalData] = useState({ bookingId: '', clientName: '', deliverables: '', totalPrice: '', advanceAmount: '', terms: '', expiryHours: '24' });
 
+    // ✅ NEW: DENIAL MODAL STATES
+    const [showDenyModal, setShowDenyModal] = useState(false);
+    const [bookingToDeny, setBookingToDeny] = useState(null);
+    const [denyReason, setDenyReason] = useState('Booking session full.');
+    const [customDenyReason, setCustomDenyReason] = useState('');
+    const PRESET_DENY_REASONS = ['Booking session full.', 'Equipment not available.', 'Venue booking conflicts.', 'Service area not covered.', 'Other Custom logic...'];
+    
     // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
         const handleOffline = () => {
@@ -105,33 +112,35 @@ const OwnerDashboard = ({ user, onLogout }) => {
     }, [onLogout]);
 
     // ✅ FEATURE 2: SMART BROWSER BACK BUTTON (FIXED with useRef to prevent infinite loop)
-    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal });
+    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal });
     useEffect(() => {
-        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal };
-    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal]);
+        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal };
+    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal]);
 
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
 
         const handlePopState = () => {
-            window.history.pushState(null, null, window.location.href); // Prevent default back
+            window.history.pushState(null, null, window.location.href);
 
             const current = stateRefs.current;
 
-            if (current.showProposalModal) {
+            if (current.showDenyModal) {
+                setShowDenyModal(false);
+            } else if (current.showProposalModal) {
                 setShowProposalModal(false);
             } else if (current.showLogoutPopup) {
                 setShowLogoutPopup(false);
             } else if (current.globalRemoveUserObj) {
-                setGlobalRemoveUserObj(null); // Step back from client data popup
+                setGlobalRemoveUserObj(null);
             } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'CHARGES') {
-                setUploadSubTab('LIMITS'); // Step back in upload form
+                setUploadSubTab('LIMITS');
             } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'LIMITS') {
-                setUploadSubTab('BASIC'); // Step back in upload form
+                setUploadSubTab('BASIC');
             } else if (current.activeTab !== 'DASHBOARD') {
-                setActiveTab('DASHBOARD'); // Return to main tab
+                setActiveTab('DASHBOARD');
             } else {
-                setShowLogoutPopup(true); // Show logout confirmation instead of throwing out
+                setShowLogoutPopup(true);
             }
         };
 
@@ -598,6 +607,34 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to update booking"); }
     };
 
+    // ✅ ADDED: DENIAL REASON LOGIC
+    const openDenyModal = (booking) => {
+        setBookingToDeny(booking);
+        setShowDenyModal(true);
+        setDenyReason('Booking session full.');
+        setCustomDenyReason('');
+    };
+
+    const handleDenyBooking = async () => {
+        if (!bookingToDeny) return;
+        const finalReason = customDenyReason.trim() !== '' ? customDenyReason : denyReason;
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/update-booking-status`, { 
+                bookingId: bookingToDeny._id, 
+                status: 'Declined',
+                cancelReason: finalReason
+            });
+            if (res.data.success) { 
+                alert(`✅ Booking marked as Declined!`); 
+                setShowDenyModal(false);
+                fetchBookings(); 
+            }
+        } catch (e) { alert("Failed to update booking"); }
+        finally { setLoading(false); }
+    };
+
     // ==========================================
     // ✅ ADDED: EDIT SERVICE & SEND PROPOSAL LOGIC
     // ==========================================
@@ -609,7 +646,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
             shortDescription: service.shortDescription,
             fullDescription: service.fullDescription,
             startingPrice: service.startingPrice,
-            features: service.features
+            features: service.features,
+            discountPercentage: service.discountPercentage || '', 
+            offerText: service.offerText || '' 
         });
         setServiceImage(null); 
         document.getElementById('service-form-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -617,7 +656,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     const cancelEditing = () => {
         setEditingServiceId(null);
-        setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '' });
+        setNewService({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '', discountPercentage: '', offerText: '' });
         setServiceImage(null);
     };
 
@@ -637,12 +676,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 uploadedImageUrl = cloudRes.data.secure_url;
             }
 
+            // Usi function me payloadData ko aise update karo:
             const payloadData = {
                 title: newService.title,
                 startingPrice: newService.startingPrice,
                 shortDescription: newService.shortDescription,
                 fullDescription: newService.fullDescription,
                 features: newService.features,
+                discountPercentage: newService.discountPercentage || 0, // ✅ NEW
+                offerText: newService.offerText || '', // ✅ NEW
                 addedBy: 'ADMIN'
             };
 
@@ -744,6 +786,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="owner-dashboard-container">
+            {/* ✅ NEW: EMERGENCY ROW CSS & COUNT */}
+            <style>{`
+                @keyframes pulse-red {
+                    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+                    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+                }
+                .emergency-row {
+                    animation: pulse-red 2s infinite;
+                    border-left: 5px solid #e74c3c !important;
+                }
+            `}</style>
             
             {showLogoutPopup && (
                 <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.7)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}>
@@ -804,6 +858,52 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 {loading ? 'Sending...' : '📤 Send Proposal & Email'}
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+            {/* ✅ DENIAL REASON MODAL */}
+            {showDenyModal && (
+                <div className="popup-overlay-fixed" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2 style={{ color: '#e74c3c', margin: 0 }}>Decline Booking</h2>
+                            <button onClick={() => setShowDenyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#fff', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Please provide a reason for declining this request from <strong>{bookingToDeny?.name}</strong>.</p>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div>
+                                <label style={{ fontSize: '12px', color: '#ccc' }}>Select Preset Reason</label>
+                                <select 
+                                    value={denyReason} 
+                                    onChange={(e) => {
+                                        setDenyReason(e.target.value);
+                                        if (e.target.value !== 'Other Custom logic...') setCustomDenyReason('');
+                                    }} 
+                                    className="custom-admin-input" style={{ marginTop: '5px' }}
+                                >
+                                    {PRESET_DENY_REASONS.map((r, i) => <option key={i} value={r}>{r}</option>)}
+                                </select>
+                            </div>
+
+                            {denyReason === 'Other Custom logic...' && (
+                                <div>
+                                    <label style={{ fontSize: '12px', color: '#ccc' }}>Write Custom Reason</label>
+                                    <textarea 
+                                        rows="3" 
+                                        placeholder="Type your reason here..." 
+                                        value={customDenyReason} 
+                                        onChange={(e) => setCustomDenyReason(e.target.value)} 
+                                        className="custom-admin-input" 
+                                        style={{ marginTop: '5px', resize: 'vertical' }}
+                                    ></textarea>
+                                </div>
+                            )}
+
+                            <button onClick={handleDenyBooking} disabled={loading} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                {loading ? 'Processing...' : 'Confirm Decline'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -898,6 +998,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>Overview Statistics</h2></div>
+                        {/* ✅ UNIQUE ALERT ON DASHBOARD */}
+                        {bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length > 0 && (
+                            <div style={{ background: '#e74c3c', color: '#fff', padding: '20px', borderRadius: '12px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 5px 20px rgba(231,76,60,0.4)', animation: 'pulse-red 2s infinite' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <span style={{ fontSize: '30px' }}>🚨</span>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '18px' }}>ATTENTION: PENDING EMERGENCY REQUESTS!</h3>
+                                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>You have <strong>{bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length} PENDING Emergency Booking(s)</strong>. User is waiting for your call!</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setActiveTab('BOOKINGS')} style={{ background: '#fff', color: '#e74c3c', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>View Now ➡️</button>
+                            </div>
+                        )}
                         <div className="dashboard-stats-grid">
                             <div className="stat-card blue" onClick={() => setActiveTab('ACCOUNTS')} style={{cursor:'pointer'}}>
                                 <h3>{accounts.length}</h3><p>Total Accounts</p>
@@ -938,6 +1051,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <input type="file" accept="image/*" onChange={e => setServiceImage(e.target.files[0])} className="custom-admin-input" style={{padding: '9px'}}/>
                                     </div>
                                 </div>
+                                {/* ✅ NEW: DISCOUNT SECTION */}
+                                <div style={{ display: 'flex', gap: '15px', background: '#f4f6f9', padding: '15px', borderRadius: '8px', border: '1px dashed #3498db' }}>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Offer Tag (Optional)</label>
+                                        <input type="text" placeholder="e.g. Diwali Sale 20% Off!" value={newService.offerText} onChange={e => setNewService({...newService, offerText: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleAddOrUpdateService)} className="custom-admin-input" style={{marginBottom: 0}}/>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Discount Percentage (%)</label>
+                                        <input type="number" placeholder="e.g. 15" min="0" max="100" value={newService.discountPercentage} onChange={e => setNewService({...newService, discountPercentage: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleAddOrUpdateService)} className="custom-admin-input" style={{marginBottom: 0}}/>
+                                    </div>
+                                </div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Short Description (For Card View)</label><textarea placeholder="Brief overview (max 2 lines)" value={newService.shortDescription} onChange={e => setNewService({...newService, shortDescription: e.target.value})} className="custom-admin-input" rows="2"></textarea></div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Full Description (For Detail View)</label><textarea placeholder="Detailed explanation of what the user gets..." value={newService.fullDescription} onChange={e => setNewService({...newService, fullDescription: e.target.value})} className="custom-admin-input" rows="4"></textarea></div>
                                 <div><label style={{fontSize: '13px', fontWeight: 'bold'}}>Included Features (Comma Separated)</label><input type="text" placeholder="e.g. 50 Edited Photos, Drone Shoot, 3 Outfits" value={newService.features} onChange={e => setNewService({...newService, features: e.target.value})} className="custom-admin-input"/></div>
@@ -957,13 +1081,38 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <thead><tr><th>Service Title</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     {availableServices.length > 0 ? availableServices.map((srv, idx) => (
-                                        <tr key={idx}>
-                                            <td><strong>{srv.title}</strong></td>
-                                            <td>₹{srv.startingPrice}</td>
-                                            <td><span className="status-badge active">Live</span></td>
+                                        <tr key={b._id} className={isEmergency && b.status === 'Pending' ? 'emergency-row' : ''} style={{ background: isEmergency ? 'rgba(231, 76, 60, 0.1)' : 'transparent' }}>
                                             <td>
-                                                <button onClick={() => startEditingService(srv)} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px'}}>✏️ Edit</button>
-                                                <button onClick={() => handleDeleteService(srv._id)} className="pdf-btn" style={{background: '#e74c3c', padding: '5px 10px'}}>Remove</button>
+                                                <strong>{srv.title}</strong>
+                                                {srv.offerText && <div style={{fontSize: '10px', background: '#e74c3c', color: '#fff', display: 'inline-block', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', fontWeight: 'bold'}}>{srv.offerText}</div>}
+                                            </td>
+                                            <td>
+                                                {srv.discountPercentage > 0 ? (
+                                                    <div>
+                                                        <span style={{textDecoration: 'line-through', color: '#888', fontSize: '12px'}}>₹{srv.startingPrice}</span>
+                                                        <strong style={{color: '#2ecc71', marginLeft: '5px', fontSize: '15px'}}>₹{srv.finalPrice}</strong>
+                                                    </div>
+                                                ) : (
+                                                    <strong>₹{srv.startingPrice}</strong>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span>
+                                                {/* Display Reason if Declined */}
+                                                {b.status === 'Declined' && b.cancelReason && (
+                                                    <div style={{fontSize:'10px', color:'#e74c3c', marginTop:'4px', maxWidth:'150px'}}>{b.cancelReason}</div>
+                                                )}
+                                            </td>
+                                            <td style={{display:'flex', flexDirection:'column', gap:'5px'}}>
+                                                {b.status === 'Pending' && (
+                                                    <>
+                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Accept</button>
+                                                        <button onClick={() => openDenyModal(b)} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                    </>
+                                                )}
+                                                {b.status === 'Accepted' && (
+                                                    <button onClick={() => openProposalModal(b)} style={{background:'#f39c12', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>✉️ Send Proposal</button>
+                                                )}
                                             </td>
                                         </tr>
                                     )) : <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No services published yet.</td></tr>}

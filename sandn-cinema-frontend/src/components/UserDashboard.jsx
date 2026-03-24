@@ -707,7 +707,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return renderHomeTab();
     };
 
-    // ✅ NATIVE SERVICES TAB
+    // ✅ NATIVE SERVICES TAB (UPDATED WITH DISCOUNT & OFFER UI)
     const renderServicesTab = () => {
         return (
             <div className="services-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
@@ -734,6 +734,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {availableServices.length > 0 ? availableServices.map((service, idx) => (
                             <div key={idx} onClick={() => setSelectedServiceModal(service)} style={{ background: '#1a1a2e', borderRadius: '15px', overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.3)', cursor: 'pointer', transition: 'transform 0.2s', position: 'relative' }}>
+                                
+                                {/* ✅ DISPLAY OFFER TAG IF AVAILABLE */}
+                                {service.offerText && (
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: '#e74c3c', color: '#fff', padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', animation: 'pulse 2s infinite' }}>
+                                        {service.offerText}
+                                    </div>
+                                )}
+
                                 {service.imageUrl && (
                                     <div style={{ height: '140px', width: '100%', overflow: 'hidden' }}>
                                         <img src={service.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={service.title} />
@@ -743,7 +751,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '18px' }}>{service.title}</h3>
                                     <p style={{ color: '#aaa', margin: '0 0 15px 0', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{service.shortDescription}</p>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ color: '#f1c40f', fontWeight: 'bold', fontSize: '15px' }}>₹{service.startingPrice}</span>
+                                        
+                                        {/* ✅ DISPLAY DISCOUNTED PRICE VS ORIGINAL PRICE */}
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            {service.discountPercentage > 0 ? (
+                                                <>
+                                                    <span style={{ color: '#888', textDecoration: 'line-through', fontSize: '12px' }}>₹{service.startingPrice}</span>
+                                                    <span style={{ color: '#2ecc71', fontWeight: 'bold', fontSize: '18px' }}>₹{service.finalPrice}</span>
+                                                </>
+                                            ) : (
+                                                <span style={{ color: '#f1c40f', fontWeight: 'bold', fontSize: '16px' }}>₹{service.startingPrice}</span>
+                                            )}
+                                        </div>
+
                                         <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View & Book</button>
                                     </div>
                                 </div>
@@ -761,7 +781,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         );
     };
 
-    // ✅ NATIVE BOOKINGS TAB (WITH FILTER)
+    // ✅ NATIVE BOOKINGS TAB (UPDATED TO SHOW DENIAL REASON)
     const renderBookingsTab = () => {
         const filteredBookings = bookingFilter === 'ALL' 
             ? userBookings 
@@ -821,6 +841,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '12px' }}>📅 Date: {new Date(booking.createdAt).toLocaleDateString()}</p>
                                     <p style={{ color: '#aaa', margin: 0, fontSize: '12px' }}>💰 Estimated: ₹{booking.amount || 'TBD'}</p>
                                     
+                                    {/* ✅ SHOW DECLINE REASON IF ANY */}
+                                    {booking.status === 'Declined' && booking.cancelReason && (
+                                        <div style={{ background: 'rgba(231,76,60,0.1)', border: '1px dashed #e74c3c', color: '#e74c3c', padding: '10px', borderRadius: '8px', marginTop: '10px', fontSize: '12px' }}>
+                                            <strong>Reason for decline:</strong> {booking.cancelReason}
+                                        </div>
+                                    )}
+
                                     {/* Action Buttons depending on status */}
                                     <div style={{ textAlign: 'right', marginTop: '10px' }}>
                                         {booking.status === 'Pending Payment' ? (
@@ -1292,7 +1319,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ SERVICES MODAL (NATIVE BOTTOM SHEET) WITH ADD TO CART */}
+            {/* ✅ SERVICES MODAL (NATIVE BOTTOM SHEET) WITH ADD TO CART AND OFFERS */}
             {selectedServiceModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(5px)' }}>
                     <div style={{ background: '#1a1a2e', width: '100%', maxHeight: '85vh', borderTopLeftRadius: '25px', borderTopRightRadius: '25px', padding: '20px', overflowY: 'auto', animation: 'slideUp 0.3s ease-out' }}>
@@ -1302,11 +1329,25 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             <img src={selectedServiceModal.imageUrl} alt="Service" style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '15px', marginBottom: '15px' }} />
                         )}
                         
-                        <h2 style={{ color: '#fff', margin: '0 0 10px 0' }}>{selectedServiceModal.title}</h2>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                            <h2 style={{ color: '#fff', margin: 0 }}>{selectedServiceModal.title}</h2>
+                            {selectedServiceModal.offerText && (
+                                <span style={{ background: '#e74c3c', color: '#fff', padding: '4px 8px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', animation: 'pulse 2s infinite' }}>{selectedServiceModal.offerText}</span>
+                            )}
+                        </div>
                         
                         <div style={{ background: 'rgba(52, 152, 219, 0.1)', border: '1px solid #3498db', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
                             <span style={{ color: '#aaa', fontSize: '13px' }}>Estimated Price</span>
-                            <div style={{ color: '#fff', fontSize: '24px', fontWeight: 'bold', marginTop: '5px' }}>₹{selectedServiceModal.startingPrice}</div>
+                            <div style={{ color: '#fff', fontSize: '24px', fontWeight: 'bold', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {selectedServiceModal.discountPercentage > 0 ? (
+                                    <>
+                                        <span style={{ color: '#888', textDecoration: 'line-through', fontSize: '16px' }}>₹{selectedServiceModal.startingPrice}</span>
+                                        <span style={{ color: '#2ecc71' }}>₹{selectedServiceModal.finalPrice}</span>
+                                    </>
+                                ) : (
+                                    <span>₹{selectedServiceModal.startingPrice}</span>
+                                )}
+                            </div>
                         </div>
 
                         <h4 style={{ color: '#f1c40f', marginBottom: '10px' }}>Description</h4>
