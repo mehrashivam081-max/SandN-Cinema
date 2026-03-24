@@ -97,7 +97,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [denyReason, setDenyReason] = useState('Booking session full.');
     const [customDenyReason, setCustomDenyReason] = useState('');
     const PRESET_DENY_REASONS = ['Booking session full.', 'Equipment not available.', 'Venue booking conflicts.', 'Service area not covered.', 'Other Custom logic...'];
-    
+
     // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
         const handleOffline = () => {
@@ -781,12 +781,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
     if (selectedAccount && Array.isArray(selectedAccount.uploadedData)) existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
-    const totalUsers = accounts.filter(a => a.role === 'USER').length;
+   const totalUsers = accounts.filter(a => a.role === 'USER').length;
     const totalStudios = accounts.filter(a => a.role === 'STUDIO').length;
+
+    // ✅ Calculate pending emergencies for dashboard alert
+    const emergencyPendingCountVal = bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length;
 
     return (
         <div className="owner-dashboard-container">
-            {/* ✅ NEW: EMERGENCY ROW CSS & COUNT */}
+            
+            {/* ✅ NEW: EMERGENCY ROW CSS */}
             <style>{`
                 @keyframes pulse-red {
                     0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
@@ -998,19 +1002,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>Overview Statistics</h2></div>
+
                         {/* ✅ UNIQUE ALERT ON DASHBOARD */}
-                        {bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length > 0 && (
+                        {emergencyPendingCountVal > 0 && (
                             <div style={{ background: '#e74c3c', color: '#fff', padding: '20px', borderRadius: '12px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 5px 20px rgba(231,76,60,0.4)', animation: 'pulse-red 2s infinite' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                     <span style={{ fontSize: '30px' }}>🚨</span>
                                     <div>
                                         <h3 style={{ margin: 0, fontSize: '18px' }}>ATTENTION: PENDING EMERGENCY REQUESTS!</h3>
-                                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>You have <strong>{bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length} PENDING Emergency Booking(s)</strong>. User is waiting for your call!</p>
+                                        <p style={{ margin: '5px 0 0 0', fontSize: '13px' }}>You have <strong>{emergencyPendingCountVal} PENDING Emergency Booking(s)</strong>. User is waiting for your call!</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setActiveTab('BOOKINGS')} style={{ background: '#fff', color: '#e74c3c', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>View Now ➡️</button>
                             </div>
                         )}
+
                         <div className="dashboard-stats-grid">
                             <div className="stat-card blue" onClick={() => setActiveTab('ACCOUNTS')} style={{cursor:'pointer'}}>
                                 <h3>{accounts.length}</h3><p>Total Accounts</p>
@@ -1081,7 +1087,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <thead><tr><th>Service Title</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     {availableServices.length > 0 ? availableServices.map((srv, idx) => (
-                                        <tr key={b._id} className={isEmergency && b.status === 'Pending' ? 'emergency-row' : ''} style={{ background: isEmergency ? 'rgba(231, 76, 60, 0.1)' : 'transparent' }}>
+                                        <tr key={idx}>
                                             <td>
                                                 <strong>{srv.title}</strong>
                                                 {srv.offerText && <div style={{fontSize: '10px', background: '#e74c3c', color: '#fff', display: 'inline-block', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px', fontWeight: 'bold'}}>{srv.offerText}</div>}
