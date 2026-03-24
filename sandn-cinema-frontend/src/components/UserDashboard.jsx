@@ -71,6 +71,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [selectedServiceModal, setSelectedServiceModal] = useState(null);
     const [servicesLoading, setServicesLoading] = useState(false);
 
+    // ✅ NEW: CART & EMERGENCY STATES
+    const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('userCart')) || []);
+    const [showCartModal, setShowCartModal] = useState(false);
+    const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+    const [emergencyData, setEmergencyData] = useState({ reason: '', location: '' });
+
     const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
@@ -86,6 +92,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
+    // ✅ Sync Cart to LocalStorage
+    useEffect(() => {
+        localStorage.setItem('userCart', JSON.stringify(cart));
+    }, [cart]);
+
     // ✅ SMART BROWSER BACK BUTTON (Native App Experience)
     useEffect(() => {
         window.history.pushState(null, null, window.location.href);
@@ -93,7 +104,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const handlePopState = () => {
             window.history.pushState(null, null, window.location.href);
 
-            if (selectedServiceModal) {
+            if (showEmergencyModal) {
+                setShowEmergencyModal(false);
+            } else if (showCartModal) {
+                setShowCartModal(false);
+            } else if (selectedServiceModal) {
                 setSelectedServiceModal(null);
             } else if (selectedMedia) {
                 setSelectedMedia(null);
@@ -121,7 +136,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal]);
+    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal, showCartModal, showEmergencyModal]);
 
 
     // 🟢 FETCH LOGIC 
@@ -530,6 +545,114 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     };
 
+    // ✅ NEW CART & BOOKING LOGIC
+    const handleAddToCart = (service) => {
+        if(cart.find(item => item._id === service._id)) return alert("This service is already in your cart!");
+        setCart([{ ...service, addedAt: Date.now() }, ...cart]);
+        alert("Service added to Cart!");
+        setSelectedServiceModal(null);
+    };
+
+    const handleRemoveFromCart = (id) => {
+        setCart(cart.filter(item => item._id !== id));
+    };
+
+    const handleDirectBook = async (service) => {
+        if (!window.confirm(`Confirm Direct Booking for ${service.title}?`)) return;
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/checkout-cart`, {
+                mobile: syncUser.mobile,
+                items: [service]
+            });
+            
+            if (res.data.success) {
+                alert(`Booking Request Sent to Provider: ${service.addedBy || 'SandN Cinema'}\nAmount: ₹${service.startingPrice}`);
+                setSelectedServiceModal(null);
+                setCurrentTab('BOOKINGS');
+                fetchServicesAndBookings(syncUser.mobile);
+            }
+        } catch (e) {
+            alert("Booking failed. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCartCheckout = async () => {
+        const hasChangedItems = cart.some(cartItem => {
+            const liveItem = availableServices.find(s => s._id === cartItem._id);
+            return liveItem && (liveItem.startingPrice !== cartItem.startingPrice || liveItem.title !== cartItem.title);
+        });
+
+        if (hasChangedItems) {
+            alert("⚠️ Some items in your cart have been updated by the provider. Please recheck the details and continue.");
+            // Update cart to match live data
+            const updatedCart = cart.map(cartItem => {
+                const liveItem = availableServices.find(s => s._id === cartItem._id);
+                return liveItem ? { ...liveItem, addedAt: cartItem.addedAt, isChanged: true } : cartItem;
+            });
+            setCart(updatedCart);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/checkout-cart`, {
+                mobile: syncUser.mobile,
+                items: cart
+            });
+
+            if (res.data.success) {
+                alert(`Successfully checked out ${cart.length} items! Request routing to providers...`);
+                setCart([]); // Empty cart after checkout
+                setShowCartModal(false);
+                setCurrentTab('BOOKINGS');
+                fetchServicesAndBookings(syncUser.mobile);
+            }
+        } catch (e) {
+            alert("Checkout failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ✅ EMERGENCY BOOKING LOGIC
+    const processEmergencyBooking = async (e) => {
+        e.preventDefault();
+        if (wallet.coins < 50) {
+            alert("You need at least 50 coins for Emergency Booking. Please recharge your wallet.");
+            setShowEmergencyModal(false);
+            setShowWalletModal(true);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const res = await axios.post(`${API_BASE}/emergency-booking`, {
+                mobile: syncUser.mobile,
+                reason: emergencyData.reason,
+                location: emergencyData.location
+            });
+
+            if (res.data.success) {
+                setWallet(res.data.wallet); // Update local wallet instantly
+                alert("Payment Successful! Connecting to Customer Care...");
+                setShowEmergencyModal(false);
+                setEmergencyData({ reason: '', location: '' });
+                fetchServicesAndBookings(syncUser.mobile);
+                
+                // Connect Call
+                window.location.href = "tel:+919999999999"; // Replace with real customer care number
+            }
+        } catch (err) {
+            alert("Failed to process payment.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     // --- RENDER TABS ---
     const renderContent = () => {
@@ -577,7 +700,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <p style={{ color: '#aaa', margin: '0 0 15px 0', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{service.shortDescription}</p>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ color: '#f1c40f', fontWeight: 'bold', fontSize: '15px' }}>₹{service.startingPrice}</span>
-                                        <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View & Book</button>
+                                        <button style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px' }}>View Details</button>
                                     </div>
                                 </div>
                             </div>
@@ -607,23 +730,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Track the status of your active and past services.</p>
                 </div>
 
-                {/* Native Filter Chips */}
                 <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
                     {['ALL', 'PENDING', 'ACCEPTED', 'DECLINED'].map(type => (
                         <button 
-                            key={type} 
-                            onClick={() => setBookingFilter(type)} 
-                            style={{ 
-                                padding: '8px 15px', 
-                                borderRadius: '20px', 
-                                border: 'none', 
-                                fontSize: '12px', 
-                                fontWeight: 'bold',
-                                whiteSpace: 'nowrap',
-                                cursor: 'pointer',
-                                background: bookingFilter === type ? '#3498db' : '#2c3e50',
-                                color: bookingFilter === type ? '#fff' : '#aaa'
-                            }}
+                            key={type} onClick={() => setBookingFilter(type)} 
+                            style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap', cursor: 'pointer', background: bookingFilter === type ? '#3498db' : '#2c3e50', color: bookingFilter === type ? '#fff' : '#aaa' }}
                         >
                             {type}
                         </button>
@@ -635,7 +746,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {filteredBookings.length > 0 ? filteredBookings.map((booking, idx) => {
-                            let statusColor = '#f1c40f'; // Pending
+                            let statusColor = '#f1c40f'; 
                             if(booking.status === 'Accepted') statusColor = '#2ecc71';
                             if(booking.status === 'Declined') statusColor = '#e74c3c';
 
@@ -643,17 +754,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 <div key={idx} style={{ background: '#1a1a2e', borderRadius: '15px', padding: '15px', borderLeft: `5px solid ${statusColor}`, position: 'relative' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                         <h3 style={{ color: '#fff', margin: 0, fontSize: '16px' }}>{booking.type}</h3>
-                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: statusColor, background: 'rgba(255,255,255,0.1)', padding: '3px 8px', borderRadius: '5px' }}>
-                                            {booking.status}
-                                        </span>
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: statusColor, background: 'rgba(255,255,255,0.1)', padding: '3px 8px', borderRadius: '5px' }}>{booking.status}</span>
                                     </div>
-                                    <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '12px' }}>📅 Date: {booking.date}</p>
+                                    <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '12px' }}>📅 Date: {new Date(booking.createdAt).toLocaleDateString()}</p>
                                     <p style={{ color: '#aaa', margin: 0, fontSize: '12px' }}>💰 Estimated: ₹{booking.amount || 'TBD'}</p>
-                                    
-                                    {/* Small Action Button */}
-                                    <div style={{ textAlign: 'right', marginTop: '10px' }}>
-                                        <button style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>View Details</button>
-                                    </div>
                                 </div>
                             );
                         }) : (
@@ -671,17 +775,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     const renderHistoryTab = () => {
-        const historyData = wallet?.history || [
-            { date: new Date().toLocaleDateString(), action: "Account Registered", amount: "0", type: "neutral" }
-        ];
-
+        const historyData = wallet?.history || [ { date: new Date().toLocaleDateString(), action: "Account Registered", amount: "0", type: "neutral" } ];
         return (
             <div className="history-tab-vip" style={{padding: '20px', paddingBottom: '80px'}}>
                 <div className="section-header" style={{marginBottom: '20px'}}>
                     <h2 style={{color: '#fff', fontSize: '20px', margin: 0}}>📜 Transaction History</h2>
                     <p style={{color: '#aaa', fontSize: '12px', margin: '5px 0 0 0'}}>Your platform activity and coin logs.</p>
                 </div>
-                
                 <div className="history-list">
                     {historyData.map((item, idx) => (
                         <div key={idx} style={{ background: '#1a1a2e', padding: '15px', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: item.type === 'credit' ? '4px solid #f1c40f' : item.type === 'debit' ? '4px solid #e74c3c' : '4px solid #3498db' }}>
@@ -704,31 +804,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 <div className="dp-section">
                     <div className="dp-circle">{profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}</div>
                     {editProfileMode && (
-                        <div className="dp-controls">
-                            <label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label>
-                            <button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button>
-                        </div>
+                        <div className="dp-controls"><label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label><button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button></div>
                     )}
                 </div>
-
                 <div className="profile-details">
                     <label>Registered Mobile No.</label>
                     <input type="text" value={syncUser?.mobile || ''} disabled className="vip-input disabled" />
-
                     <label>Full Name</label>
                     <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={!editProfileMode} className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-
                     <label>Email Address</label>
                     <input type="email" value={profileData.email} onChange={(e) => setProfileData({...profileData, email: e.target.value})} disabled={!editProfileMode} placeholder="Add your email" className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-
                     <label>Location / City</label>
                     <input type="text" value={profileData.location} onChange={(e) => setProfileData({...profileData, location: e.target.value})} disabled={!editProfileMode} placeholder="e.g. Indore" className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-
-                    {editProfileMode ? (
-                        <button className="vip-btn-gold mt-20" onClick={handleSaveProfile} style={{background: '#2ecc71', color: '#fff', border: 'none'}}>Save Changes</button>
-                    ) : (
-                        <button className="vip-btn-outline mt-20" onClick={() => setEditProfileMode(true)}>Edit Profile</button>
-                    )}
+                    {editProfileMode ? <button className="vip-btn-gold mt-20" onClick={handleSaveProfile} style={{background: '#2ecc71', color: '#fff', border: 'none'}}>Save Changes</button> : <button className="vip-btn-outline mt-20" onClick={() => setEditProfileMode(true)}>Edit Profile</button>}
                 </div>
             </div>
             <button className="logout-btn-full mt-20" onClick={onLogout} style={{background: '#e74c3c'}}>Logout Securely</button>
@@ -736,19 +824,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     );
 
     const renderHomeTab = () => {
-        // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
         if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
-            
-            let filesToDisplay = [];
-            let currentFolderName = '';
-
-            if (activeSubFolder) {
-                filesToDisplay = activeSubFolder.files || [];
-                currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
-            } else {
-                filesToDisplay = activeFolder.files || [];
-                currentFolderName = activeFolder.folderName;
-            }
+            let filesToDisplay = activeSubFolder ? activeSubFolder.files || [] : activeFolder.files || [];
+            let currentFolderName = activeSubFolder ? `${activeFolder.folderName} ➔ ${activeSubFolder.name}` : activeFolder.folderName;
 
             const displayedMedia = filesToDisplay.filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
@@ -765,10 +843,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folder-gallery-view">
                     <div className="folder-header-nav">
-                        <button onClick={() => { 
-                            if(activeSubFolder) { setActiveSubFolder(null); setIsSelectionMode(false); setSelectedMediaFiles([]); }
-                            else { setActiveFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); } 
-                        }} className="back-btn">⬅ Back</button>
+                        <button onClick={() => { if(activeSubFolder) { setActiveSubFolder(null); setIsSelectionMode(false); setSelectedMediaFiles([]); } else { setActiveFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); } }} className="back-btn">⬅ Back</button>
                         <h3 style={{fontSize: '16px'}}>{currentFolderName}</h3>
                     </div>
 
@@ -779,7 +854,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </div>
                     )}
 
-                    {/* ✅ MULTI-SELECT & FILTER BAR */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                         <div className="filter-group-vip" style={{margin: 0}}>
                             <button className={`filter-btn-vip ${mediaFilter === 'ALL' ? 'active' : ''}`} onClick={() => setMediaFilter('ALL')}>All</button>
@@ -791,93 +865,30 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </button>
                     </div>
 
-                    {/* ✅ FLOATING BATCH UNLOCK BAR */}
                     {isSelectionMode && selectedMediaFiles.length > 0 && (
                         <div style={{ background: '#f1c40f', padding: '12px 15px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', position: 'sticky', top: '10px', zIndex: 50, boxShadow: '0 10px 20px rgba(0,0,0,0.3)' }}>
                             <span style={{ color: '#000', fontWeight: 'bold', fontSize: '13px' }}>{selectedMediaFiles.length} Selected</span>
-                            <button onClick={triggerBatchMonetization} style={{ background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                🔓 Unlock ({getBatchCost()} Coins)
-                            </button>
+                            <button onClick={triggerBatchMonetization} style={{ background: '#1a1a2e', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔓 Unlock ({getBatchCost()} Coins)</button>
                         </div>
                     )}
 
                     <div className="ud-grid-vip mt-20">
                         {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => {
-                            const isUnlocked = isFileUnlocked(filePath);
-                            const isSelected = selectedMediaFiles.includes(filePath);
-                            
+                            const isUnlocked = isFileUnlocked(filePath); const isSelected = selectedMediaFiles.includes(filePath);
                             return (
                                 <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #3498db' : (isUnlocked ? '1px solid #2ecc71' : '1px solid #333') }}>
-                                    
-                                    {/* 1. MEDIA CLICK AREA */}
                                     <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => isSelectionMode ? toggleSelection(filePath) : openMediaInterface(filePath)}>
-                                        
-                                        {/* CHECKBOX FOR SELECTION */}
-                                        {isSelectionMode && (
-                                            <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20, background: '#fff', borderRadius: '50%', padding: '2px', display: 'flex', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
-                                                <input type="checkbox" checked={isSelected} readOnly style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: '#3498db' }} />
-                                            </div>
-                                        )}
-
-                                        {isVideo(filePath) ? (
-                                            <>
-                                                <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
-                                            </>
-                                        ) : (
-                                            <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
-                                        )}
-
-                                        {!isUnlocked && !isSelectionMode && (
-                                            <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>
-                                                🔒 Locked
-                                            </div>
-                                        )}
-
-                                        {/* Download Progress Overlay */}
-                                        {downloadingFile === filePath && (
-                                            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: 'rgba(0,0,0,0.85)', padding: '10px', textAlign: 'center', zIndex: 10 }}>
-                                                <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
-                                                <div style={{ width: '100%', background: '#eee', height: '4px', borderRadius: '5px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {isSelectionMode && <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20, background: '#fff', borderRadius: '50%', padding: '2px', display: 'flex', boxShadow: '0 2px 5px rgba(0,0,0,0.5)' }}><input type="checkbox" checked={isSelected} readOnly style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: '#3498db' }} /></div>}
+                                        {isVideo(filePath) ? ( <><video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div></> ) : ( <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} /> )}
+                                        {!isUnlocked && !isSelectionMode && <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>🔒 Locked</div>}
                                     </div>
-
-                                    {/* 2. UPLOADER & PRICE STRIP */}
                                     <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
-                                        <div 
-                                            onClick={() => setUploaderProfile({
-                                                name: activeFolder.uploadedBy || 'SandN Cinema',
-                                                role: activeFolder.uploaderRole || 'Premium Studio',
-                                                email: activeFolder.uploaderEmail || 'contact@sandncinema.com'
-                                            })}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-                                        >
-                                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>
-                                                {(activeFolder.uploadedBy || 'S')[0].toUpperCase()}
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span>
-                                                <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span>
-                                            </div>
+                                        <div onClick={() => setUploaderProfile({ name: activeFolder.uploadedBy || 'SandN Cinema', role: activeFolder.uploaderRole || 'Premium Studio', email: activeFolder.uploaderEmail || 'contact@sandncinema.com' })} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>{(activeFolder.uploadedBy || 'S')[0].toUpperCase()}</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}><span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span><span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span></div>
                                         </div>
-
-                                        {/* Badge Area */}
                                         <div style={{ textAlign: 'right' }}>
-                                            {isUnlocked ? (
-                                                <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                    ✅ Unlocked
-                                                </span>
-                                            ) : (
-                                                <>
-                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
-                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                        🪙 {getCostLabel(filePath)}
-                                                    </span>
-                                                </>
-                                            )}
+                                            {isUnlocked ? <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>✅ Unlocked</span> : <><span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span><span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>🪙 {getCostLabel(filePath)}</span></>}
                                         </div>
                                     </div>
                                 </div>
@@ -888,61 +899,31 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
-        // ✅ SCENARIO 2: Viewing Sub-Folders inside a Main Folder
         if (activeFolder && activeFolder.subFolders && activeFolder.subFolders.length > 0 && !activeSubFolder) {
             return (
                 <div className="folders-view">
-                    <div className="folder-header-nav">
-                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button>
-                        <h3>{activeFolder.folderName}</h3>
-                    </div>
-                    
-                    {/* Display Root Files if any exist along with sub-folders */}
-                    {activeFolder.files && activeFolder.files.length > 0 && (
-                        <div className="folder-card" onClick={() => setActiveSubFolder({ name: "Root Media Files", files: activeFolder.files })} style={{ background: '#2c3e50', border: '1px solid #3498db', marginBottom: '20px' }}>
-                            <div className="folder-icon">📁</div><h4>General Uploads</h4><p>{activeFolder.files.length} Items</p>
-                        </div>
-                    )}
-
+                    <div className="folder-header-nav"><button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button><h3>{activeFolder.folderName}</h3></div>
+                    {activeFolder.files && activeFolder.files.length > 0 && <div className="folder-card" onClick={() => setActiveSubFolder({ name: "Root Media Files", files: activeFolder.files })} style={{ background: '#2c3e50', border: '1px solid #3498db', marginBottom: '20px' }}><div className="folder-icon">📁</div><h4>General Uploads</h4><p>{activeFolder.files.length} Items</p></div>}
                     <div className="folders-grid">
                         {activeFolder.subFolders.map((sub, index) => (
-                            <div key={index} className="folder-card" onClick={() => setActiveSubFolder(sub)}>
-                                <div className="folder-icon">🗓️</div>
-                                <h4>{sub.name}</h4>
-                                <p>{sub.files?.length || 0} Items</p>
-                            </div>
+                            <div key={index} className="folder-card" onClick={() => setActiveSubFolder(sub)}><div className="folder-icon">🗓️</div><h4>{sub.name}</h4><p>{sub.files?.length || 0} Items</p></div>
                         ))}
                     </div>
                 </div>
             );
         }
 
-        // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
         return (
             <div className="folders-view">
-                <div className="welcome-banner">
-                    <h1>Your Digital Memories</h1>
-                    <p>Select a folder to view your curated albums.</p>
-                </div>
-                
+                <div className="welcome-banner"><h1>Your Digital Memories</h1><p>Select a folder to view your curated albums.</p></div>
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid">
                         {folders.map((folder, index) => {
-                            const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
-                            const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
-                            const isLocked = isExpired || isLimitReached;
-
-                            // Calculate total files (Root files + all Subfolder files)
-                            let totalFiles = folder.files ? folder.files.length : 0;
-                            if (folder.subFolders) {
-                                folder.subFolders.forEach(sf => totalFiles += (sf.files ? sf.files.length : 0));
-                            }
-
+                            const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date(); const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit; const isLocked = isExpired || isLimitReached;
+                            let totalFiles = folder.files ? folder.files.length : 0; if (folder.subFolders) folder.subFolders.forEach(sf => totalFiles += (sf.files ? sf.files.length : 0));
                             return (
                                 <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1 }}>
-                                    <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
-                                    <h4>{folder.folderName}</h4>
-                                    <p>{totalFiles} Total Items</p>
+                                    <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div><h4>{folder.folderName}</h4><p>{totalFiles} Total Items</p>
                                     {folder.subFolders && folder.subFolders.length > 0 && <p style={{fontSize: '10px', color: '#3498db', marginTop: '2px'}}>🗓️ Contains Date Folders</p>}
                                     {folder.isDefault && <span className="default-badge">Premium</span>}
                                     {isExpired && <span style={{display:'block', fontSize:'11px', color:'#e74c3c', marginTop:'5px'}}>Expired</span>}
@@ -958,7 +939,125 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     return (
         <div className="ud-container-vip">
 
-            {/* ✅ SERVICES MODAL (NATIVE BOTTOM SHEET) */}
+            {/* Inline CSS for Pulse Animation (Emergency Button) */}
+            <style>{`
+                @keyframes pulseEmergency {
+                    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+                    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+                }
+                .emergency-pulse-btn {
+                    animation: pulseEmergency 1.5s infinite;
+                    background: linear-gradient(45deg, #e74c3c, #c0392b);
+                    color: white;
+                    border: none;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+                .cart-icon-wrapper {
+                    position: relative;
+                    font-size: 24px;
+                    cursor: pointer;
+                }
+                .cart-badge {
+                    position: absolute;
+                    top: -5px;
+                    right: -10px;
+                    background: #e74c3c;
+                    color: white;
+                    font-size: 10px;
+                    font-weight: bold;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    border: 2px solid #0f172a;
+                }
+            `}</style>
+
+            {/* ✅ EMERGENCY MODAL */}
+            {showEmergencyModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(231,76,60,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2 style={{ color: '#e74c3c', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🚨 Emergency Booking</h2>
+                            <button onClick={() => setShowEmergencyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Instantly connect with our customer care for urgent booking requests. Cost: <strong>50 Coins</strong>.</p>
+                        
+                        <form onSubmit={processEmergencyBooking} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <input type="text" required placeholder="Your Location / City" value={emergencyData.location} onChange={e => setEmergencyData({...emergencyData, location: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px' }} />
+                            <textarea required placeholder="Why do you need emergency service?" rows="3" value={emergencyData.reason} onChange={e => setEmergencyData({...emergencyData, reason: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', resize: 'vertical' }}></textarea>
+                            
+                            <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#d4ac0d', fontWeight: 'bold' }}>
+                                Wallet Balance: 🪙 {wallet.coins} Coins
+                            </div>
+
+                            <button type="submit" disabled={loading} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                {loading ? 'Connecting...' : 'Pay 50 Coins & Call Now 📞'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ CART MODAL */}
+            {showCartModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', width: '100%', maxHeight: '85vh', borderTopLeftRadius: '25px', borderTopRightRadius: '25px', padding: '20px', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '15px' }}>
+                            <h2 style={{ color: '#fff', margin: 0 }}>🛒 My Cart ({cart.length})</h2>
+                            <button onClick={() => setShowCartModal(false)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+                        </div>
+
+                        {cart.length === 0 ? (
+                            <p style={{ color: '#888', textAlign: 'center', padding: '30px 0' }}>Your cart is empty.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                {cart.map((item, idx) => {
+                                    // Change detection logic
+                                    const liveItem = availableServices.find(s => s._id === item._id);
+                                    const isChanged = liveItem && (liveItem.startingPrice !== item.startingPrice || liveItem.title !== item.title);
+
+                                    return (
+                                        <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '12px', border: isChanged ? '1px solid #e74c3c' : '1px solid #333', position: 'relative' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <div>
+                                                    <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
+                                                    <p style={{ color: '#f1c40f', margin: 0, fontWeight: 'bold', fontSize: '14px' }}>₹{item.startingPrice}</p>
+                                                    <p style={{ color: '#888', fontSize: '11px', margin: '5px 0 0 0' }}>Provider: {item.addedBy || 'SandN Cinema'}</p>
+                                                </div>
+                                                <button onClick={() => handleRemoveFromCart(item._id)} style={{ background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: 'none', padding: '5px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>Remove</button>
+                                            </div>
+                                            {isChanged && (
+                                                <div style={{ background: '#fdedec', color: '#c0392b', padding: '8px', borderRadius: '6px', fontSize: '11px', marginTop: '10px', fontWeight: 'bold' }}>
+                                                    ⚠️ Note: This service details or price has been updated by the provider. Please recheck.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+
+                                <div style={{ marginTop: '20px', borderTop: '1px dashed #444', paddingTop: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontSize: '18px', fontWeight: 'bold', marginBottom: '15px' }}>
+                                        <span>Total Estimated:</span>
+                                        <span>₹{cart.reduce((acc, item) => acc + (item.startingPrice || 0), 0)}</span>
+                                    </div>
+                                    <button onClick={handleCartCheckout} disabled={loading} style={{ background: '#2ecc71', color: '#fff', border: 'none', width: '100%', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                        {loading ? 'Processing Checkout...' : 'Checkout Now'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ SERVICES MODAL (NATIVE BOTTOM SHEET) WITH ADD TO CART */}
             {selectedServiceModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(5px)' }}>
                     <div style={{ background: '#1a1a2e', width: '100%', maxHeight: '85vh', borderTopLeftRadius: '25px', borderTopRightRadius: '25px', padding: '20px', overflowY: 'auto', animation: 'slideUp 0.3s ease-out' }}>
@@ -987,13 +1086,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             )) : <li>✅ Premium Quality Service</li>}
                         </ul>
 
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button onClick={() => setSelectedServiceModal(null)} style={{ flex: 1, padding: '15px', background: '#333', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
-                            <button onClick={() => {
-                                alert(`Booking request sent for ${selectedServiceModal.title}! Admin will contact you soon.`);
-                                setSelectedServiceModal(null);
-                                setCurrentTab('BOOKINGS');
-                            }} style={{ flex: 2, padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Confirm Booking</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={() => handleAddToCart(selectedServiceModal)} style={{ flex: 1, padding: '15px', background: '#f39c12', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                    🛒 Add to Cart
+                                </button>
+                                <button onClick={() => handleDirectBook(selectedServiceModal)} disabled={loading} style={{ flex: 1, padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                    {loading ? '...' : '⚡ Direct Book'}
+                                </button>
+                            </div>
+                            <button onClick={() => setSelectedServiceModal(null)} style={{ padding: '12px', background: 'transparent', color: '#aaa', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
                         </div>
                     </div>
                 </div>
@@ -1253,12 +1355,25 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            <header className="ud-header-vip">
+            {/* ✅ HEADER MODIFIED: Added Cart and Emergency Button */}
+            <header className="ud-header-vip" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="brand-logo-vip">
                     <h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span>
                 </div>
-                <div className="ud-coin-badge-vip" title="Click to add coins" onClick={() => setShowWalletModal(true)} style={{ cursor: 'pointer' }}>
-                    <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS ➕</span>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <button onClick={() => setShowEmergencyModal(true)} className="emergency-pulse-btn">
+                        🚨 Emergency
+                    </button>
+
+                    <div className="cart-icon-wrapper" onClick={() => setShowCartModal(true)}>
+                        🛒
+                        {cart.length > 0 && <span className="cart-badge">{cart.length}</span>}
+                    </div>
+
+                    <div className="ud-coin-badge-vip" title="Click to add coins" onClick={() => setShowWalletModal(true)} style={{ cursor: 'pointer', margin: 0 }}>
+                        <span className="coin-val-vip">{wallet.coins}</span><span className="coin-label-vip">COINS ➕</span>
+                    </div>
                 </div>
             </header>
 
