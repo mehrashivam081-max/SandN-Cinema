@@ -154,10 +154,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
         </div> 
-        )
+        );
     
-
-
     // 🟢 FETCH LOGIC 
     useEffect(() => {
         const fetchRealTimeData = async () => {

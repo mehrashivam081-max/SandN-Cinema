@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './StudioDashboard.css'; 
+import useBackButton from '../hooks/useBackButton';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -8,6 +9,7 @@ const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 const StudioDashboard = ({ user, onLogout }) => {
     // --- UI TABS STATES ---
     const [activeTab, setActiveTab] = useState('DASHBOARD');
+    const [showExitPopup, setShowExitPopup] = useState(false);
 
     // --- DATA STATES ---
     const [studioProfile, setStudioProfile] = useState(user);
@@ -75,31 +77,39 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ NEW 2: SMART BROWSER BACK BUTTON (Prevent Logout inside Dashboard)
-    const stateRefs = useRef({ activeTab, studioRemoveUserObj });
-    useEffect(() => {
-        stateRefs.current = { activeTab, studioRemoveUserObj };
-    }, [activeTab, studioRemoveUserObj]);
+    // ✅ NEW 2: SMART BACK BUTTON FOR STUDIO (Pro Hook)
+    useBackButton(() => {
+        if (showLogoutPopup) {
+            setShowLogoutPopup(false);
+        } else if (activeTab !== 'DASHBOARD') { 
+            // Agar user kisi dusre tab (Profile/Upload) par hai toh pehle Dashboard par layega
+            setActiveTab('DASHBOARD'); 
+        } else {
+            // Dashboard par aane ke baad back dabane par Exit Popup khulega
+            setShowExitPopup(true);
+        }
+    });
+    return (
+        <div className="studio-dashboard-container">
+            {/* ✅ EXIT APP POPUP (Inside Studio Div) */}
+            {showExitPopup && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
+                        <div style={{fontSize: '40px', marginBottom: '10px'}}>📸</div>
+                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Close Studio?</h3>
+                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit your Studio Panel?</p>
+                        
+                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
+                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
+                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-    useEffect(() => {
-        window.history.pushState(null, null, window.location.href);
-        const handlePopState = () => {
-            window.history.pushState(null, null, window.location.href); // Prevent default back
-            
-            const current = stateRefs.current;
-            
-            if (current.studioRemoveUserObj) {
-                setStudioRemoveUserObj(null); // Step back from client data popup
-            } else if (current.activeTab !== 'DASHBOARD') {
-                setActiveTab('DASHBOARD'); // Return to main tab instead of logging out
-            } else {
-                console.log("At root of Studio dashboard. Logout prevented.");
-            }
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
-
+            {/* Baaki ka tumhara Studio UI yahan niche rahega */}
+        </div>
+    );
     // ✅ NEW 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
