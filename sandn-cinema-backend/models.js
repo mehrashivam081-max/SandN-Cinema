@@ -150,6 +150,9 @@ const bookingSchema = new mongoose.Schema({
     // ✅ NEW: REMINDERS FOR ADMIN
     reminders: [{ note: String, date: Date }],
 
+    // ✅ NEW: Reason for Denial/Cancellation
+    cancelReason: { type: String, default: '' },
+
     // Status Flow: Pending -> Accepted -> Pending Payment -> Confirmed -> Completed
     status: { type: String, default: 'Pending' }, 
     createdAt: { type: Date, default: Date.now } 
@@ -191,10 +194,16 @@ const platformSettingSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now }
 });
 
-// ✅ 9. APP SERVICES SCHEMA
+// ✅ 9. APP SERVICES SCHEMA (UPDATED FOR DISCOUNTS)
 const serviceSchema = new mongoose.Schema({
     title: { type: String, required: true },
     startingPrice: { type: Number, required: true },
+    
+    // ✅ NEW: Discount & Offers Logic
+    discountPercentage: { type: Number, default: 0 }, 
+    finalPrice: { type: Number }, // Backend will automatically calculate this
+    offerText: { type: String, default: '' }, // e.g. "Diwali Special 20% Off!"
+    
     imageUrl: { type: String, default: '' },
     shortDescription: { type: String, default: '' },
     fullDescription: { type: String, default: '' },

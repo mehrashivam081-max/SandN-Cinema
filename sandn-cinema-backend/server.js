@@ -13,6 +13,12 @@ const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require
 const serviceSchema = new mongoose.Schema({
     title: String,
     startingPrice: Number,
+    
+    // ✅ NEW: Discount & Offers Logic
+    discountPercentage: { type: Number, default: 0 }, 
+    finalPrice: { type: Number }, // Backend automatically calculate karega
+    offerText: { type: String, default: '' }, // Example: "Diwali Special 20% Off!"
+    
     imageUrl: String,
     shortDescription: String,
     fullDescription: String,
@@ -1029,10 +1035,19 @@ app.get('/api/auth/get-bookings', async (req, res) => {
     }
 });
 
+// ✅ ADDED: Cancel Reason Update Logic inside Booking Status
 app.post('/api/auth/update-booking-status', async (req, res) => {
     try {
-        const { bookingId, status } = req.body;
-        await Booking.findByIdAndUpdate(bookingId, { status });
+        const { bookingId, status, cancelReason } = req.body;
+        
+        let updateData = { status };
+        if (status === 'Declined' && cancelReason) {
+            updateData.cancelReason = cancelReason;
+        } else if (status !== 'Declined') {
+            updateData.cancelReason = ''; // Clear reason if status changes from declined
+        }
+
+        await Booking.findByIdAndUpdate(bookingId, updateData);
         res.json({ success: true, message: `Booking marked as ${status}!` });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to update booking." });
@@ -1451,7 +1466,14 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
 // Add a new service (From Admin Panel)
 app.post('/api/auth/add-service', async (req, res) => {
     try {
-        const newService = await Service.create(req.body);
+        let serviceData = { ...req.body };
+        // ✅ Calculate discount if provided
+        if (serviceData.startingPrice) {
+            let discount = serviceData.discountPercentage || 0;
+            serviceData.finalPrice = serviceData.startingPrice - ((serviceData.startingPrice * discount) / 100);
+        }
+
+        const newService = await Service.create(serviceData);
         res.json({ success: true, message: "Service added successfully to App!", data: newService });
     } catch (e) {
         console.error("Add Service Error:", e);
@@ -1483,6 +1505,16 @@ app.post('/api/auth/delete-service', async (req, res) => {
 app.post('/api/auth/update-service', async (req, res) => {
     try {
         const { id, ...updateData } = req.body;
+        
+        // ✅ Recalculate discount if price or discount percentage is updated
+        if (updateData.startingPrice !== undefined || updateData.discountPercentage !== undefined) {
+             const existingService = await Service.findById(id);
+             const price = updateData.startingPrice !== undefined ? updateData.startingPrice : existingService.startingPrice;
+             const discount = updateData.discountPercentage !== undefined ? updateData.discountPercentage : (existingService.discountPercentage || 0);
+             
+             updateData.finalPrice = price - ((price * discount) / 100);
+        }
+
         const updatedService = await Service.findByIdAndUpdate(id, updateData, { new: true });
         if (updatedService) {
             res.json({ success: true, message: "Service updated successfully!", data: updatedService });
@@ -1492,6 +1524,26 @@ app.post('/api/auth/update-service', async (req, res) => {
     } catch (e) {
         console.error("Update Service Error:", e);
         res.status(500).json({ success: false, message: "Failed to update service." });
+    }
+});
+
+// ✅ NEW: Apply Quick Discount Route (Admin Panel)
+app.post('/api/auth/apply-service-discount', async (req, res) => {
+    try {
+        const { serviceId, discountPercentage, offerText } = req.body;
+        const service = await Service.findById(serviceId);
+        if (!service) return res.json({ success: false, message: "Service not found" });
+
+        const discount = Number(discountPercentage) || 0;
+        service.discountPercentage = discount;
+        service.offerText = offerText || '';
+        service.finalPrice = service.startingPrice - ((service.startingPrice * discount) / 100);
+        
+        await service.save();
+        res.json({ success: true, message: "Discount/Offer applied successfully!", data: service });
+    } catch (e) {
+        console.error("Apply Discount Error:", e);
+        res.status(500).json({ success: false, message: "Failed to apply discount." });
     }
 });
 
