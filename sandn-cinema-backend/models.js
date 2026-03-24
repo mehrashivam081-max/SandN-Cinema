@@ -117,24 +117,41 @@ const offerSchema = new mongoose.Schema({
 // 🚀 NAYE SCHEMAS (Database Tables)
 // ==========================================
 
-// --- 6. BOOKING SCHEMA (UPDATED FOR CART & EMERGENCY) ---
+// --- 6. BOOKING SCHEMA (UPDATED FOR CART, EMERGENCY & PROPOSALS) ---
 const bookingSchema = new mongoose.Schema({
     name: String,
     mobile: String,
+    email: String, // Added for quick proposal emails
     startDate: String,
     endDate: String,
     type: String, // E.g., Wedding, Pre-Wedding, App Service, Emergency
     location: String,
+    liveLocation: { lat: Number, long: Number }, // GPS location for Emergency
     eventPlaceName: String,
     amount: { type: Number }, // To track estimated cost
     
-    // ✅ NEW PARAMS FOR ADVANCED ROUTING
+    // ✅ PARAMS FOR ADVANCED ROUTING
     isEmergency: { type: Boolean, default: false },
     reason: { type: String, default: '' }, // For Emergency context
     cartItems: { type: Array, default: [] }, // Store multiple selected services here
     providerTarget: { type: String, default: 'ADMIN' }, // Route to specific studio or admin
     
-    status: { type: String, default: 'Pending' }, // Pending, Accepted, Declined
+    // ✅ NEW: CUSTOM PROPOSAL SYSTEM (Admin sends, User accepts)
+    proposal: {
+        deliverables: { type: String, default: '' },
+        totalPrice: { type: Number, default: 0 },
+        advanceAmount: { type: Number, default: 0 },
+        terms: { type: String, default: '' },
+        expiryTime: { type: Date },
+        isAccepted: { type: Boolean, default: false } // Becomes true when user pays advance
+    },
+    advancePaid: { type: Boolean, default: false },
+    
+    // ✅ NEW: REMINDERS FOR ADMIN
+    reminders: [{ note: String, date: Date }],
+
+    // Status Flow: Pending -> Accepted -> Pending Payment -> Confirmed -> Completed
+    status: { type: String, default: 'Pending' }, 
     createdAt: { type: Date, default: Date.now } 
 });
 

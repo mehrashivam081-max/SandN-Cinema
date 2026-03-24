@@ -512,7 +512,6 @@ app.post('/api/auth/login', async (req, res) => {
 // ==============================================================
 app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    // ✅ Added subFolderName and unlockValidity
     let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, imageCost, videoCost, unlockValidity } = req.body; 
     const files = req.files; 
 
@@ -557,7 +556,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                // ✅ Handle Subfolder Logic correctly
                 if (subFolderName) {
                     if (!currentData[folderIndex].subFolders) currentData[folderIndex].subFolders = [];
                     let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
@@ -577,7 +575,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                 if (unlockValidity) currentData[folderIndex].unlockValidity = unlockValidity;
 
             } else {
-                // CREATE NEW FOLDER
                 const newFolder = {
                     folderName: finalFolderName,
                     files: subFolderName ? [] : filePaths,
@@ -656,7 +653,6 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
-    // ✅ Extracting subFolderName and unlockValidity correctly
     let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity } = req.body; 
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
@@ -697,7 +693,6 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
             let folderIndex = currentData.findIndex(f => f.folderName === finalFolderName);
             
             if (folderIndex > -1) {
-                // ✅ Handle Subfolder Logic correctly
                 if (subFolderName) {
                     if (!currentData[folderIndex].subFolders) currentData[folderIndex].subFolders = [];
                     let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
@@ -717,7 +712,6 @@ app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
                 if (unlockValidity) currentData[folderIndex].unlockValidity = unlockValidity;
 
             } else {
-                // CREATE NEW FOLDER
                 const newFolder = {
                     folderName: finalFolderName,
                     files: subFolderName ? [] : filePaths,
@@ -799,9 +793,8 @@ app.post('/api/auth/list-accounts', async (req, res) => {
 // 10. Delete an Account
 app.post('/api/auth/delete-account', async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
-    const { targetRole } = req.body; // Studio will pass 'USER'
+    const { targetRole } = req.body; 
     try {
-        // Simple safe check: If targetRole is USER, we delete from User schema.
         if (targetRole === 'STUDIO') {
             await Studio.findOneAndDelete({ mobile: targetMobile });
         } else if (targetRole === 'ADMIN') {
@@ -980,6 +973,9 @@ app.post('/api/auth/update-default-pricing', async (req, res) => {
     }
 });
 
+// ==========================================
+// ✅ GET SERVICES ROUTE (RESTORED)
+// ==========================================
 app.get('/api/auth/get-services', async (req, res) => {
     try {
         const defaultServices = [
@@ -996,6 +992,7 @@ app.get('/api/auth/get-services', async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to fetch services." });
     }
 });
+
 
 // ==========================================
 // ✅ 18. DIRECT BOOKINGS LOGIC 
@@ -1482,6 +1479,22 @@ app.post('/api/auth/delete-service', async (req, res) => {
     }
 });
 
+// ✅ NEW: Update an existing service (From Admin Panel)
+app.post('/api/auth/update-service', async (req, res) => {
+    try {
+        const { id, ...updateData } = req.body;
+        const updatedService = await Service.findByIdAndUpdate(id, updateData, { new: true });
+        if (updatedService) {
+            res.json({ success: true, message: "Service updated successfully!", data: updatedService });
+        } else {
+            res.json({ success: false, message: "Service not found." });
+        }
+    } catch (e) {
+        console.error("Update Service Error:", e);
+        res.status(500).json({ success: false, message: "Failed to update service." });
+    }
+});
+
 // Fetch specific user's bookings (For User Dashboard)
 app.post('/api/auth/get-user-services', async (req, res) => {
     try {
@@ -1513,11 +1526,12 @@ app.post('/api/auth/checkout-cart', async (req, res) => {
         const newBooking = await Booking.create({
             name: account.data.name || account.data.ownerName,
             mobile: mobile,
+            email: account.data.email, // Added for proposal tracking
             type: `Cart Order: ${itemTitles}`,
             amount: totalAmount,
             cartItems: items,
             status: 'Pending',
-            providerTarget: items[0].addedBy || 'ADMIN' // Default route to the first item's provider
+            providerTarget: items[0].addedBy || 'ADMIN' 
         });
 
         res.json({ success: true, message: "Cart checkout successful!", data: newBooking });
@@ -1530,7 +1544,7 @@ app.post('/api/auth/checkout-cart', async (req, res) => {
 // Process Emergency Booking (Deducts 50 Coins)
 app.post('/api/auth/emergency-booking', async (req, res) => {
     try {
-        const { mobile, reason, location } = req.body;
+        const { mobile, reason, location, lat, long } = req.body; // Added GPS points
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
@@ -1562,14 +1576,23 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
         const emergencyBooking = await Booking.create({
             name: account.data.name || account.data.ownerName,
             mobile: mobile,
+            email: account.data.email,
             type: "🚨 EMERGENCY BOOKING",
             location: location,
+            liveLocation: { lat, long }, // Store GPS
             reason: reason,
             isEmergency: true,
             status: 'Pending',
-            amount: 0, // Since paid via coins
-            providerTarget: 'ADMIN' // Always goes to admin
+            amount: 0, 
+            providerTarget: 'ADMIN' 
         });
+        
+        // 📩 Send Quick Alert to Admin
+        sendBrevoEmail(
+            process.env.ADMIN_EMAIL || process.env.EMAIL_USER, 
+            "🚨 EMERGENCY BOOKING RECEIVED", 
+            `<h2 style="color:red;">Emergency Request!</h2><p>Client: ${emergencyBooking.name} (${mobile})</p><p>Location: ${location}</p><p>Reason: ${reason}</p>`
+        ).catch(() => console.log("Admin Emergency Email failed"));
 
         res.json({ success: true, message: "Emergency call initiated!", wallet, data: emergencyBooking });
     } catch (e) {
@@ -1577,6 +1600,107 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to process emergency booking." });
     }
 });
+
+
+// ==========================================
+// ✅ 23. ADVANCED PROPOSAL SYSTEM
+// ==========================================
+
+// 📩 Admin Sends Proposal to User
+app.post('/api/auth/send-proposal', async (req, res) => {
+    try {
+        const { bookingId, totalPrice, advanceAmount, deliverables, terms, expiryHours } = req.body;
+        
+        let booking = await Booking.findById(bookingId);
+        if(!booking) return res.json({ success: false, message: "Booking not found." });
+
+        const expiryTime = new Date();
+        expiryTime.setHours(expiryTime.getHours() + parseInt(expiryHours));
+
+        booking.proposal = {
+            deliverables,
+            totalPrice: parseInt(totalPrice),
+            advanceAmount: parseInt(advanceAmount),
+            terms,
+            expiryTime,
+            isAccepted: false
+        };
+        booking.status = 'Pending Payment'; // Status changed awaiting user action
+        await booking.save();
+
+        // 📩 Send Email Notification to User
+        if (booking.email && !booking.email.includes('dummy_')) {
+            const htmlContent = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <h2 style="color: #2b5876;">You've received a Custom Proposal! 🎉</h2>
+                    <p style="color: #444;">Hello <strong>${booking.name}</strong>,</p>
+                    <p>We have reviewed your request for <strong>${booking.type}</strong> and generated a customized proposal for you.</p>
+                    
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px dashed #ccc;">
+                        <p style="margin: 5px 0;">Total Estimated Cost: <strong style="color: #2ecc71;">₹${totalPrice}</strong></p>
+                        <p style="margin: 5px 0;">Advance Required (To Book): <strong style="color: #e74c3c;">₹${advanceAmount}</strong></p>
+                        <p style="margin: 5px 0; color: #7f8c8d; font-size: 12px;"><em>This proposal expires on ${expiryTime.toLocaleString()}</em></p>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 25px;">
+                        <a href="${WEBSITE_URL}" style="background-color: #f39c12; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details & Pay Advance</a>
+                    </div>
+                    <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Thank you for choosing SandN Cinema.</p>
+                </div>
+            `;
+            sendBrevoEmail(booking.email, "Action Required: Your Custom Booking Proposal", htmlContent).catch(()=>console.log("Proposal Email Failed"));
+        }
+
+        res.json({ success: true, message: "Proposal sent successfully to user!", data: booking });
+    } catch (e) {
+        console.error("Proposal Error:", e);
+        res.status(500).json({ success: false, message: "Failed to send proposal." });
+    }
+});
+
+// 💳 User Accepts Proposal & Pays Advance (Simulated Payment)
+app.post('/api/auth/accept-proposal', async (req, res) => {
+    try {
+        const { bookingId } = req.body;
+        let booking = await Booking.findById(bookingId);
+        if(!booking) return res.json({ success: false, message: "Booking not found." });
+
+        if (new Date() > new Date(booking.proposal.expiryTime)) {
+            booking.status = 'Declined';
+            await booking.save();
+            return res.json({ success: false, message: "Proposal has expired. Please contact support." });
+        }
+
+        // Simulating that user successfully paid the advance
+        booking.advancePaid = true;
+        booking.proposal.isAccepted = true;
+        booking.status = 'Confirmed';
+        await booking.save();
+
+        // 📩 Send Confirmation Email
+        if (booking.email && !booking.email.includes('dummy_')) {
+            const htmlContent = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; border-top: 5px solid #2ecc71;">
+                    <h2 style="color: #2ecc71;">Booking Confirmed! ✅</h2>
+                    <p>Hello <strong>${booking.name}</strong>,</p>
+                    <p>We have successfully received your advance payment of <strong>₹${booking.proposal.advanceAmount}</strong>.</p>
+                    <p>Your booking for <strong>${booking.type}</strong> is officially confirmed.</p>
+                    <p>Our team will get in touch with you shortly to coordinate the final details.</p>
+                    <div style="text-align: center; margin-top: 25px;">
+                        <a href="${WEBSITE_URL}" style="background-color: #34495e; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Booking History</a>
+                    </div>
+                </div>
+            `;
+            sendBrevoEmail(booking.email, "Booking Confirmed - SandN Cinema", htmlContent).catch(()=>console.log("Confirmation Email Failed"));
+        }
+
+        res.json({ success: true, message: "Advance Paid! Booking Officially Confirmed.", data: booking });
+    } catch (e) {
+        console.error("Accept Proposal Error:", e);
+        res.status(500).json({ success: false, message: "Failed to confirm booking." });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
