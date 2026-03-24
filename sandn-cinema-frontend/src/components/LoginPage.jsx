@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
+import useBackButton from '../hooks/useBackButton'; // ✅ NEW: Back Button Hook Import
 
 // ✅ Firebase Imports (Make sure path is correct based on where you saved firebase.js)
 import { auth } from '../firebase'; 
@@ -232,6 +233,11 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         }
     };
 
+    // ✅ NEW: Trigger handleStepBack when mobile hardware back button is pressed
+    useBackButton(() => {
+        handleStepBack();
+    });
+
     return (
         <div className="login-page">
             {/* ✅ REQUIRED FOR FIREBASE PHONE AUTH */}
@@ -262,9 +268,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
                 {error && <div className="error-msg">{error}</div>}
 
-                {/* --- STEP 1: MOBILE INPUT --- */}
+                {/* --- STEP 1: MOBILE INPUT (Changed to Form for Enter Key) --- */}
                 {step === 1 && (
-                    <div className="fade-in">
+                    <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleCheckUser(); }}>
                         <div className="input-group">
                             <label>{activeTab === 'code' ? "Enter Secret Code" : "Registered Mobile Number"}</label>
                             <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
@@ -273,17 +279,17 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                         <div style={{ marginBottom: '15px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
+                                <button type="button"
                                     onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}
                                     style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
                                     📱 SMS
                                 </button>
-                                <button 
+                                <button type="button"
                                     onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}
                                     style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
                                     💬 WhatsApp
                                 </button>
-                                <button 
+                                <button type="button"
                                     onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}
                                     style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
                                     ✉️ Email
@@ -291,27 +297,27 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        <button className="login-btn" onClick={handleCheckUser} disabled={loading}>{loading ? 'Checking...' : 'GET OTP'}</button>
-                    </div>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Checking...' : 'GET OTP'}</button>
+                    </form>
                 )}
 
-                {/* --- STEP 2: OTP VERIFICATION --- */}
+                {/* --- STEP 2: OTP VERIFICATION (Changed to Form for Enter Key) --- */}
                 {step === 2 && (
-                    <div className="fade-in">
+                    <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
                         <div className="input-group">
                             <label>Enter OTP</label>
                             <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
                         </div>
-                        <button className="login-btn" onClick={handleVerifyOTP} disabled={loading}>VERIFY OTP</button>
+                        <button type="submit" className="login-btn" disabled={loading}>VERIFY OTP</button>
                         <p className="resend-text" onClick={handleStepBack} style={{cursor: 'pointer'}}>
                             {activeTab === 'code' ? '← Edit Secret Code' : '← Edit Number'}
                         </p>
-                    </div>
+                    </form>
                 )}
 
-                {/* --- STEP 3: REGULAR PASSWORD LOGIN --- */}
+                {/* --- STEP 3: REGULAR PASSWORD LOGIN (Changed to Form for Enter Key) --- */}
                 {step === 3 && (
-                    <div className="fade-in">
+                    <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
                         <div className="input-group">
                             <label>Password</label>
                             <div className="pass-wrapper">
@@ -319,14 +325,14 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
                         </div>
-                        <button className="login-btn" onClick={handleLogin} disabled={loading}>LOGIN NOW</button>
+                        <button type="submit" className="login-btn" disabled={loading}>LOGIN NOW</button>
                         <p className="resend-text" onClick={handleStepBack} style={{cursor: 'pointer'}}>← Back</p>
-                    </div>
+                    </form>
                 )}
 
-                {/* --- STEP 4: NEW ACCOUNT SETUP (Email & Password) --- */}
+                {/* --- STEP 4: NEW ACCOUNT SETUP (Changed to Form for Enter Key) --- */}
                 {step === 4 && (
-                    <div className="fade-in">
+                    <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleSetupAccount(); }}>
                         <p style={{ color: '#28a745', fontSize: '12px', marginBottom: '15px' }}>✅ Number Verified! Please complete your profile setup.</p>
                         
                         <div className="input-group">
@@ -342,7 +348,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        {/* ✅ Confirm Password Field */}
                         <div className="input-group">
                             <label>Confirm Password</label>
                             <div className="pass-wrapper">
@@ -351,8 +356,8 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             </div>
                         </div>
 
-                        <button className="login-btn" onClick={handleSetupAccount} disabled={loading}>COMPLETE SETUP & LOGIN</button>
-                    </div>
+                        <button type="submit" className="login-btn" disabled={loading}>COMPLETE SETUP & LOGIN</button>
+                    </form>
                 )}
 
                 <div className="toggle-text">

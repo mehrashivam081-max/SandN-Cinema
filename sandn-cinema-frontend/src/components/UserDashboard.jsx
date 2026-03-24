@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './UserDashboard.css';
 import { calculateDailyReward } from '../utils/coinLogic';
+import useBackButton from '../hooks/useBackButton';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -9,7 +10,8 @@ const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 const UserDashboard = ({ user, userData, onLogout }) => {
     // --- UI STATES ---
     const [currentTab, setCurrentTab] = useState('HOME'); 
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true); 
+    const [showExitPopup, setShowExitPopup] = useState(false);
     
     // --- USER SYNCED DATA (REAL-TIME) ---
     const [syncUser, setSyncUser] = useState(user || {});
@@ -100,48 +102,60 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('userCart', JSON.stringify(cart));
     }, [cart]);
 
-    // ✅ SMART BROWSER BACK BUTTON (Native App Experience)
-    useEffect(() => {
-        window.history.pushState(null, null, window.location.href);
+    // ✅ SMART BROWSER BACK BUTTON (With Exit App Popup)
+    useBackButton(() => {
+        if (viewProposalBooking) {
+            setViewProposalBooking(null);
+        } else if (showEmergencyModal) {
+            setShowEmergencyModal(false);
+        } else if (showCartModal) {
+            setShowCartModal(false);
+        } else if (selectedServiceModal) {
+            setSelectedServiceModal(null);
+        } else if (selectedMedia) {
+            setSelectedMedia(null);
+        } else if (purchaseModal.show) {
+            setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
+        } else if (showWalletModal) {
+            setShowWalletModal(false);
+        } else if (showCollabModal) {
+            setShowCollabModal(false);
+        } else if (activeSubFolder) {
+            setActiveSubFolder(null);
+            setIsSelectionMode(false);
+            setSelectedMediaFiles([]);
+        } else if (activeFolder) {
+            setActiveFolder(null);
+            setMediaFilter('ALL');
+            setIsSelectionMode(false);
+            setSelectedMediaFiles([]);
+        } else if (currentTab !== 'HOME') {
+            setCurrentTab('HOME');
+        } else {
+            setShowExitPopup(true);
+        }
+    });
 
-        const handlePopState = () => {
-            window.history.pushState(null, null, window.location.href);
-
-            if (viewProposalBooking) {
-                setViewProposalBooking(null);
-            } else if (showEmergencyModal) {
-                setShowEmergencyModal(false);
-            } else if (showCartModal) {
-                setShowCartModal(false);
-            } else if (selectedServiceModal) {
-                setSelectedServiceModal(null);
-            } else if (selectedMedia) {
-                setSelectedMedia(null);
-            } else if (purchaseModal.show) {
-                setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
-            } else if (showWalletModal) {
-                setShowWalletModal(false);
-            } else if (showCollabModal) {
-                setShowCollabModal(false);
-            } else if (activeSubFolder) {
-                setActiveSubFolder(null);
-                setIsSelectionMode(false);
-                setSelectedMediaFiles([]);
-            } else if (activeFolder) {
-                setActiveFolder(null);
-                setMediaFilter('ALL');
-                setIsSelectionMode(false);
-                setSelectedMediaFiles([]);
-            } else if (currentTab !== 'HOME') {
-                setCurrentTab('HOME');
-            } else {
-                console.log("At root of dashboard. Logout prevented.");
-            }
-        };
-
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [activeFolder, activeSubFolder, currentTab, selectedMedia, purchaseModal, showWalletModal, showCollabModal, selectedServiceModal, showCartModal, showEmergencyModal, viewProposalBooking]);
+    return (
+        <div className="user-dashboard-container">
+            {/* ✅ EXIT APP POPUP */}
+            {showExitPopup && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
+                        <div style={{fontSize: '40px', marginBottom: '10px'}}>🚪</div>
+                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Exit App?</h3>
+                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to close the app?</p>
+                        
+                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
+                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
+                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div> 
+        )
+    
 
 
     // 🟢 FETCH LOGIC 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './OwnerDashboard.css';
+import useBackButton from '../hooks/useBackButton';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -111,42 +112,26 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ FEATURE 2: SMART BROWSER BACK BUTTON (FIXED with useRef to prevent infinite loop)
-    const stateRefs = useRef({ activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal });
-    useEffect(() => {
-        stateRefs.current = { activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal };
-    }, [activeTab, globalRemoveUserObj, showLogoutPopup, uploadSubTab, showProposalModal, showDenyModal]);
-
-    useEffect(() => {
-        window.history.pushState(null, null, window.location.href);
-
-        const handlePopState = () => {
-            window.history.pushState(null, null, window.location.href);
-
-            const current = stateRefs.current;
-
-            if (current.showDenyModal) {
-                setShowDenyModal(false);
-            } else if (current.showProposalModal) {
-                setShowProposalModal(false);
-            } else if (current.showLogoutPopup) {
-                setShowLogoutPopup(false);
-            } else if (current.globalRemoveUserObj) {
-                setGlobalRemoveUserObj(null);
-            } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'CHARGES') {
-                setUploadSubTab('LIMITS');
-            } else if (current.activeTab === 'UPLOAD' && current.uploadSubTab === 'LIMITS') {
-                setUploadSubTab('BASIC');
-            } else if (current.activeTab !== 'DASHBOARD') {
-                setActiveTab('DASHBOARD');
-            } else {
-                setShowLogoutPopup(true);
-            }
-        };
-
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
+    // ✅ FEATURE 2: SMART BROWSER BACK BUTTON (Using Pro Global Hook)
+    useBackButton(() => {
+        if (showDenyModal) {
+            setShowDenyModal(false);
+        } else if (showProposalModal) {
+            setShowProposalModal(false);
+        } else if (showLogoutPopup) {
+            setShowLogoutPopup(false);
+        } else if (globalRemoveUserObj) {
+            setGlobalRemoveUserObj(null);
+        } else if (activeTab === 'UPLOAD' && uploadSubTab === 'CHARGES') {
+            setUploadSubTab('LIMITS');
+        } else if (activeTab === 'UPLOAD' && uploadSubTab === 'LIMITS') {
+            setUploadSubTab('BASIC');
+        } else if (activeTab !== 'DASHBOARD') {
+            setActiveTab('DASHBOARD');
+        } else {
+            setShowLogoutPopup(true); // Agar Dashboard par hai toh seedha Logout pucho, bahar mat feko
+        }
+    });
 
     // ✅ FEATURE 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
