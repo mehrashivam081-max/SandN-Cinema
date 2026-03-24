@@ -1084,7 +1084,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <h3 style={{ padding: '15px' }}>📦 Live Services on App</h3>
                         <div className="data-table-container">
                             <table className="admin-table">
-                                <thead><tr><th>Service Title</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+                                <thead><tr><th>Service Title</th><th>Price Details</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     {availableServices.length > 0 ? availableServices.map((srv, idx) => (
                                         <tr key={idx}>
@@ -1102,23 +1102,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                     <strong>₹{srv.startingPrice}</strong>
                                                 )}
                                             </td>
+                                            <td><span className="status-badge active">Live</span></td>
                                             <td>
-                                                <span className={`status-badge ${b.status === 'Accepted' ? 'active' : b.status === 'Declined' ? 'inactive' : 'normal'}`}>{b.status}</span>
-                                                {/* Display Reason if Declined */}
-                                                {b.status === 'Declined' && b.cancelReason && (
-                                                    <div style={{fontSize:'10px', color:'#e74c3c', marginTop:'4px', maxWidth:'150px'}}>{b.cancelReason}</div>
-                                                )}
-                                            </td>
-                                            <td style={{display:'flex', flexDirection:'column', gap:'5px'}}>
-                                                {b.status === 'Pending' && (
-                                                    <>
-                                                        <button onClick={() => handleBookingStatus(b._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => openDenyModal(b)} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
-                                                    </>
-                                                )}
-                                                {b.status === 'Accepted' && (
-                                                    <button onClick={() => openProposalModal(b)} style={{background:'#f39c12', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>✉️ Send Proposal</button>
-                                                )}
+                                                <button onClick={() => startEditingService(srv)} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px'}}>✏️ Edit</button>
+                                                <button onClick={() => handleDeleteService(srv._id)} className="pdf-btn" style={{background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer'}}>Remove</button>
                                             </td>
                                         </tr>
                                     )) : <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No services published yet.</td></tr>}
