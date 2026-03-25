@@ -9,15 +9,15 @@ const path = require('path');
 // ✅ Added New Models Here
 const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require('./models');
 
-// ✅ NEW: Service Model for App Services (Defined here to avoid crashing if not in models.js)
+// ✅ NEW: Service Model for App Services
 const serviceSchema = new mongoose.Schema({
     title: String,
     startingPrice: Number,
     
     // ✅ NEW: Discount & Offers Logic
     discountPercentage: { type: Number, default: 0 }, 
-    finalPrice: { type: Number }, // Backend automatically calculate karega
-    offerText: { type: String, default: '' }, // Example: "Diwali Special 20% Off!"
+    finalPrice: { type: Number }, 
+    offerText: { type: String, default: '' }, 
     
     imageUrl: String,
     shortDescription: String,
@@ -48,7 +48,7 @@ const upload = multer({ storage: storage });
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
-const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema"; // ✅ Global URL for Emails
+const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema"; 
 
 app.use(cors({
     origin: [
@@ -655,7 +655,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 
 
 // ==============================================================
-// 🚀 CLOUDINARY FAST UPLOAD ROUTE (WITH MONETIZATION RATES)
+// 🚀 CLOUDINARY FAST UPLOAD ROUTE
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
@@ -963,7 +963,6 @@ app.post('/api/auth/update-policies', async (req, res) => {
     }
 });
 
-// ✅ NEW: UPDATE GLOBAL PRICING
 app.post('/api/auth/update-default-pricing', async (req, res) => {
     try {
         const { imageCost, videoCost } = req.body;
@@ -980,7 +979,7 @@ app.post('/api/auth/update-default-pricing', async (req, res) => {
 });
 
 // ==========================================
-// ✅ GET SERVICES ROUTE (RESTORED)
+// ✅ GET SERVICES ROUTE
 // ==========================================
 app.get('/api/auth/get-services', async (req, res) => {
     try {
@@ -1035,7 +1034,6 @@ app.get('/api/auth/get-bookings', async (req, res) => {
     }
 });
 
-// ✅ ADDED: Cancel Reason Update Logic inside Booking Status
 app.post('/api/auth/update-booking-status', async (req, res) => {
     try {
         const { bookingId, status, cancelReason } = req.body;
@@ -1044,7 +1042,7 @@ app.post('/api/auth/update-booking-status', async (req, res) => {
         if (status === 'Declined' && cancelReason) {
             updateData.cancelReason = cancelReason;
         } else if (status !== 'Declined') {
-            updateData.cancelReason = ''; // Clear reason if status changes from declined
+            updateData.cancelReason = ''; 
         }
 
         await Booking.findByIdAndUpdate(bookingId, updateData);
@@ -1087,7 +1085,6 @@ app.post('/api/auth/update-collab-status', async (req, res) => {
             const subject = status === 'Accepted' ? "Collab Request Approved!" : "Collab Request Update";
             const msg = status === 'Accepted' ? "We are excited to work with you." : "Sorry, we can't proceed right now.";
             try {
-                // ✅ With Premium Website Button 
                 await sendBrevoEmail(
                     collab.email, 
                     subject, 
@@ -1201,10 +1198,10 @@ app.post('/api/auth/deduct-coins', async (req, res) => {
     }
 });
 
-// ✅ BATCH MONETIZATION (MULTIPLE UNLOCK & VALIDITY & EMAIL WITH BUTTON)
+// ✅ BATCH MONETIZATION WITH STUDIO AUTO-TRANSFER
 app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
-    const { amount, filesToUnlock, expiryDate, reason } = req.body; 
+    const { amount, filesToUnlock, expiryDate, reason, targetStudio } = req.body; 
 
     try {
         const account = await findAccount(mobile);
@@ -1239,7 +1236,34 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
         if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
 
-        // ✅ EMAIL NOTIFICATION LOGIC (With Styled Button)
+        // ✅ AUTO-CREDIT COINS TO STUDIO'S WALLET
+        if (targetStudio && targetStudio !== 'ADMIN' && targetStudio !== 'SandN Cinema') {
+            try {
+                const studio = await Studio.findOne({ studioName: targetStudio });
+                if (studio) {
+                    let studioWallet = studio.wallet || { coins: 0, history: [], revenue: 0 };
+                    studioWallet.coins += parseInt(amount);
+                    
+                    const studioHistory = {
+                        action: `Media Unlocked by ${account.data.name || 'User'}`,
+                        amount: `+${amount} Coins`,
+                        date: new Date().toLocaleDateString(),
+                        type: "credit"
+                    };
+                    studioWallet.history = [studioHistory, ...(studioWallet.history || [])];
+
+                    await Studio.updateOne(
+                        { _id: studio._id }, 
+                        { $set: { wallet: studioWallet } }, 
+                        { strict: false }
+                    );
+                }
+            } catch (err) { 
+                console.log("Failed to credit studio coins"); 
+            }
+        }
+
+        // ✅ EMAIL NOTIFICATION LOGIC
         const targetEmail = account.data.email;
         if (targetEmail && !targetEmail.includes('dummy_')) {
             const subject = "Media Unlocked Successfully - SandN Cinema";
@@ -1254,11 +1278,9 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
                         <p style="margin: 5px 0;">Access Validity: <strong style="color: #3498db;">${expiryDate === 'Permanent' ? 'Permanent' : 'Limited Time'}</strong></p>
                     </div>
                     <p style="color: #444; text-align: center;">You can now view, download, and share your media.</p>
-                    
                     <div style="text-align: center; margin-top: 25px;">
                         <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">View Unlocked Media</a>
                     </div>
-                    
                     <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
                     <p style="font-size: 11px; color: #999; text-align: center;">Thank you for choosing SandN Cinema.</p>
                 </div>
@@ -1313,7 +1335,6 @@ app.post('/api/auth/add-coins', async (req, res) => {
 // 💰 ADVANCED MONETIZATION (REAL MONEY & EVENTS)
 // ==========================================
 
-// 1. Save Global Charges (Packages, Events, Pricing) from Admin
 app.post('/api/auth/update-global-charges', async (req, res) => {
     try {
         const { imageCost, videoCost, coinPackages, miniEvents } = req.body;
@@ -1337,7 +1358,6 @@ app.post('/api/auth/update-global-charges', async (req, res) => {
     }
 });
 
-// 2. Simulate Real Money Purchase
 app.post('/api/auth/purchase-coins', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { coinsToAdd, pricePaid } = req.body;
@@ -1367,7 +1387,6 @@ app.post('/api/auth/purchase-coins', async (req, res) => {
     }
 });
 
-// 3. Claim Mini Event Reward
 app.post('/api/auth/claim-event', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { eventId, rewardCoins, eventTitle } = req.body;
@@ -1385,7 +1404,7 @@ app.post('/api/auth/claim-event', async (req, res) => {
         }
 
         wallet.coins += parseInt(rewardCoins);
-        wallet.claimedEvents.push(eventId); // Mark as completed
+        wallet.claimedEvents.push(eventId); 
 
         const historyEntry = {
             action: `Completed: ${eventTitle}`,
@@ -1425,7 +1444,6 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
         
         if (folderIndex > -1) {
             if (fileUrl) {
-                // ✅ 1. DELETE SPECIFIC FILE ONLY
                 if (subFolderName) {
                     let subIndex = currentData[folderIndex].subFolders.findIndex(sf => sf.name === subFolderName);
                     if (subIndex > -1) {
@@ -1435,17 +1453,14 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
                     currentData[folderIndex].files = currentData[folderIndex].files.filter(url => url !== fileUrl);
                 }
             } else if (subFolderName) {
-                // ✅ 2. DELETE ENTIRE SUB-FOLDER (Dates)
                 if (currentData[folderIndex].subFolders) {
                     currentData[folderIndex].subFolders = currentData[folderIndex].subFolders.filter(sf => sf.name !== subFolderName);
                 }
             } else {
-                // ✅ 3. DELETE ENTIRE MAIN FOLDER
                 currentData = currentData.filter(f => f.folderName !== folderName);
             }
         }
 
-        // Save back to DB safely
         if (account.type === 'STUDIO') {
             await Studio.updateOne({ mobile }, { $set: { uploadedData: currentData } }, { strict: false });
         } else {
@@ -1462,12 +1477,9 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
 // ==========================================
 // ✅ 21. MANAGE SERVICES LOGIC (NEW APP FEATURES)
 // ==========================================
-
-// Add a new service (From Admin Panel)
 app.post('/api/auth/add-service', async (req, res) => {
     try {
         let serviceData = { ...req.body };
-        // ✅ Calculate discount if provided
         if (serviceData.startingPrice) {
             let discount = serviceData.discountPercentage || 0;
             serviceData.finalPrice = serviceData.startingPrice - ((serviceData.startingPrice * discount) / 100);
@@ -1481,7 +1493,6 @@ app.post('/api/auth/add-service', async (req, res) => {
     }
 });
 
-// Fetch all available services (For App users to explore)
 app.get('/api/auth/get-available-services', async (req, res) => {
     try {
         const services = await Service.find().sort({ createdAt: -1 });
@@ -1491,7 +1502,6 @@ app.get('/api/auth/get-available-services', async (req, res) => {
     }
 });
 
-// Delete a service (From Admin Panel)
 app.post('/api/auth/delete-service', async (req, res) => {
     try {
         await Service.findByIdAndDelete(req.body.id);
@@ -1501,12 +1511,10 @@ app.post('/api/auth/delete-service', async (req, res) => {
     }
 });
 
-// ✅ NEW: Update an existing service (From Admin Panel)
 app.post('/api/auth/update-service', async (req, res) => {
     try {
         const { id, ...updateData } = req.body;
         
-        // ✅ Recalculate discount if price or discount percentage is updated
         if (updateData.startingPrice !== undefined || updateData.discountPercentage !== undefined) {
              const existingService = await Service.findById(id);
              const price = updateData.startingPrice !== undefined ? updateData.startingPrice : existingService.startingPrice;
@@ -1527,7 +1535,6 @@ app.post('/api/auth/update-service', async (req, res) => {
     }
 });
 
-// ✅ NEW: Apply Quick Discount Route (Admin Panel)
 app.post('/api/auth/apply-service-discount', async (req, res) => {
     try {
         const { serviceId, discountPercentage, offerText } = req.body;
@@ -1547,7 +1554,6 @@ app.post('/api/auth/apply-service-discount', async (req, res) => {
     }
 });
 
-// Fetch specific user's bookings (For User Dashboard)
 app.post('/api/auth/get-user-services', async (req, res) => {
     try {
         const mobile = getCleanMobile(req.body.mobile);
@@ -1569,16 +1575,13 @@ app.post('/api/auth/checkout-cart', async (req, res) => {
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
-        // Calculate total amount from live items
         let totalAmount = items.reduce((acc, item) => acc + (item.startingPrice || 0), 0);
-
-        // Group item titles for the booking type
         const itemTitles = items.map(i => i.title).join(", ");
 
         const newBooking = await Booking.create({
             name: account.data.name || account.data.ownerName,
             mobile: mobile,
-            email: account.data.email, // Added for proposal tracking
+            email: account.data.email, 
             type: `Cart Order: ${itemTitles}`,
             amount: totalAmount,
             cartItems: items,
@@ -1593,10 +1596,10 @@ app.post('/api/auth/checkout-cart', async (req, res) => {
     }
 });
 
-// Process Emergency Booking (Deducts 50 Coins)
+// Process Emergency Booking
 app.post('/api/auth/emergency-booking', async (req, res) => {
     try {
-        const { mobile, reason, location, lat, long } = req.body; // Added GPS points
+        const { mobile, reason, location, lat, long } = req.body; 
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
@@ -1606,7 +1609,6 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
             return res.json({ success: false, message: "Not enough coins for emergency booking." });
         }
 
-        // Deduct 50 Coins
         wallet.coins -= 50;
 
         const historyEntry = {
@@ -1617,21 +1619,19 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
         };
         wallet.history = [historyEntry, ...(wallet.history || [])];
 
-        // Safe DB Update
         if (account.type === 'STUDIO') {
             await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         } else {
             await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         }
 
-        // Create Emergency Booking Record
         const emergencyBooking = await Booking.create({
             name: account.data.name || account.data.ownerName,
             mobile: mobile,
             email: account.data.email,
             type: "🚨 EMERGENCY BOOKING",
             location: location,
-            liveLocation: { lat, long }, // Store GPS
+            liveLocation: { lat, long }, 
             reason: reason,
             isEmergency: true,
             status: 'Pending',
@@ -1639,7 +1639,6 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
             providerTarget: 'ADMIN' 
         });
         
-        // 📩 Send Quick Alert to Admin
         sendBrevoEmail(
             process.env.ADMIN_EMAIL || process.env.EMAIL_USER, 
             "🚨 EMERGENCY BOOKING RECEIVED", 
@@ -1653,9 +1652,8 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
     }
 });
 
-
 // ==========================================
-// ✅ 23. ADVANCED PROPOSAL SYSTEM
+// ✅ 23. ADVANCED PROPOSAL SYSTEM (WITH PAYMENT ROUTING)
 // ==========================================
 
 // 📩 Admin Sends Proposal to User
@@ -1677,10 +1675,9 @@ app.post('/api/auth/send-proposal', async (req, res) => {
             expiryTime,
             isAccepted: false
         };
-        booking.status = 'Pending Payment'; // Status changed awaiting user action
+        booking.status = 'Pending Payment'; 
         await booking.save();
 
-        // 📩 Send Email Notification to User
         if (booking.email && !booking.email.includes('dummy_')) {
             const htmlContent = `
                 <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
@@ -1710,7 +1707,7 @@ app.post('/api/auth/send-proposal', async (req, res) => {
     }
 });
 
-// 💳 User Accepts Proposal & Pays Advance (Simulated Payment)
+// 💳 User Accepts Proposal & Pays Advance 
 app.post('/api/auth/accept-proposal', async (req, res) => {
     try {
         const { bookingId } = req.body;
@@ -1728,6 +1725,39 @@ app.post('/api/auth/accept-proposal', async (req, res) => {
         booking.proposal.isAccepted = true;
         booking.status = 'Confirmed';
         await booking.save();
+
+        // ✅ AUTO-CREDIT PAYMENT TO STUDIO'S WALLET (INCOME)
+        if (booking.providerTarget && booking.providerTarget !== 'ADMIN') {
+            try {
+                // Find the Studio using the providerTarget (which stores addedBy / studioName)
+                const studio = await Studio.findOne({ studioName: booking.providerTarget });
+                if (studio) {
+                    let studioWallet = studio.wallet || { coins: 0, history: [], revenue: 0 };
+                    
+                    // Add Rupees to Studio Revenue
+                    studioWallet.revenue = (studioWallet.revenue || 0) + booking.proposal.advanceAmount;
+
+                    // Add to Studio's Transaction History
+                    const historyEntry = {
+                        action: `Advance Received: ${booking.name}`,
+                        amount: `+₹${booking.proposal.advanceAmount}`,
+                        date: new Date().toLocaleDateString(),
+                        type: "credit"
+                    };
+                    studioWallet.history = [historyEntry, ...(studioWallet.history || [])];
+
+                    // Save Studio Wallet
+                    await Studio.updateOne(
+                        { _id: studio._id }, 
+                        { $set: { wallet: studioWallet } }, 
+                        { strict: false }
+                    );
+                    console.log(`💰 Added ₹${booking.proposal.advanceAmount} to ${studio.studioName}'s account.`);
+                }
+            } catch (err) {
+                console.error("Failed to update studio income:", err);
+            }
+        }
 
         // 📩 Send Confirmation Email
         if (booking.email && !booking.email.includes('dummy_')) {
