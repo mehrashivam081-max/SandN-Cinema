@@ -22,12 +22,16 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
 
+    // ✅ PREMIUM UPLOADER STATES (For Feed Drag & Drop)
+    const [isDragging, setIsDragging] = useState(false);
+    const [feedPreviews, setFeedPreviews] = useState([]);
+
     // ✅ NEW: SEARCH CLIENT STATE
     const [clientSearchQuery, setClientSearchQuery] = useState('');
 
     // --- FOLDER & FILE COUNTER STATES ---
     const [folderName, setFolderName] = useState('');
-    const [useDateFolder, setUseDateFolder] = useState(false); // ✅ Added Date Append Logic
+    const [useDateFolder, setUseDateFolder] = useState(false); 
     
     // --- LIMIT & EXPIRY STATES ---
     const [expiryDays, setExpiryDays] = useState('');
@@ -42,10 +46,22 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [uploadSpeed, setUploadSpeed] = useState('');
     const [uploadETA, setUploadETA] = useState('');
 
-    // ✅ NEW: STUDIO REMOVE TAB STATES
+    // ✅ STUDIO REMOVE TAB STATES
     const [studioRemoveMobile, setStudioRemoveMobile] = useState('');
     const [studioRemoveSearchSuggestions, setStudioRemoveSearchSuggestions] = useState(false);
     const [studioRemoveUserObj, setStudioRemoveUserObj] = useState(null);
+
+    // ✅ NEW: BOOKING LEADS & PROPOSAL STATES
+    const [studioBookings, setStudioBookings] = useState([]);
+    const [fetchingBookings, setFetchingBookings] = useState(false);
+    const [activeProposalBooking, setActiveProposalBooking] = useState(null);
+    const [proposalForm, setProposalForm] = useState({
+        totalPrice: '',
+        advanceAmount: '',
+        deliverables: 'Complete edited photos & cinematic highlight video',
+        terms: '30% Advance is non-refundable. Final payment is required before full data delivery.',
+        expiryHours: '48'
+    });
 
     // --- PROFILE EDIT STATES ---
     const [profileEdit, setProfileEdit] = useState({
@@ -64,7 +80,14 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     }, [user]);
 
-    // ✅ NEW 1: SUPER SECURITY: Auto-Logout on Connection Lost
+    // Fetch Bookings when LEADS tab is active
+    useEffect(() => {
+        if (activeTab === 'LEADS') {
+            fetchStudioBookings();
+        }
+    }, [activeTab]);
+
+    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
         const handleOffline = () => {
             alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
@@ -79,19 +102,20 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     // ✅ SMART BACK BUTTON FOR STUDIO DASHBOARD
     useBackButton(() => {
-        if (showLogoutPopup) {
-            setShowLogoutPopup(false);
+        if (showExitPopup) {
+            setShowExitPopup(false);
+        } else if (activeProposalBooking) {
+            setActiveProposalBooking(null); // Close proposal modal if open
         } else if (studioRemoveUserObj) {
             setStudioRemoveUserObj(null); 
         } else if (activeTab !== 'DASHBOARD') { 
             setActiveTab('DASHBOARD'); 
         } else {
-            // 👈 Yahan bhi sahi se Exit Popup call hoga
             setShowExitPopup(true);
         }
     });
 
-    // ✅ NEW 3: ENTER KEY SUPPORT HELPER
+    // ✅ ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -111,7 +135,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                     password: '',
                     location: res.data.data.location || ''
                 });
-                // ✅ NEW 4: Session Storage Sync
                 sessionStorage.setItem('user', JSON.stringify(res.data.data)); 
             }
         } catch (e) {}
@@ -134,7 +157,24 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // --- 2. DELETE CLIENT LOGIC (Entire Account) ---
+    // ✅ FETCH BOOKING LEADS FOR THIS STUDIO
+    const fetchStudioBookings = async () => {
+        setFetchingBookings(true);
+        try {
+            const res = await axios.get(`${API_BASE}/get-bookings`);
+            if (res.data.success) {
+                // Filter only bookings where this studio is the provider
+                const myLeads = res.data.data.filter(b => b.providerTarget === (studioProfile.studioName || user.ownerName));
+                setStudioBookings(myLeads);
+            }
+        } catch (e) {
+            console.error("Failed to fetch leads", e);
+        } finally {
+            setFetchingBookings(false);
+        }
+    };
+
+    // --- 2. DELETE CLIENT LOGIC ---
     const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
@@ -165,11 +205,43 @@ const StudioDashboard = ({ user, onLogout }) => {
         setFileStats(prev => ({ ...prev, photos, videos }));
     };
 
-    const handleFeedFileChange = (e) => {
-        const selectedFiles = Array.from(e.target.files);
-        setFeedFiles(selectedFiles);
-        const feedPhotos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
-        const feedVideos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
+    // ✅ WORLD-CLASS DRAG & DROP LOGIC FOR FEED
+    const processFeedFiles = (selectedFiles) => {
+        const validFiles = selectedFiles.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+        if (validFiles.length === 0) return alert("Only image and video files are allowed!");
+
+        const newPreviews = validFiles.map(file => ({
+            file,
+            url: URL.createObjectURL(file),
+            type: file.type,
+            name: file.name
+        }));
+
+        setFeedFiles(prev => [...prev, ...validFiles]);
+        setFeedPreviews(prev => [...prev, ...newPreviews]);
+
+        const allFiles = [...feedFiles, ...validFiles];
+        const feedPhotos = allFiles.filter(f => f.type.startsWith('image/')).length;
+        const feedVideos = allFiles.filter(f => f.type.startsWith('video/')).length;
+        setFileStats(prev => ({ ...prev, feedPhotos, feedVideos }));
+    };
+
+    const handleFeedDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+    const handleFeedDragLeave = () => { setIsDragging(false); };
+    const handleFeedDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        processFeedFiles(droppedFiles);
+    };
+
+    const removeFeedFile = (indexToRemove) => {
+        const updatedFiles = feedFiles.filter((_, i) => i !== indexToRemove);
+        const updatedPreviews = feedPreviews.filter((_, i) => i !== indexToRemove);
+        setFeedFiles(updatedFiles);
+        setFeedPreviews(updatedPreviews);
+        const feedPhotos = updatedFiles.filter(f => f.type.startsWith('image/')).length;
+        const feedVideos = updatedFiles.filter(f => f.type.startsWith('video/')).length;
         setFileStats(prev => ({ ...prev, feedPhotos, feedVideos }));
     };
 
@@ -191,14 +263,12 @@ const StudioDashboard = ({ user, onLogout }) => {
         const currentFiles = isFeed ? feedFiles : files;
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
-        // ✅ Date Append Logic (Subfolder)
         let baseFolder = folderName.trim() || 'Stranger Photography';
         let targetSubFolder = '';
         if (useDateFolder && !isFeed) {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
         }
-        const displayFolder = targetSubFolder ? `${baseFolder} ➔ ${targetSubFolder}` : (isFeed ? 'Public Feed' : baseFolder);
-
+        
         setLoading(true);
         setUploadProgress(0);
         setUploadSpeed('Starting Upload...');
@@ -280,14 +350,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                 setTimeout(() => {
                     alert(`✅ Success: ${backendRes.data.message}\n📩 Notification sent!`);
                     
-                    // ✅ COMPLETE UI RESET LOGIC AFTER UPLOAD
                     setUploadProgress(0);
                     setUploadSpeed('');
                     setUploadETA('');
 
                     if (isFeed) {
                         setFeedFiles([]);
-                        document.getElementById('feed-input-field').value = '';
+                        setFeedPreviews([]);
                         setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                     } else {
                         setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
@@ -323,7 +392,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (error) { alert("Server error."); }
     };
 
-    // ✅ NEW: STUDIO REMOVE SPECIFIC DATA LOGIC
     const searchUserForRemoval = (mobile) => {
         if(mobile.length !== 10) return alert("Please enter valid 10-digit mobile number.");
         const foundUser = clients.find(a => a.mobile === mobile);
@@ -356,6 +424,39 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Error connecting to server."); }
     };
 
+    // ✅ SEND PROPOSAL LOGIC
+    const handleSendProposal = async (e) => {
+        e.preventDefault();
+        if (!proposalForm.totalPrice || !proposalForm.advanceAmount) return alert("Please fill the pricing details.");
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/send-proposal`, {
+                bookingId: activeProposalBooking._id,
+                ...proposalForm
+            });
+
+            if (res.data.success) {
+                alert("✅ Custom Proposal Sent to User Successfully!");
+                setActiveProposalBooking(null);
+                fetchStudioBookings(); // Refresh the leads list
+            } else {
+                alert(res.data.message || "Failed to send proposal.");
+            }
+        } catch (err) {
+            alert("Server error sending proposal.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Helper to auto-calculate 30% advance
+    const handlePriceChange = (val) => {
+        const total = parseFloat(val) || 0;
+        const advance = Math.round(total * 0.30); // 30% Auto Escrow Logic
+        setProposalForm({ ...proposalForm, totalPrice: val, advanceAmount: advance });
+    };
+
     const isVideo = (filePath) => {
         if (!filePath || typeof filePath !== 'string') return false;
         if (filePath.includes('/video/upload/')) return true; 
@@ -369,10 +470,7 @@ const StudioDashboard = ({ user, onLogout }) => {
     };
 
     const filteredMobileSuggestions = clients.filter(c => c.mobile && c.mobile.includes(clientMobile));
-    const filteredRemoveSuggestions = clients.filter(c => c.mobile && c.mobile.includes(studioRemoveMobile));
     const selectedClient = clients.find(c => c.mobile === clientMobile);
-    
-    // ✅ Apply Search Filter on Clients List
     const filteredClientsList = clients.filter(c => c.mobile && c.mobile.includes(clientSearchQuery));
 
     let existingFolders = [];
@@ -382,6 +480,12 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     }
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(folderName.toLowerCase()));
+
+    // Safe wallet values
+    const studioWallet = studioProfile?.wallet || {};
+    const studioRevenue = studioWallet.revenue || 0;
+    const studioCoins = studioWallet.coins || 0;
+    const studioHistory = studioWallet.history || [];
 
     return (
         <div className="owner-dashboard-container"> 
@@ -395,9 +499,53 @@ const StudioDashboard = ({ user, onLogout }) => {
                         <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit your Studio Panel?</p>
                         
                         <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
-                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
+                            <button onClick={() => window.location.replace('/')} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
                             <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ PROPOSAL MODAL */}
+            {activeProposalBooking && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.85)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#fff', padding:'30px', borderRadius:'20px', width:'90%', maxWidth:'450px', boxShadow:'0 20px 50px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto'}}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2 style={{ margin: 0, color: '#2c3e50' }}>📝 Send Proposal</h2>
+                            <button onClick={() => setActiveProposalBooking(null)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888' }}>✖</button>
+                        </div>
+                        
+                        <div style={{ background: '#f8f9fa', padding: '10px', borderRadius: '8px', marginBottom: '20px', borderLeft: '4px solid #3498db' }}>
+                            <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#7f8c8d' }}>Responding to:</p>
+                            <p style={{ margin: 0, fontWeight: 'bold', color: '#333' }}>{activeProposalBooking.name} - {activeProposalBooking.type}</p>
+                        </div>
+
+                        <form onSubmit={handleSendProposal} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>Total Estimate (₹)</label>
+                                    <input type="number" required placeholder="e.g. 50000" value={proposalForm.totalPrice} onChange={(e) => handlePriceChange(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', marginTop: '5px' }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#e74c3c' }}>Advance 30% (₹)</label>
+                                    <input type="number" required value={proposalForm.advanceAmount} onChange={(e) => setProposalForm({...proposalForm, advanceAmount: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e74c3c', marginTop: '5px', background: '#fdedec', color: '#c0392b', fontWeight: 'bold' }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>Deliverables</label>
+                                <textarea rows="2" required value={proposalForm.deliverables} onChange={(e) => setProposalForm({...proposalForm, deliverables: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', marginTop: '5px', resize: 'vertical' }}></textarea>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>Terms & Conditions</label>
+                                <textarea rows="2" required value={proposalForm.terms} onChange={(e) => setProposalForm({...proposalForm, terms: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', marginTop: '5px', resize: 'vertical' }}></textarea>
+                            </div>
+
+                            <button type="submit" disabled={loading} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
+                                {loading ? 'Sending...' : '🚀 Send Proposal to User'}
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}
@@ -418,6 +566,7 @@ const StudioDashboard = ({ user, onLogout }) => {
 
                 <ul className="sidebar-menu">
                     <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>👥 My Clients</li>
+                    <li className={activeTab === 'LEADS' ? 'active' : ''} onClick={() => setActiveTab('LEADS')}>📅 Booking Leads</li>
                     <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Client Data</li>
                     
                     {studioProfile.isFeedApproved && (
@@ -435,7 +584,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 1: CLIENTS DASHBOARD */}
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
-                        {/* ✅ SEARCH BAR IN HEADER */}
                         <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'}}>
                             <h2 style={{margin: 0}}>👥 My Recent Clients</h2>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -497,7 +645,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                             </table>
                         </div>
 
-                        {/* DATA MANAGER SECTION (Visible when "Manage Data" clicked) */}
+                        {/* DATA MANAGER SECTION */}
                         {studioRemoveUserObj && (
                             <div className="update-creation-container" style={{ maxWidth: '900px', margin: '30px auto', background: '#f8f9fa', border: '1px solid #ddd' }}>
                                 <h3 style={{ borderBottom: '2px solid #bdc3c7', paddingBottom: '10px', color: '#2c3e50', display: 'flex', justifyContent: 'space-between' }}>
@@ -563,6 +711,90 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         ))}
                                     </div>
                                 ) : <p style={{ textAlign: 'center', color: '#7f8c8d', padding: '30px 0' }}>No folders uploaded for this user yet.</p>}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 🔴 TAB: BOOKING LEADS (THE ESCROW SYSTEM) */}
+                {activeTab === 'LEADS' && (
+                    <div className="view-section">
+                        <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                            <h2 style={{margin: 0}}>📅 Incoming Booking Leads</h2>
+                            <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer'}} onClick={fetchStudioBookings} disabled={fetchingBookings}>
+                                {fetchingBookings ? '...' : '🔄 Refresh'}
+                            </button>
+                        </div>
+
+                        {fetchingBookings ? (
+                            <p style={{ textAlign: 'center', color: '#888', marginTop: '30px' }}>Loading incoming leads...</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
+                                {studioBookings.length > 0 ? studioBookings.map((booking, idx) => {
+                                    
+                                    // Status Badge Logic
+                                    let statusColor = '#f1c40f'; // Pending
+                                    let statusText = 'Pending Your Proposal';
+                                    if(booking.status === 'Pending Payment') { statusColor = '#e67e22'; statusText = 'Awaiting 30% User Payment'; }
+                                    if(booking.status === 'Confirmed' || booking.status === 'Accepted') { statusColor = '#2ecc71'; statusText = 'DEAL CLOSED - Contact Revealed'; }
+                                    if(booking.status === 'Declined') { statusColor = '#e74c3c'; statusText = 'Cancelled / Expired'; }
+
+                                    // Masking Logic
+                                    const isRevealed = booking.status === 'Confirmed' || booking.status === 'Accepted';
+                                    const maskedMobile = booking.mobile ? `+91 ********${booking.mobile.slice(-2)}` : 'N/A';
+                                    const displayMobile = isRevealed ? booking.mobile : maskedMobile;
+                                    const displayEmail = isRevealed ? (booking.email || 'N/A') : '*****@***.com';
+
+                                    return (
+                                        <div key={idx} style={{ background: '#fff', borderRadius: '15px', padding: '20px', borderLeft: `5px solid ${statusColor}`, boxShadow: '0 4px 15px rgba(0,0,0,0.05)', position: 'relative' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                                <div>
+                                                    <h3 style={{ color: '#2c3e50', margin: 0, fontSize: '18px' }}>{booking.type}</h3>
+                                                    <p style={{ color: '#7f8c8d', margin: '5px 0 0 0', fontSize: '13px' }}>Received on: {new Date(booking.createdAt).toLocaleDateString()}</p>
+                                                </div>
+                                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: statusColor, background: `${statusColor}22`, padding: '5px 10px', borderRadius: '8px', textAlign: 'right' }}>
+                                                    {statusText}
+                                                </span>
+                                            </div>
+                                            
+                                            <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '15px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                                                <div>
+                                                    <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#95a5a6' }}>Client Name</p>
+                                                    <p style={{ margin: 0, fontWeight: 'bold', color: '#34495e' }}>{booking.name}</p>
+                                                </div>
+                                                <div>
+                                                    <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#95a5a6' }}>Contact Number</p>
+                                                    <p style={{ margin: 0, fontWeight: 'bold', color: isRevealed ? '#27ae60' : '#e74c3c' }}>
+                                                        {displayMobile} {isRevealed && '📞'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p style={{ margin: '0 0 5px 0', fontSize: '12px', color: '#95a5a6' }}>Email ID</p>
+                                                    <p style={{ margin: 0, fontWeight: 'bold', color: '#34495e' }}>{displayEmail}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons */}
+                                            {booking.status === 'Pending' && (
+                                                <button onClick={() => setActiveProposalBooking(booking)} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                    📝 Send Custom Proposal
+                                                </button>
+                                            )}
+
+                                            {booking.status === 'Confirmed' && (
+                                                <div style={{ background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' }}>
+                                                    ✅ You have received ₹{booking.proposal?.advanceAmount} in your Wallet. You can now contact the client to proceed with the work!
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }) : (
+                                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
+                                        <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                                        <h3>No Booking Leads Yet</h3>
+                                        <p style={{ fontSize: '13px' }}>Keep uploading quality content to your feed to attract clients!</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -642,14 +874,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         </ul>
                                     )}
                                     
-                                    {/* ✅ SMART DATE APPEND CHECKBOX (Subfolder logic) */}
                                     <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <input type="checkbox" id="useDateFolder" checked={useDateFolder} onChange={(e) => setUseDateFolder(e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
                                         <label htmlFor="useDateFolder" style={{ fontSize: '12px', color: '#333', cursor: 'pointer', fontWeight: 'bold' }}>🗓️ Save inside Today's Date Sub-Folder</label>
                                     </div>
                                 </div>
 
-                                {/* ✅ EXPIRY AND LIMIT CONTROLS */}
                                 <div style={{ display: 'flex', gap: '15px', background: '#fffdf5', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>⏳ Expiry (Days)</label>
@@ -712,17 +942,71 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 </p>
                             </div>
                             
-                            <div style={{ border: '2px dashed #d4af37', padding: '30px', borderRadius: '10px', background: '#fafafa' }}>
-                                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', fontSize:'18px', color: '#8e6b1e' }}>📸 Select Feed Content</label>
-                                <input id="feed-input-field" type="file" multiple accept="image/*,video/mp4,video/mov" onChange={handleFeedFileChange} style={{marginTop: '10px'}}/>
+                            {/* ✅ PREMIUM DRAG & DROP ZONE FOR FEED */}
+                            <div 
+                                onDragOver={handleFeedDragOver}
+                                onDragLeave={handleFeedDragLeave}
+                                onDrop={handleFeedDrop}
+                                style={{ 
+                                    border: isDragging ? '2px dashed #2ecc71' : '2px dashed #d4af37', 
+                                    padding: '40px 20px', 
+                                    borderRadius: '15px', 
+                                    background: isDragging ? 'rgba(46, 204, 113, 0.1)' : '#fafafa', 
+                                    transition: 'all 0.3s ease',
+                                    cursor: 'pointer',
+                                    position: 'relative'
+                                }}
+                                onClick={() => document.getElementById('feed-hidden-input').click()}
+                            >
+                                <div style={{ fontSize: '50px', marginBottom: '10px', animation: isDragging ? 'bounce 1s infinite' : 'none' }}>📥</div>
+                                <h3 style={{ color: isDragging ? '#27ae60' : '#8e6b1e', margin: '0 0 10px 0' }}>
+                                    {isDragging ? 'Drop Files Here!' : 'Drag & Drop Media Here'}
+                                </h3>
+                                <p style={{ color: '#888', fontSize: '13px', margin: 0 }}>or click to browse files from your device</p>
                                 
-                                {feedFiles.length > 0 && (
-                                    <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
-                                        <div style={{ background: '#e8f8f5', color: '#27ae60', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>📸 Photos: {fileStats.feedPhotos}</div>
-                                        <div style={{ background: '#fdedec', color: '#c0392b', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>🎥 Videos: {fileStats.feedVideos}</div>
-                                    </div>
-                                )}
+                                <input 
+                                    id="feed-hidden-input" 
+                                    type="file" 
+                                    multiple 
+                                    accept="image/*,video/mp4,video/mov" 
+                                    onChange={(e) => processFeedFiles(Array.from(e.target.files))} 
+                                    style={{ display: 'none' }}
+                                />
                             </div>
+
+                            {/* ✅ LIVE MEDIA PREVIEW GRID FOR FEED */}
+                            {feedPreviews.length > 0 && (
+                                <div style={{ marginTop: '20px', background: '#fff', padding: '15px', borderRadius: '15px', border: '1px solid #eee' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                        <span style={{ fontWeight: 'bold', color: '#333' }}>Selected Media ({feedPreviews.length})</span>
+                                        <div style={{ display: 'flex', gap: '10px', fontSize: '11px', fontWeight: 'bold' }}>
+                                            <span style={{ background: '#e8f8f5', color: '#27ae60', padding: '4px 10px', borderRadius: '10px' }}>📸 {fileStats.feedPhotos} Photos</span>
+                                            <span style={{ background: '#fdedec', color: '#c0392b', padding: '4px 10px', borderRadius: '10px' }}>🎥 {fileStats.feedVideos} Videos</span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '15px', overflowX: 'auto', paddingBottom: '10px' }}>
+                                        {feedPreviews.map((preview, idx) => (
+                                            <div key={idx} style={{ position: 'relative', minWidth: '100px', height: '100px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #ddd', background: '#000', flexShrink: 0 }}>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); removeFeedFile(idx); }} 
+                                                    style={{ position: 'absolute', top: '5px', right: '5px', background: 'rgba(231, 76, 60, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '22px', height: '22px', fontSize: '10px', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    ✖
+                                                </button>
+                                                {preview.type.startsWith('video/') ? (
+                                                    <>
+                                                        <video src={preview.url} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
+                                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#fff', fontSize: '20px' }}>▶️</div>
+                                                    </>
+                                                ) : (
+                                                    <img src={preview.url} alt={preview.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {loading && (
                                 <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginTop: '20px' }}>
@@ -746,20 +1030,45 @@ const StudioDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB 4: REVENUE */}
+                {/* 🔴 TAB 4: REVENUE (LIVE MONETIZATION UPDATE) */}
                 {activeTab === 'REVENUE' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>💰 Business Revenue</h2></div>
+                        <div className="section-header"><h2>💰 Business Revenue & Wallet</h2></div>
                         <div className="dashboard-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
                             <div className="stat-card green" style={{ padding: '30px', textAlign:'center' }}>
-                                <p style={{ color: '#555', fontWeight: 'bold', marginBottom: '10px' }}>Today's Earnings</p>
-                                <h3 style={{ fontSize: '40px', color: '#27ae60' }}>₹ 0</h3>
+                                <p style={{ color: '#555', fontWeight: 'bold', marginBottom: '10px' }}>Total Cash Revenue</p>
+                                <h3 style={{ fontSize: '40px', color: '#27ae60', margin: 0 }}>₹ {studioRevenue}</h3>
+                                <p style={{ fontSize: '11px', color: '#888', marginTop: '5px' }}>From advance bookings</p>
                             </div>
-                            <div className="stat-card blue" style={{ padding: '30px', textAlign:'center' }}>
-                                <p style={{ color: '#555', fontWeight: 'bold', marginBottom: '10px' }}>Total Earnings</p>
-                                <h3 style={{ fontSize: '40px', color: '#3498db' }}>₹ 0</h3>
+                            <div className="stat-card blue" style={{ padding: '30px', textAlign:'center', background: '#fffdf5', border: '1px solid #f1c40f' }}>
+                                <p style={{ color: '#d4ac0d', fontWeight: 'bold', marginBottom: '10px' }}>Digital Coins Earned</p>
+                                <h3 style={{ fontSize: '40px', color: '#f39c12', margin: 0 }}>🪙 {studioCoins}</h3>
+                                <p style={{ fontSize: '11px', color: '#888', marginTop: '5px' }}>From premium media unlocks</p>
                             </div>
                         </div>
+
+                        {/* ✅ TRANSACTION HISTORY */}
+                        <div style={{ marginTop: '30px', background: '#fff', padding: '20px', borderRadius: '15px', border: '1px solid #eee' }}>
+                            <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50', fontSize: '18px' }}>📜 Recent Transactions</h3>
+                            {studioHistory.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto' }}>
+                                    {studioHistory.map((item, idx) => (
+                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: item.type === 'credit' ? '4px solid #2ecc71' : '4px solid #e74c3c' }}>
+                                            <div>
+                                                <p style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>{item.action}</p>
+                                                <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{item.date}</p>
+                                            </div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '15px', color: item.type === 'credit' ? '#27ae60' : '#c0392b' }}>
+                                                {item.amount}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p style={{ textAlign: 'center', color: '#999', fontSize: '13px', padding: '20px 0' }}>No transactions recorded yet.</p>
+                            )}
+                        </div>
+
                         <div style={{textAlign:'center', marginTop:'30px'}}>
                             <button className="global-update-btn" style={{ background: '#e67e22', padding: '15px 40px', fontSize: '16px' }}>🏦 Withdraw Funds</button>
                         </div>
