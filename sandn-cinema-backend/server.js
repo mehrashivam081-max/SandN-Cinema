@@ -1783,6 +1783,60 @@ app.post('/api/auth/accept-proposal', async (req, res) => {
     }
 });
 
+// ==========================================
+// ✅ 24. PUBLIC FEED MANAGEMENT (TRENDING / VIRAL)
+// ==========================================
+
+// Create a dedicated Database Model for Public Feed
+const feedPostSchema = new mongoose.Schema({
+    studioMobile: String,
+    studioName: String,
+    file: String, // Cloudinary URL
+    fileType: String, // image or video
+    description: String,
+    feedCategory: String, // 'trending' or 'viral'
+    price: Number,
+    createdAt: { type: Date, default: Date.now }
+});
+const FeedPost = mongoose.models.FeedPost || mongoose.model('FeedPost', feedPostSchema);
+
+// Upload a new post to the Feed (From Studio Dashboard)
+app.post('/api/auth/upload-feed-post', async (req, res) => {
+    try {
+        const { mobile, studioName, fileUrls, description, feedCategory, price } = req.body;
+        
+        const posts = fileUrls.map(url => ({
+            studioMobile: mobile,
+            studioName: studioName || 'Featured Studio',
+            file: url,
+            fileType: url.match(/\.(mp4|mov|avi|wmv|webm)$/i) ? 'video' : 'image',
+            description: description || 'Check out this amazing shot!',
+            feedCategory: feedCategory || 'trending',
+            price: Number(price) || 5000
+        }));
+
+        await FeedPost.insertMany(posts);
+        res.json({ success: true, message: "Successfully published to Public Feed! 🌟" });
+    } catch (err) {
+        console.error("Feed Upload Error:", err);
+        res.status(500).json({ success: false, message: "Server error publishing feed." });
+    }
+});
+
+// Fetch Public Feed (For Landing Page)
+app.get('/api/auth/get-public-feed', async (req, res) => {
+    try {
+        const { category } = req.query; // 'trending' or 'viral'
+        let query = {};
+        if (category) query.feedCategory = category;
+
+        const posts = await FeedPost.find(query).sort({ createdAt: -1 });
+        res.json({ success: true, data: posts });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Failed to fetch feed." });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
