@@ -77,16 +77,17 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ NEW 2: // ✅ SMART BACK BUTTON FOR STUDIO (Fixed Logic)
+    // ✅ SMART BACK BUTTON FOR STUDIO DASHBOARD
     useBackButton(() => {
         if (showLogoutPopup) {
             setShowLogoutPopup(false);
         } else if (studioRemoveUserObj) {
-            setStudioRemoveUserObj(null); // Agar Manage Data khula ho toh wo band hoga
-        } else if (activeTab !== 'DASHBOARD') {
-            setActiveTab('DASHBOARD');
+            setStudioRemoveUserObj(null); 
+        } else if (activeTab !== 'DASHBOARD') { 
+            setActiveTab('DASHBOARD'); 
         } else {
-            setShowExitPopup(true); 
+            // 👈 Yahan bhi sahi se Exit Popup call hoga
+            setShowExitPopup(true);
         }
     });
 

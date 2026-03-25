@@ -132,7 +132,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } else if (activeTab !== 'DASHBOARD') {
             setActiveTab('DASHBOARD');
         } else {
-            setShowExitPopup(true); // Sab close hone ke baad popup aayega
+            // 👈 Yahan pehle setShowLogoutPopup tha, jise fix kar diya hai
+            setShowExitPopup(true); 
         }
     });
 
