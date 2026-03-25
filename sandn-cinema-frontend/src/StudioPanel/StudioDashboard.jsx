@@ -77,39 +77,19 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ NEW 2: SMART BACK BUTTON FOR STUDIO (Pro Hook)
+    // ✅ NEW 2: // ✅ SMART BACK BUTTON FOR STUDIO (Fixed Logic)
     useBackButton(() => {
         if (showLogoutPopup) {
             setShowLogoutPopup(false);
-        } else if (activeTab !== 'DASHBOARD') { 
-            // Agar user kisi dusre tab (Profile/Upload) par hai toh pehle Dashboard par layega
-            setActiveTab('DASHBOARD'); 
+        } else if (studioRemoveUserObj) {
+            setStudioRemoveUserObj(null); // Agar Manage Data khula ho toh wo band hoga
+        } else if (activeTab !== 'DASHBOARD') {
+            setActiveTab('DASHBOARD');
         } else {
-            // Dashboard par aane ke baad back dabane par Exit Popup khulega
-            setShowExitPopup(true);
+            setShowExitPopup(true); 
         }
     });
-    return (
-        <div className="studio-dashboard-container">
-            {/* ✅ EXIT APP POPUP (Inside Studio Div) */}
-            {showExitPopup && (
-                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
-                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
-                        <div style={{fontSize: '40px', marginBottom: '10px'}}>📸</div>
-                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Close Studio?</h3>
-                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit your Studio Panel?</p>
-                        
-                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
-                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
-                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
-            {/* Baaki ka tumhara Studio UI yahan niche rahega */}
-        </div>
-    );
     // ✅ NEW 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
@@ -404,6 +384,22 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="owner-dashboard-container"> 
+
+            {/* ✅ STUDIO EXIT APP POPUP */}
+            {showExitPopup && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
+                        <div style={{fontSize: '40px', marginBottom: '10px'}}>📸</div>
+                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Close Studio?</h3>
+                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit your Studio Panel?</p>
+                        
+                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
+                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
+                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             <aside className="admin-sidebar">
                 <div className="sidebar-header">

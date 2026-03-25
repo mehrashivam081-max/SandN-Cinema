@@ -12,6 +12,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false);
     const [accounts, setAccounts] = useState([]);
     const [filterRole, setFilterRole] = useState('ALL'); 
+    
+    // ✅ MISSING STATE FIXED
     const [showExitPopup, setShowExitPopup] = useState(false);
     
     // ✅ NEW: DROPDOWN MENU STATE FOR SIDEBAR
@@ -113,7 +115,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ FEATURE: SMART BROWSER BACK BUTTON (With Exit App Popup)
+    // ✅ SMART BACK BUTTON FOR OWNER DASHBOARD
     useBackButton(() => {
         if (showDenyModal) {
             setShowDenyModal(false);
@@ -130,29 +132,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } else if (activeTab !== 'DASHBOARD') {
             setActiveTab('DASHBOARD');
         } else {
-            // ✅ Dashboard par aane ke baad back dabane par ye Popup khulega
-            setShowExitPopup(true);
+            setShowExitPopup(true); // Sab close hone ke baad popup aayega
         }
     });
-    return (
-        <div className="owner-dashboard-container">
-            {/* ✅ EXIT APP POPUP */}
-            {showExitPopup && (
-                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
-                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
-                        <div style={{fontSize: '40px', marginBottom: '10px'}}>🔐</div>
-                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Close Admin Panel?</h3>
-                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit the Owner Control Center?</p>
-                        
-                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
-                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
-                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-        );
 
     // ✅ FEATURE 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
@@ -185,7 +167,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         password: ''
                     });
                     const updatedUser = { ...activeUser, name: latestData.name };
-                    // ✅ FEATURE 4: SESSION STORAGE SYNC
                     sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
                     localStorage.setItem('user', JSON.stringify(updatedUser));
                 }
@@ -339,7 +320,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     // 🚀 CLOUDINARY UPLOAD WITH SMART DATE FOLDER LOGIC
     const handleAddManualUser = async (e) => {
-        if(e) e.preventDefault(); // ✅ Safe form submit integration
+        if(e) e.preventDefault(); 
         if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
         if (formData.files.length === 0) return alert("Please select files to upload.");
         
@@ -418,7 +399,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
 
-            // ✅ Added unlockValidity
             const payloadData = {
                 type: formData.type,
                 name: formData.name,
@@ -523,7 +503,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     // 🚀 ADMIN SETTINGS & PRICING
     // ==========================================
     const handleUpdateAdminProfile = async (e) => {
-        if(e) e.preventDefault(); // ✅ Safe form submit integration
+        if(e) e.preventDefault(); 
         if (!window.confirm("Are you sure you want to save these profile changes?")) return;
 
         try {
@@ -557,7 +537,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const handleCreateSubAdmin = async (e) => {
-        if(e) e.preventDefault(); // ✅ Safe form submit integration
+        if(e) e.preventDefault(); 
         if (!window.confirm(`Create new Sub-Admin: ${subAdmin.name}?`)) return;
 
         try {
@@ -589,7 +569,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
     const handlePolicySave = async (e) => {
-        if(e) e.preventDefault(); // ✅ Safe form submit integration
+        if(e) e.preventDefault(); 
         if (!window.confirm("Are you sure you want to update Platform Policies?")) return;
         try {
             await axios.post(`${API_BASE}/update-policies`, { policies: policyData });
@@ -613,7 +593,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to update booking"); }
     };
 
-    // ✅ ADDED: DENIAL REASON LOGIC
     const openDenyModal = (booking) => {
         setBookingToDeny(booking);
         setShowDenyModal(true);
@@ -640,10 +619,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to update booking"); }
         finally { setLoading(false); }
     };
-
-    // ==========================================
-    // ✅ ADDED: EDIT SERVICE & SEND PROPOSAL LOGIC
-    // ==========================================
 
     const startEditingService = (service) => {
         setEditingServiceId(service._id);
@@ -682,15 +657,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 uploadedImageUrl = cloudRes.data.secure_url;
             }
 
-            // Usi function me payloadData ko aise update karo:
             const payloadData = {
                 title: newService.title,
                 startingPrice: newService.startingPrice,
                 shortDescription: newService.shortDescription,
                 fullDescription: newService.fullDescription,
                 features: newService.features,
-                discountPercentage: newService.discountPercentage || 0, // ✅ NEW
-                offerText: newService.offerText || '', // ✅ NEW
+                discountPercentage: newService.discountPercentage || 0,
+                offerText: newService.offerText || '',
                 addedBy: 'ADMIN'
             };
 
@@ -732,7 +706,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // ✅ OPEN PROPOSAL MODAL
     const openProposalModal = (booking) => {
         setProposalData({
             bookingId: booking._id,
@@ -746,7 +719,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowProposalModal(true);
     };
 
-    // ✅ SEND PROPOSAL
     const handleSendProposal = async (e) => {
         if(e) e.preventDefault();
         if(!proposalData.totalPrice || !proposalData.advanceAmount) return alert("Pricing details are required.");
@@ -770,12 +742,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
     };
 
-
-    // ✅ DROPDOWN TOGGLE LOGIC
     const toggleMenu = (menuName) => {
         setOpenDropdown(openDropdown === menuName ? null : menuName);
     };
-
 
     const displayedAccounts = accounts.filter(acc => filterRole === 'ALL' ? true : acc.role === filterRole);
     const filteredSuggestions = accounts.filter(acc => acc.mobile && acc.mobile.includes(formData.mobile));
@@ -787,15 +756,30 @@ const OwnerDashboard = ({ user, onLogout }) => {
     if (selectedAccount && Array.isArray(selectedAccount.uploadedData)) existingFolders = selectedAccount.uploadedData.map(f => f.folderName).filter(Boolean); 
     const filteredFolderSuggestions = existingFolders.filter(fName => fName.toLowerCase().includes(formData.folderName.toLowerCase()));
 
-   const totalUsers = accounts.filter(a => a.role === 'USER').length;
+    const totalUsers = accounts.filter(a => a.role === 'USER').length;
     const totalStudios = accounts.filter(a => a.role === 'STUDIO').length;
 
-    // ✅ Calculate pending emergencies for dashboard alert
     const emergencyPendingCountVal = bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length;
 
     return (
         <div className="owner-dashboard-container">
             
+            {/* ✅ EXIT APP POPUP */}
+            {showExitPopup && (
+                <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                    <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
+                        <div style={{fontSize: '40px', marginBottom: '10px'}}>🔐</div>
+                        <h3 style={{marginBottom:'10px', marginTop: 0}}>Close Admin Panel?</h3>
+                        <p style={{fontSize: '13px', color: '#aaa', marginBottom: '20px'}}>Are you sure you want to exit the Owner Control Center?</p>
+                        
+                        <div style={{display:'flex', gap:'15px', justifyContent:'center'}}>
+                            <button onClick={() => window.location.href = '/'} style={{background:'#e74c3c', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>Yes, Exit</button>
+                            <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ✅ NEW: EMERGENCY ROW CSS */}
             <style>{`
                 @keyframes pulse-red {
