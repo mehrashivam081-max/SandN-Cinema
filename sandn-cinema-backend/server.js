@@ -48,7 +48,7 @@ const upload = multer({ storage: storage });
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
-const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema"; 
+const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema/"; 
 
 app.use(cors({
     origin: [
@@ -1796,6 +1796,8 @@ const feedPostSchema = new mongoose.Schema({
     description: String,
     feedCategory: String, // 'trending' or 'viral'
     price: Number,
+    expiryDate: Date, // ✅ FOMO Feature Added
+    views: { type: Number, default: 0 }, // ✅ Analytics Added
     createdAt: { type: Date, default: Date.now }
 });
 const FeedPost = mongoose.models.FeedPost || mongoose.model('FeedPost', feedPostSchema);
@@ -1803,8 +1805,14 @@ const FeedPost = mongoose.models.FeedPost || mongoose.model('FeedPost', feedPost
 // Upload a new post to the Feed (From Studio Dashboard)
 app.post('/api/auth/upload-feed-post', async (req, res) => {
     try {
-        const { mobile, studioName, fileUrls, description, feedCategory, price } = req.body;
+        const { mobile, studioName, fileUrls, description, feedCategory, price, expiryHours } = req.body;
         
+        let expiryDate = null;
+        if (expiryHours && parseInt(expiryHours) > 0) {
+            expiryDate = new Date();
+            expiryDate.setHours(expiryDate.getHours() + parseInt(expiryHours));
+        }
+
         const posts = fileUrls.map(url => ({
             studioMobile: mobile,
             studioName: studioName || 'Featured Studio',
@@ -1812,10 +1820,31 @@ app.post('/api/auth/upload-feed-post', async (req, res) => {
             fileType: url.match(/\.(mp4|mov|avi|wmv|webm)$/i) ? 'video' : 'image',
             description: description || 'Check out this amazing shot!',
             feedCategory: feedCategory || 'trending',
-            price: Number(price) || 5000
+            price: Number(price) || 5000,
+            expiryDate: expiryDate
         }));
 
         await FeedPost.insertMany(posts);
+
+        // ✅ BLAST NOTIFICATION TO ALL USERS (Background process)
+        User.find({ role: 'USER' }).select('email').then(users => {
+            const emails = users.filter(u => u.email && !u.email.includes('dummy_')).map(u => u.email);
+            if(emails.length > 0) {
+                const subject = `🔥 New Trending Post from ${studioName || 'a Top Studio'}!`;
+                const htmlContent = `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                        <h2 style="color: #e74c3c;">New Trending Media Alert! 📸</h2>
+                        <p style="color: #444;">A top studio just dropped a new amazing shot.</p>
+                        <p style="color: #555;"><i>"${description}"</i></p>
+                        <div style="margin-top: 20px;">
+                            <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Check it out Now!</a>
+                        </div>
+                    </div>
+                `;
+                emails.forEach(email => sendBrevoEmail(email, subject, htmlContent).catch(()=>{}));
+            }
+        });
+
         res.json({ success: true, message: "Successfully published to Public Feed! 🌟" });
     } catch (err) {
         console.error("Feed Upload Error:", err);
@@ -1830,10 +1859,24 @@ app.get('/api/auth/get-public-feed', async (req, res) => {
         let query = {};
         if (category) query.feedCategory = category;
 
+        // Auto-delete expired posts before fetching
+        await FeedPost.deleteMany({ expiryDate: { $lt: new Date() } });
+
         const posts = await FeedPost.find(query).sort({ createdAt: -1 });
         res.json({ success: true, data: posts });
     } catch (err) {
         res.status(500).json({ success: false, message: "Failed to fetch feed." });
+    }
+});
+
+// ✅ UPDATE POST VIEWS ROUTE (For Analytics)
+app.post('/api/auth/view-feed-post', async (req, res) => {
+    try {
+        const { postId } = req.body;
+        await FeedPost.findByIdAndUpdate(postId, { $inc: { views: 1 } });
+        res.json({ success: true });
+    } catch (e) {
+        res.json({ success: false });
     }
 });
 
