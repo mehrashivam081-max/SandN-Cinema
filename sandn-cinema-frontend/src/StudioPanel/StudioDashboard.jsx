@@ -26,6 +26,13 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [feedPreviews, setFeedPreviews] = useState([]);
 
+    // ✅ NEW: FEED FORM STATES WITH CUSTOM EXPIRY
+    const [feedDescription, setFeedDescription] = useState('');
+    const [feedCategory, setFeedCategory] = useState('trending');
+    const [feedPrice, setFeedPrice] = useState('');
+    const [feedExpiryType, setFeedExpiryType] = useState('permanent'); // Predefined & Custom Logic
+    const [customExpiryHours, setCustomExpiryHours] = useState('');
+
     // ✅ NEW: SEARCH CLIENT STATE
     const [clientSearchQuery, setClientSearchQuery] = useState('');
 
@@ -51,6 +58,10 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [studioRemoveSearchSuggestions, setStudioRemoveSearchSuggestions] = useState(false);
     const [studioRemoveUserObj, setStudioRemoveUserObj] = useState(null);
 
+    // ✅ NEW: MY FEED POSTS STATES
+    const [myFeedPosts, setMyFeedPosts] = useState([]);
+    const [fetchingFeed, setFetchingFeed] = useState(false);
+
     // ✅ NEW: BOOKING LEADS & PROPOSAL STATES
     const [studioBookings, setStudioBookings] = useState([]);
     const [fetchingBookings, setFetchingBookings] = useState(false);
@@ -63,13 +74,14 @@ const StudioDashboard = ({ user, onLogout }) => {
         expiryHours: '48'
     });
 
-    // --- PROFILE EDIT STATES ---
+    // --- PROFILE EDIT STATES (WITH PORTFOLIO) ---
     const [profileEdit, setProfileEdit] = useState({
         studioName: user.studioName || '',
         ownerName: user.ownerName || '',
         email: user.email || '',
         password: '',
-        location: user.location || ''
+        location: user.location || '',
+        portfolioUrl: user.portfolioUrl || '' 
     });
 
     // --- 1. FETCH LOGIC ---
@@ -80,12 +92,17 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     }, [user]);
 
-    // Fetch Bookings when LEADS tab is active
     useEffect(() => {
         if (activeTab === 'LEADS') {
             fetchStudioBookings();
         }
     }, [activeTab]);
+
+    useEffect(() => {
+        if (activeTab === 'FEED' && studioProfile.isFeedApproved) {
+            fetchMyFeedPosts();
+        }
+    }, [activeTab, studioProfile.isFeedApproved]);
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
@@ -100,12 +117,11 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ SMART BACK BUTTON FOR STUDIO DASHBOARD
     useBackButton(() => {
         if (showExitPopup) {
             setShowExitPopup(false);
         } else if (activeProposalBooking) {
-            setActiveProposalBooking(null); // Close proposal modal if open
+            setActiveProposalBooking(null); 
         } else if (studioRemoveUserObj) {
             setStudioRemoveUserObj(null); 
         } else if (activeTab !== 'DASHBOARD') { 
@@ -115,7 +131,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     });
 
-    // ✅ ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -133,7 +148,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                     ownerName: res.data.data.ownerName || '',
                     email: res.data.data.email || '',
                     password: '',
-                    location: res.data.data.location || ''
+                    location: res.data.data.location || '',
+                    portfolioUrl: res.data.data.portfolioUrl || ''
                 });
                 sessionStorage.setItem('user', JSON.stringify(res.data.data)); 
             }
@@ -157,13 +173,11 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // ✅ FETCH BOOKING LEADS FOR THIS STUDIO
     const fetchStudioBookings = async () => {
         setFetchingBookings(true);
         try {
-            const res = await axios.get(`${API_BASE}/get-bookings`);
+            const res = await axios.get(`${API_BASE}/get-bookings?t=${Date.now()}`); 
             if (res.data.success) {
-                // Filter only bookings where this studio is the provider
                 const myLeads = res.data.data.filter(b => b.providerTarget === (studioProfile.studioName || user.ownerName));
                 setStudioBookings(myLeads);
             }
@@ -174,7 +188,21 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // --- 2. DELETE CLIENT LOGIC ---
+    const fetchMyFeedPosts = async () => {
+        setFetchingFeed(true);
+        try {
+            const res = await axios.get(`${API_BASE}/get-public-feed?t=${Date.now()}`); 
+            if (res.data.success) {
+                const myPosts = res.data.data.filter(post => post.studioMobile === user.mobile);
+                setMyFeedPosts(myPosts);
+            }
+        } catch (e) {
+            console.error("Failed to fetch feed posts", e);
+        } finally {
+            setFetchingFeed(false);
+        }
+    };
+
     const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
@@ -196,7 +224,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // --- 3. UPLOAD LOGIC & COUNTERS ---
     const handleFileChange = (e) => {
         const selectedFiles = Array.from(e.target.files);
         setFiles(selectedFiles);
@@ -205,7 +232,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         setFileStats(prev => ({ ...prev, photos, videos }));
     };
 
-    // ✅ WORLD-CLASS DRAG & DROP LOGIC FOR FEED
     const processFeedFiles = (selectedFiles) => {
         const validFiles = selectedFiles.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         if (validFiles.length === 0) return alert("Only image and video files are allowed!");
@@ -257,7 +283,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
@@ -330,15 +355,56 @@ const StudioDashboard = ({ user, onLogout }) => {
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
 
+            // ✅ IF UPLOADING TO PUBLIC FEED
+            if (isFeed) {
+                let finalExpiryHours = '';
+                if (feedExpiryType === 'custom') {
+                    finalExpiryHours = customExpiryHours;
+                } else if (feedExpiryType !== 'permanent') {
+                    finalExpiryHours = feedExpiryType;
+                }
+
+                const feedPayload = {
+                    mobile: studioProfile.mobile,
+                    studioName: studioProfile.studioName || user.ownerName,
+                    description: feedDescription,
+                    feedCategory: feedCategory,
+                    price: feedPrice,
+                    expiryHours: finalExpiryHours, // Processed Custom/Dropdown Expiry
+                    fileUrls: uploadedUrls 
+                };
+                
+                const backendRes = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload);
+                
+                if (backendRes.data.success) {
+                    setUploadETA('Complete!');
+                    setTimeout(() => {
+                        alert(`✅ Success: ${backendRes.data.message}`);
+                        setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
+                        setFeedFiles([]); setFeedPreviews([]);
+                        setFeedDescription(''); setFeedPrice(''); setFeedCategory('trending');
+                        setFeedExpiryType('permanent'); setCustomExpiryHours('');
+                        setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
+                        setLoading(false);
+                        fetchMyFeedPosts(); // Refresh the grid
+                    }, 500);
+                } else {
+                    alert(`❌ Error: ${backendRes.data.message}`); 
+                    setLoading(false);
+                }
+                return; 
+            }
+
+            // Normal Client Data Payload
             const payload = {
-                mobile: isFeed ? studioProfile.mobile : clientMobile,
-                name: isFeed ? studioProfile.studioName : (clientName || 'Client'),
-                type: isFeed ? 'STUDIO' : 'USER',
-                folderName: isFeed ? 'Public Feed Content' : baseFolder,
+                mobile: clientMobile,
+                name: clientName || 'Client',
+                type: 'USER',
+                folderName: baseFolder,
                 subFolderName: targetSubFolder, 
-                email: isFeed ? '' : clientEmail,
-                expiryDays: isFeed ? '' : expiryDays,
-                downloadLimit: isFeed ? '' : downloadLimit,
+                email: clientEmail,
+                expiryDays: expiryDays,
+                downloadLimit: downloadLimit,
                 addedBy: user.mobile,
                 fileUrls: uploadedUrls 
             };
@@ -354,17 +420,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                     setUploadSpeed('');
                     setUploadETA('');
 
-                    if (isFeed) {
-                        setFeedFiles([]);
-                        setFeedPreviews([]);
-                        setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
-                    } else {
-                        setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
-                        setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
-                        setFiles([]);
-                        document.getElementById('file-input-field').value = '';
-                        setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
-                    }
+                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
+                    setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
+                    setFiles([]);
+                    document.getElementById('file-input-field').value = '';
+                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    
                     fetchClients();
                     if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
                     setLoading(false);
@@ -380,11 +441,11 @@ const StudioDashboard = ({ user, onLogout }) => {
         } 
     };
 
-    // --- 4. PROFILE UPDATE LOGIC ---
     const handleProfileUpdate = async (e) => {
         if(e) e.preventDefault();
         try {
-            const res = await axios.post(`${API_BASE}/update-studio-profile`, { mobile: user.mobile, ...profileEdit });
+            const payload = { mobile: user.mobile, ...profileEdit };
+            const res = await axios.post(`${API_BASE}/update-studio-profile`, payload);
             if (res.data.success) {
                 alert("✅ Profile Updated Successfully!");
                 fetchMyProfile();
@@ -424,7 +485,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Error connecting to server."); }
     };
 
-    // ✅ SEND PROPOSAL LOGIC
     const handleSendProposal = async (e) => {
         e.preventDefault();
         if (!proposalForm.totalPrice || !proposalForm.advanceAmount) return alert("Please fill the pricing details.");
@@ -439,7 +499,7 @@ const StudioDashboard = ({ user, onLogout }) => {
             if (res.data.success) {
                 alert("✅ Custom Proposal Sent to User Successfully!");
                 setActiveProposalBooking(null);
-                fetchStudioBookings(); // Refresh the leads list
+                fetchStudioBookings(); 
             } else {
                 alert(res.data.message || "Failed to send proposal.");
             }
@@ -450,10 +510,9 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // Helper to auto-calculate 30% advance
     const handlePriceChange = (val) => {
         const total = parseFloat(val) || 0;
-        const advance = Math.round(total * 0.30); // 30% Auto Escrow Logic
+        const advance = Math.round(total * 0.30); 
         setProposalForm({ ...proposalForm, totalPrice: val, advanceAmount: advance });
     };
 
@@ -672,7 +731,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                             {folder.files.map((fileUrl, idx) => (
                                                                 <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fdfefe', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
                                                                     <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                                                                        {isVideo(fileUrl) ? (<><video src={getCleanUrl(fileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                        {isVideo(fileUrl) ? (<><video src={getCleanUrl(fileUrl)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                                                                     </div>
                                                                     <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, null, fileUrl)} style={{ background: 'transparent', color: '#e74c3c', border: '1px solid #e74c3c', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
                                                                 </div>
@@ -696,7 +755,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                                         {sub.files.map((subFileUrl, fidx) => (
                                                                             <div key={fidx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
                                                                                 <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                                                                                    {isVideo(subFileUrl) ? (<><video src={getCleanUrl(subFileUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(subFileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                                    {isVideo(subFileUrl) ? (<><video src={getCleanUrl(subFileUrl)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(subFileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                                                                                 </div>
                                                                                 <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, sub.name, subFileUrl)} style={{ background: 'transparent', color: '#c0392b', border: '1px solid #c0392b', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
                                                                             </div>
@@ -974,6 +1033,57 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 />
                             </div>
 
+                            {/* ✅ NEW: FEED DETAILS FORM WITH CUSTOM EXPIRY LOGIC */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px', textAlign: 'left', background: '#fff', padding: '20px', borderRadius: '15px', border: '1px solid #eee' }}>
+                                <div>
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>📝 Post Description / Caption</label>
+                                    <textarea rows="2" value={feedDescription} onChange={(e) => setFeedDescription(e.target.value)} className="custom-admin-input" placeholder="Write a catchy caption detailing the shot..." style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}}></textarea>
+                                </div>
+                                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, minWidth: '150px' }}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>🗂️ Select Feed Category</label>
+                                        <select value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)} className="custom-admin-input" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', background: '#fff'}}>
+                                            <option value="trending">🔥 Trending Now</option>
+                                            <option value="viral">🚀 Viral Content</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '150px' }}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>💰 Booking Price (₹)</label>
+                                        <input type="number" value={feedPrice} onChange={(e) => setFeedPrice(e.target.value)} className="custom-admin-input" placeholder="e.g. 15000" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}} />
+                                    </div>
+
+                                    {/* ✅ FOMO Expiry Logic Input (CUSTOM OPTIONS) */}
+                                    <div style={{ flex: '1 1 100%' }}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#d4ac0d'}}>⏳ Limited Time Offer Expiry</label>
+                                        
+                                        <select 
+                                            value={feedExpiryType} 
+                                            onChange={(e) => setFeedExpiryType(e.target.value)} 
+                                            className="custom-admin-input" 
+                                            style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px dashed #f1c40f', background: '#fffdf5', cursor: 'pointer'}}
+                                        >
+                                            <option value="permanent">♾️ Permanent (No Expiry)</option>
+                                            <option value="12">⏳ 12 Hours</option>
+                                            <option value="24">⏳ 24 Hours (1 Day)</option>
+                                            <option value="72">⏳ 72 Hours (3 Days)</option>
+                                            <option value="168">⏳ 1 Week</option>
+                                            <option value="custom">✍️ Custom Hours</option>
+                                        </select>
+
+                                        {feedExpiryType === 'custom' && (
+                                            <input 
+                                                type="number" 
+                                                value={customExpiryHours} 
+                                                onChange={(e) => setCustomExpiryHours(e.target.value)} 
+                                                className="custom-admin-input" 
+                                                placeholder="Enter exact hours (e.g., 48)" 
+                                                style={{marginTop: '10px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}} 
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* ✅ LIVE MEDIA PREVIEW GRID FOR FEED */}
                             {feedPreviews.length > 0 && (
                                 <div style={{ marginTop: '20px', background: '#fff', padding: '15px', borderRadius: '15px', border: '1px solid #eee' }}>
@@ -996,7 +1106,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 </button>
                                                 {preview.type.startsWith('video/') ? (
                                                     <>
-                                                        <video src={preview.url} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
+                                                        <video src={preview.url} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
                                                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#fff', fontSize: '20px' }}>▶️</div>
                                                     </>
                                                 ) : (
@@ -1027,6 +1137,46 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 {loading ? 'Uploading to Cloud Server...' : '🔥 Upload to Global Feed'}
                             </button>
                         </div>
+
+                    {/* ✅ FEED ANALYTICS DISPLAY */}
+                    <div className="update-creation-container" style={{ maxWidth: '900px', margin: '30px auto', background: '#f8f9fa' }}>
+                        <h3 style={{ color: '#2c3e50', borderBottom: '2px solid #eee', paddingBottom: '10px', textAlign: 'left' }}>📊 My Feed Analytics</h3>
+                        {fetchingFeed ? (
+                            <p style={{ color: '#888', textAlign: 'center', marginTop: '20px' }}>Loading your feed posts...</p>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '15px', marginTop: '20px' }}>
+                                {myFeedPosts.length > 0 ? myFeedPosts.map((post, idx) => (
+                                    <div key={idx} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', position: 'relative' }}>
+                                        {/* Views Counter Overlay */}
+                                        <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 10 }}>
+                                            👁️ {post.views || 0} Views
+                                        </div>
+                                        <div style={{ height: '180px', background: '#000', position: 'relative' }}>
+                                            {post.fileType === 'video' ? (
+                                                <>
+                                                    <video src={getCleanUrl(post.file)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>🎥</div>
+                                                </>
+                                            ) : (
+                                                <img src={getCleanUrl(post.file)} alt="Feed" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            )}
+                                        </div>
+                                        <div style={{ padding: '12px', textAlign: 'left' }}>
+                                            <p style={{ margin: '0 0 5px 0', fontSize: '12px', fontWeight: 'bold', color: post.feedCategory === 'trending' ? '#e74c3c' : '#3498db' }}>{post.feedCategory === 'trending' ? '🔥 Trending' : '🚀 Viral'}</p>
+                                            <p style={{ margin: 0, fontSize: '11px', color: '#777', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.description}</p>
+                                            <p style={{ margin: '8px 0', fontSize: '14px', color: '#27ae60', fontWeight: 'bold' }}>₹{post.price}</p>
+                                            {/* Timer/Expiry Tag */}
+                                            <div style={{ background: post.expiryDate ? '#fdf2e9' : '#ebf5fb', color: post.expiryDate ? '#e67e22' : '#2980b9', padding: '5px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', textAlign: 'center' }}>
+                                                {post.expiryDate ? `⏳ Expires: ${new Date(post.expiryDate).toLocaleString()}` : '♾️ Permanent Post'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p style={{ color: '#888', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px 0' }}>You haven't uploaded any public feed posts yet.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     </div>
                 )}
 
@@ -1097,6 +1247,14 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Location</label>
                                     <input type="text" value={profileEdit.location} onChange={e => setProfileEdit({...profileEdit, location: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
+                                
+                                {/* ✅ PORTFOLIO LINK INPUT */}
+                                <div style={{ background: '#f4f6f7', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #3498db' }}>
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#2980b9'}}>🌐 Portfolio / Website Link</label>
+                                    <p style={{ margin: '3px 0 8px 0', fontSize: '11px', color: '#7f8c8d' }}>This link will be shown to users when they view your studio details.</p>
+                                    <input type="url" placeholder="https://instagram.com/your_page" value={profileEdit.portfolioUrl} onChange={e => setProfileEdit({...profileEdit, portfolioUrl: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                </div>
+
                                 <div>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>New Password</label>
                                     <input type="password" placeholder="Leave blank to keep current password" value={profileEdit.password} onChange={e => setProfileEdit({...profileEdit, password: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />

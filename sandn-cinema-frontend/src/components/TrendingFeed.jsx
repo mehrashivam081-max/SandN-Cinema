@@ -7,18 +7,26 @@ const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const TrendingFeed = ({ type, onClose }) => {
     const title = type === 'trending' ? '🔥 Trending Now' : '🚀 Viral Content';
     
+    // 🟢 SWIPE LOGIC STATES
     const touchStartX = useRef(0);
     const [translateX, setTranslateX] = useState(0);
+    const screenWidth = window.innerWidth;
 
     const [feedData, setFeedData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [bookingLoading, setBookingLoading] = useState(false); // Naya state direct booking ke loading ke liye
+    const [bookingLoading, setBookingLoading] = useState(false);
+    
+    // 🟢 READ MORE STATES
+    const [expandedTextIndex, setExpandedTextIndex] = useState(null);
 
-    // 🟢 FETCH PUBLIC FEED DATA
+    // 🟢 STUDIO PROFILE POPUP STATES
+    const [selectedStudio, setSelectedStudio] = useState(null);
+
     useEffect(() => {
         const fetchPublicFeed = async () => {
             try {
-                const res = await axios.get(`${API_BASE}/get-public-feed`);
+                // Fetch latest data with anti-caching
+                const res = await axios.get(`${API_BASE}/get-public-feed?t=${Date.now()}`);
                 if (res.data.success && res.data.data.length > 0) {
                     const shuffled = res.data.data.sort(() => 0.5 - Math.random()).map(item => ({
                         ...item,
@@ -35,21 +43,36 @@ const TrendingFeed = ({ type, onClose }) => {
                 setLoading(false);
             }
         };
-
         fetchPublicFeed();
     }, []);
 
-    // --- SWIPE HANDLERS ---
-    const handleTouchStart = (e) => { touchStartX.current = e.targetTouches[0].clientX; };
+    // ✅ VIEW ANALYTICS SENDER
+    const handleViewAnalytics = async (postId) => {
+        try {
+            await axios.post(`${API_BASE}/view-feed-post`, { postId });
+        } catch (e) { console.log("Analytics error silently ignored"); }
+    };
+
+    // --- SWIPE HANDLERS (ANTI-SHAKE & 30% RULE) ---
+    const handleTouchStart = (e) => { 
+        touchStartX.current = e.targetTouches[0].clientX; 
+    };
+
     const handleTouchMove = (e) => {
         const diff = e.targetTouches[0].clientX - touchStartX.current;
+        // Anti-Shake: 20px buffer before swipe starts registering
+        if (Math.abs(diff) < 20) return; 
+
         if (type === 'trending' && diff > 0) setTranslateX(diff);
         else if (type === 'viral' && diff < 0) setTranslateX(diff);
     };
+
     const handleTouchEnd = () => {
-        if (type === 'trending' && translateX > 100) onClose();
-        else if (type === 'viral' && translateX < -100) onClose();
-        else setTranslateX(0); 
+        const threshold = screenWidth * 0.30; // 30% of screen width
+
+        if (type === 'trending' && translateX > threshold) onClose();
+        else if (type === 'viral' && translateX < -threshold) onClose();
+        else setTranslateX(0); // Snap back to center
     };
 
     // --- UTILS & INTERACTIONS ---
@@ -78,31 +101,37 @@ const TrendingFeed = ({ type, onClose }) => {
     };
 
     const handleCommentClick = () => {
-        const userStr = sessionStorage.getItem('user');
-        if (!userStr) {
-            alert("Please sign in to leave a comment!");
-            onClose(); 
-        } else {
-            alert("Comment section will open here! (Phase 2)");
+        alert("Comment section will open here! (Phase 2)");
+    };
+
+    // Fetch Full Studio Details for Profile Popup
+    const openStudioProfile = async (mobile) => {
+        try {
+            const res = await axios.post(`${API_BASE}/search-account`, { mobile, roleFilter: 'STUDIO' });
+            if (res.data.success) {
+                setSelectedStudio(res.data.data);
+            } else {
+                alert("Studio details currently unavailable.");
+            }
+        } catch (e) {
+            console.error(e);
         }
     };
 
-    // ✅ HELPER FOR SERVICE OBJECT
+    // HELPER FOR SERVICE OBJECT
     const getServiceObject = (item) => ({
         _id: item._id || Date.now().toString(),
         title: `Premium Session by ${item.studioName || 'Featured Studio'}`,
         startingPrice: item.price || 5000, 
         addedBy: item.studioName || 'SandN Cinema',
-        imageUrl: `https://sandn-cinema.onrender.com/${item.file}`
+        imageUrl: item.file.startsWith('http') ? item.file : `https://sandn-cinema.onrender.com/${item.file}`
     });
 
-    // ✅ ACTION 1: ADD TO CART LOGIC
     const handleAddToCart = (item) => {
         const userStr = sessionStorage.getItem('user');
         const serviceToBook = getServiceObject(item);
 
         if (userStr) {
-            // 🟢 LOGGED IN: Add to Cart silently
             const currentCart = JSON.parse(localStorage.getItem('userCart')) || [];
             if (currentCart.find(c => c.title === serviceToBook.title && c.addedBy === serviceToBook.addedBy)) {
                 return alert("This session is already in your cart!");
@@ -111,34 +140,30 @@ const TrendingFeed = ({ type, onClose }) => {
             localStorage.setItem('userCart', JSON.stringify(newCart));
             alert(`🛒 Added to Cart!\nGo back to your Dashboard and open your cart to complete the booking later.`);
         } else {
-            // 🔴 GUEST: Save to pending and redirect to Login
             localStorage.setItem('pendingCartItem', JSON.stringify(serviceToBook));
             alert("✨ Please sign in or create an account to add this to your cart!");
             onClose(); 
         }
     };
 
-    // ✅ ACTION 2: DIRECT BOOKING LOGIC (Triggers Blind Booking Flow)
     const handleDirectBook = async (item) => {
         const userStr = sessionStorage.getItem('user');
         const serviceToBook = getServiceObject(item);
 
         if (userStr) {
-            // 🟢 LOGGED IN: Send Blind Booking Request Directly
             const userObj = JSON.parse(userStr);
-            if (!window.confirm(`⚡ Ready to book ${item.studioName}?\nA booking request will be sent to the studio. Your contact details will remain completely hidden for safety until the studio accepts and you pay the 30% advance.`)) return;
+            if (!window.confirm(`⚡ Ready to book ${item.studioName}?\nA booking request will be sent securely. Your contact details will remain completely hidden until the studio accepts.`)) return;
 
             setBookingLoading(true);
             try {
-                // Call the checkout API which creates a booking request
                 const res = await axios.post(`${API_BASE}/checkout-cart`, {
                     mobile: userObj.mobile,
                     items: [serviceToBook]
                 });
                 
                 if (res.data.success) {
-                    alert(`✅ Booking Request Sent Securely!\n\nThe studio has received your requirement (Contact Hidden). Once they accept, you'll be notified to pay the advance.`);
-                    onClose(); // Close feed, take them to dashboard to see bookings
+                    alert(`✅ Booking Request Sent Securely!\n\nThe studio has received your requirement. Check your Dashboard to see the proposal and pay the advance.`);
+                    onClose(); 
                 } else {
                     alert("Booking failed. Please try again later.");
                 }
@@ -148,7 +173,6 @@ const TrendingFeed = ({ type, onClose }) => {
                 setBookingLoading(false);
             }
         } else {
-            // 🔴 GUEST: Save to pending and redirect to Login
             localStorage.setItem('pendingCartItem', JSON.stringify(serviceToBook));
             alert("✨ Please sign in or create an account to book this amazing studio securely!");
             onClose(); 
@@ -158,21 +182,15 @@ const TrendingFeed = ({ type, onClose }) => {
     return (
         <div 
            className="modal-overlay"
-           style={{ background: `rgba(0,0,0, ${1 - Math.abs(translateX)/500})` }}
+           style={{ background: `rgba(0,0,0, ${1 - Math.abs(translateX)/(screenWidth*1.5)})` }}
         >
             <div 
                 className="modal-card full-screen fade-in"
                 style={{
                     transform: `translateX(${translateX}px)`,
                     transition: translateX === 0 ? 'transform 0.3s ease-out' : 'none',
-                    width: '100%',
-                    height: '100dvh',
-                    maxWidth: '100%',
-                    borderRadius: 0,
-                    margin: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: '#000'
+                    width: '100%', height: '100dvh', maxWidth: '100%', borderRadius: 0, margin: 0,
+                    display: 'flex', flexDirection: 'column', background: '#000'
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
@@ -190,48 +208,78 @@ const TrendingFeed = ({ type, onClose }) => {
                             <p>Loading magic... ✨</p>
                         </div>
                     ) : feedData.length > 0 ? (
-                        
                         feedData.map((item, index) => {
-                            const fileUrl = `https://sandn-cinema.onrender.com/${item.file}`;
+                            const fileUrl = item.file.startsWith('http') ? item.file : `https://sandn-cinema.onrender.com/${item.file}`;
                             const isVid = isVideo(item.file);
                             
+                            // Read More text trimming logic
+                            const maxChars = 60;
+                            const isExpanded = expandedTextIndex === index;
+                            const displayText = (item.description && item.description.length > maxChars && !isExpanded) 
+                                                ? item.description.substring(0, maxChars) + '...' 
+                                                : item.description;
+                            
                             return (
-                                <div key={index} className="feed-item" style={{ height: '100dvh', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden' }}>
+                                <div 
+                                    key={index} 
+                                    className="feed-item" 
+                                    style={{ height: '100dvh', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden', background: '#111' }}
+                                    onMouseEnter={() => handleViewAnalytics(item._id)} // Fire view event when entering view
+                                >
                                     
-                                    {/* Media Layer */}
-                                    {isVid ? (
-                                        <video 
-                                            src={fileUrl} 
-                                            autoPlay={index === 0} 
-                                            loop 
-                                            muted 
-                                            playsInline
-                                            style={{width:'100%', height:'100%', objectFit:'cover'}} 
-                                        />
-                                    ) : (
-                                        <img src={fileUrl} alt={`Feed ${index}`} style={{width:'100%', height:'100%', objectFit:'cover'}} />
+                                    {/* ✅ FOMO Expiry Timer Highlight (Top Center) */}
+                                    {item.expiryDate && (
+                                        <div style={{ position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg, #e74c3c, #c0392b)', color: '#fff', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 15, boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '1px solid #fff', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            ⏳ Offer Ends: {new Date(item.expiryDate).toLocaleDateString()} {new Date(item.expiryDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                        </div>
                                     )}
+
+                                    {/* ✅ Media Layer (objectFit: contain ensures no cropping) */}
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {isVid ? (
+                                            <video 
+                                                src={fileUrl} 
+                                                autoPlay={index === 0} 
+                                                loop 
+                                                muted 
+                                                playsInline
+                                                preload="metadata"
+                                                style={{width:'100%', height:'100%', objectFit:'contain'}} 
+                                            />
+                                        ) : (
+                                            <img src={fileUrl} alt={`Feed ${index}`} loading="lazy" style={{width:'100%', height:'100%', objectFit:'contain'}} />
+                                        )}
+                                    </div>
 
                                     {/* Black Gradient Overlay at bottom for text visibility */}
                                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(to top, rgba(0,0,0,0.95), transparent)', zIndex: 1 }}></div>
 
                                     {/* Content Info (Left Bottom) */}
                                     <div style={{ position: 'absolute', bottom: '30px', left: '15px', right: '80px', zIndex: 5, color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                                        <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                                        
+                                        {/* ✅ Clickable Studio Profile Area */}
+                                        <div 
+                                            onClick={() => openStudioProfile(item.studioMobile)}
+                                            style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer'}}
+                                        >
                                             <div style={{width: '35px', height: '35px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', color: '#000', border: '2px solid #fff'}}>
                                                 {(item.studioName || 'S')[0].toUpperCase()}
                                             </div>
                                             <div>
                                                 <h4 style={{margin: '0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '5px'}}>{item.studioName || 'Featured Studio'} <span style={{color: '#3498db', fontSize: '14px'}}>✔️</span></h4>
-                                                <p style={{margin: 0, fontSize: '11px', color: '#ccc'}}>Verified Creator</p>
+                                                <p style={{margin: 0, fontSize: '11px', color: '#ccc'}}>Verified Creator • Click to view profile</p>
                                             </div>
                                         </div>
                                         
+                                        {/* ✅ Read More Description Logic */}
                                         <p style={{margin: '0 0 10px 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9}}>
-                                            Check out this beautiful {isVid ? 'video' : 'shot'}! Let's create something amazing for your next event. ✨
+                                            {displayText || "Check out this beautiful shot! Let's create something amazing for your next event. ✨"}
+                                            {item.description && item.description.length > maxChars && !isExpanded && (
+                                                <span onClick={() => setExpandedTextIndex(index)} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}>...Read More</span>
+                                            )}
                                         </p>
 
-                                        {/* ✅ SPLIT BUTTONS: ADD TO CART & BOOK NOW */}
+                                        {/* Split Buttons: Cart & Book */}
                                         <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                                             <button 
                                                 onClick={() => handleAddToCart(item)}
@@ -245,12 +293,12 @@ const TrendingFeed = ({ type, onClose }) => {
                                                 disabled={bookingLoading}
                                                 style={{ flex: 1.5, background: 'linear-gradient(90deg, #f1c40f, #f39c12)', color: '#000', border: 'none', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: bookingLoading ? 'not-allowed' : 'pointer', boxShadow: '0 4px 15px rgba(241, 196, 15, 0.4)', animation: 'pulse 2s infinite' }}
                                             >
-                                                {bookingLoading ? '⏳ Wait...' : '⚡ Book Session'}
+                                                {bookingLoading ? '⏳ Wait...' : `⚡ Book @ ₹${item.price || 5000}`}
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Action Bar (Right Side like Reels/TikTok) */}
+                                    {/* Action Bar (Right Side like Reels) */}
                                     <div style={{ position: 'absolute', bottom: '50px', right: '15px', zIndex: 5, display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
                                         <div onClick={() => handleLike(index)} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
                                             <div style={{fontSize: '28px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))', transform: item.isLiked ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s'}}>
@@ -289,6 +337,37 @@ const TrendingFeed = ({ type, onClose }) => {
 
                 </div>
             </div>
+
+            {/* ✅ STUDIO PROFILE POPUP MODAL */}
+            {selectedStudio && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#fff', width: '90%', maxWidth: '350px', borderRadius: '20px', padding: '30px', textAlign: 'center', position: 'relative', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+                        <button onClick={() => setSelectedStudio(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: '#eee', border: 'none', width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px', cursor: 'pointer' }}>✖</button>
+                        
+                        <div style={{ width: '80px', height: '80px', background: 'linear-gradient(45deg, #3498db, #8e44ad)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', color: '#fff', fontWeight: 'bold', border: '4px solid #fdfdfd', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                            {(selectedStudio.studioName || 'S')[0].toUpperCase()}
+                        </div>
+                        <h2 style={{ margin: '0 0 5px 0', color: '#2c3e50', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                            {selectedStudio.studioName} <span style={{ color: '#3498db', fontSize: '18px' }}>✔️</span>
+                        </h2>
+                        <p style={{ margin: '0 0 15px 0', color: '#7f8c8d', fontSize: '13px' }}>Location: {selectedStudio.location || 'India'}</p>
+
+                        {/* Portfolio Link Display */}
+                        {selectedStudio.portfolioUrl ? (
+                            <a href={selectedStudio.portfolioUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', background: '#fdf2e9', color: '#e67e22', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', border: '1px solid #f8c471', marginBottom: '15px' }}>
+                                🌐 View Complete Portfolio
+                            </a>
+                        ) : (
+                            <p style={{ background: '#f4f6f7', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#95a5a6' }}>No portfolio link available.</p>
+                        )}
+
+                        <button onClick={() => setSelectedStudio(null)} style={{ width: '100%', padding: '12px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };
