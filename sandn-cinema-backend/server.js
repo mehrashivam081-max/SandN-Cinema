@@ -1880,7 +1880,87 @@ app.post('/api/auth/view-feed-post', async (req, res) => {
     }
 });
 
+// ==========================================
+// 🚀 25. SMART ADVERTISEMENT ENGINE (TARGETED ADS)
+// ==========================================
 
+const adSchema = new mongoose.Schema({
+    title: String,
+    file: String, // Cloudinary URL
+    fileType: String, // image or video
+    targetLocation: { type: String, default: 'ALL' }, // Specific city or ALL
+    targetInterest: { type: String, default: 'ALL' }, // Specific category
+    actionLink: String, // Website or App link
+    maxViews: { type: Number, default: 0 }, // 0 means Unlimited
+    currentViews: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now }
+});
+const Advertisement = mongoose.models.Advertisement || mongoose.model('Advertisement', adSchema);
+
+// 📤 Upload New Ad (From Admin Dashboard)
+app.post('/api/auth/upload-ad', async (req, res) => {
+    try {
+        const newAd = await Advertisement.create(req.body);
+        res.json({ success: true, message: "Smart Ad Created & Live! 🚀", data: newAd });
+    } catch (err) {
+        console.error("Ad Upload Error:", err);
+        res.status(500).json({ success: false, message: "Server error uploading Ad." });
+    }
+});
+
+// 📥 Fetch Targeted Ads for User Feed
+app.post('/api/auth/get-targeted-ads', async (req, res) => {
+    try {
+        const { userLocation, userInterest } = req.body;
+        
+        // Find Ads where: Is Active AND (Current Views < Max Views OR Max Views is 0)
+        let query = {
+            isActive: true,
+            $or: [ { maxViews: 0 }, { $expr: { $lt: ["$currentViews", "$maxViews"] } } ]
+        };
+
+        const activeAds = await Advertisement.find(query);
+
+        // Smart Filtering (Show location/interest specific first, then global ads)
+        const targetedAds = activeAds.filter(ad => {
+            const locMatch = ad.targetLocation === 'ALL' || (userLocation && ad.targetLocation.toLowerCase().includes(userLocation.toLowerCase()));
+            const intMatch = ad.targetInterest === 'ALL' || (userInterest && ad.targetInterest.toLowerCase() === userInterest.toLowerCase());
+            return locMatch && intMatch;
+        });
+
+        res.json({ success: true, data: targetedAds.length > 0 ? targetedAds : activeAds });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Failed to fetch ads." });
+    }
+});
+
+// 👁️ Track Ad Views to Auto-Stop Campaigns
+app.post('/api/auth/track-ad-view', async (req, res) => {
+    try {
+        const { adId } = req.body;
+        const ad = await Advertisement.findByIdAndUpdate(adId, { $inc: { currentViews: 1 } }, { new: true });
+        
+        // Auto-pause if max views reached
+        if (ad && ad.maxViews > 0 && ad.currentViews >= ad.maxViews) {
+            ad.isActive = false;
+            await ad.save();
+        }
+        res.json({ success: true });
+    } catch (e) {
+        res.json({ success: false });
+    }
+});
+
+// 🗑️ Delete Ad
+app.post('/api/auth/delete-ad', async (req, res) => {
+    try {
+        await Advertisement.findByIdAndDelete(req.body.adId);
+        res.json({ success: true, message: "Ad Permanently Deleted from Cloud DB." });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to delete ad." });
+    }
+});
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
