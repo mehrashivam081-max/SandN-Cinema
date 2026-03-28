@@ -537,10 +537,20 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     };
 
-    // ✅ NEW CART & BOOKING LOGIC
+    // ✅ NEW CART & BOOKING LOGIC (FIXED: Takes Discounted Price)
     const handleAddToCart = (service) => {
         if(cart.find(item => item._id === service._id)) return alert("This service is already in your cart!");
-        setCart([{ ...service, addedAt: Date.now() }, ...cart]);
+        
+        // 🛠️ BUG FIX: Pick finalPrice if available, else startingPrice
+        const priceToCharge = service.finalPrice || service.startingPrice;
+        
+        const itemToAdd = {
+            ...service,
+            startingPrice: priceToCharge, // We overwrite startingPrice with the actual price to charge
+            addedAt: Date.now()
+        };
+
+        setCart([itemToAdd, ...cart]);
         alert("Service added to Cart!");
         setSelectedServiceModal(null);
     };
@@ -554,13 +564,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         setLoading(true);
         try {
+            // 🛠️ BUG FIX: Pick finalPrice if available, else startingPrice
+            const priceToCharge = service.finalPrice || service.startingPrice;
+            
+            const itemToBook = {
+                ...service,
+                startingPrice: priceToCharge // Send the discounted price to backend
+            };
+
             const res = await axios.post(`${API_BASE}/checkout-cart`, {
                 mobile: syncUser.mobile,
-                items: [service]
+                items: [itemToBook]
             });
             
             if (res.data.success) {
-                alert(`Booking Request Sent to Provider: ${service.addedBy || 'SandN Cinema'}\nAmount: ₹${service.startingPrice}`);
+                alert(`Booking Request Sent to Provider: ${service.addedBy || 'SandN Cinema'}\nAmount: ₹${priceToCharge}`);
                 setSelectedServiceModal(null);
                 setCurrentTab('BOOKINGS');
                 fetchServicesAndBookings(syncUser.mobile);
