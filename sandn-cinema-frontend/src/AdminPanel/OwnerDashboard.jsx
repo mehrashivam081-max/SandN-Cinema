@@ -107,6 +107,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adFile, setAdFile] = useState(null);
     const [adList, setAdList] = useState([]);
     const [fetchingAds, setFetchingAds] = useState(false);
+    const [previewAd, setPreviewAd] = useState(null); // ✅ NEW: Preview State
+    const [editingAdId, setEditingAdId] = useState(null); // ✅ NEW: Edit State
+
+    // ✅ Dynamic Location Counter
+    const locationStats = accounts.reduce((acc, user) => {
+        const loc = user.location ? user.location.trim() : 'Unknown';
+        if(loc) acc[loc] = (acc[loc] || 0) + 1;
+        return acc;
+    }, {});
 
     // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
@@ -1160,10 +1169,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 📣 NEW: SMART AD MANAGER TAB */}
                 {activeTab === 'ADS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📣 Smart Ad Manager</h2></div>
+                        <div className="section-header"><h2>📣 Smart Ad Manager (Pro)</h2></div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Create targeted ads or promotions that automatically inject into user feeds.</p>
 
-                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px', borderTop: editingAdId ? '4px solid #f1c40f' : 'none' }}>
+                            {editingAdId && <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', color: '#d4ac0d', fontWeight: 'bold', marginBottom: '15px', textAlign: 'center' }}>✏️ You are modifying an existing Ad Campaign</div>}
+                            
                             <form onSubmit={handleAdSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <div style={{flex: 1}}>
@@ -1171,22 +1182,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <input type="text" placeholder="e.g. Diwali Mega Sale" value={adForm.title} onChange={e => setAdForm({...adForm, title: e.target.value})} className="custom-admin-input" required/>
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Media (Image/Video)</label>
-                                        <input type="file" accept="image/*,video/*" onChange={e => setAdFile(e.target.files[0])} className="custom-admin-input" id="ad-file-input" style={{padding: '9px'}} required/>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Media {editingAdId && <span style={{fontSize: '10px'}}>(Leave blank to keep old)</span>}</label>
+                                        <input type="file" accept="image/*,video/*" onChange={e => setAdFile(e.target.files[0])} className="custom-admin-input" id="ad-file-input" style={{padding: '9px'}} />
                                     </div>
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '15px', background: '#f4f6f9', padding: '15px', borderRadius: '8px', border: '1px dashed #3498db' }}>
                                     <div style={{flex: 1}}>
                                         <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Location</label>
-                                        <input type="text" placeholder="e.g. Mumbai (or ALL)" value={adForm.location} onChange={e => setAdForm({...adForm, location: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}/>
+                                        <select value={adForm.location} onChange={e => setAdForm({...adForm, location: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}>
+                                            <option value="ALL">🌍 ALL Locations (Global)</option>
+                                            {Object.keys(locationStats).filter(k => k !== 'Unknown').map((loc, idx) => (
+                                                <option key={idx} value={loc}>📍 {loc} ({locationStats[loc]} Users)</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Interest (Category)</label>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Feed Category</label>
                                         <select value={adForm.interest} onChange={e => setAdForm({...adForm, interest: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}>
-                                            <option value="ALL">ALL (Global)</option>
-                                            <option value="trending">🔥 Trending</option>
-                                            <option value="viral">🚀 Viral</option>
+                                            <option value="ALL">🌍 Both Feeds (Global)</option>
+                                            <option value="trending">🔥 Trending Feed Only</option>
+                                            <option value="viral">🚀 Viral Feed Only</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1213,29 +1229,36 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </div>
                                 )}
 
-                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#f39c12', padding: '15px', marginTop: '10px' }}>
-                                    {loading ? 'Publishing Ad...' : '🚀 Publish Smart Ad Campaign'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {editingAdId && <button type="button" onClick={() => {setEditingAdId(null); setAdForm({ title: '', location: 'ALL', interest: 'ALL', link: '', maxViews: '0' });}} style={{ background: '#95a5a6', color: '#fff', border: 'none', padding: '15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>}
+                                    <button type="submit" disabled={loading} className="global-update-btn" style={{ background: editingAdId ? '#2ecc71' : '#f39c12', padding: '15px', marginTop: editingAdId ? 0 : '10px', flex: 1 }}>
+                                        {loading ? 'Processing...' : (editingAdId ? '💾 Update Live Ad' : '🚀 Publish Smart Ad Campaign')}
+                                    </button>
+                                </div>
                             </form>
                         </div>
 
                         <h3 style={{ padding: '15px' }}>📊 Live Advertisement Campaigns</h3>
                         <div className="data-table-container">
                             <table className="admin-table">
-                                <thead><tr><th>Preview</th><th>Ad Title</th><th>Targeting</th><th>Views (Current / Limit)</th><th>Action</th></tr></thead>
+                                <thead><tr><th>Preview Image</th><th>Ad Title</th><th>Targeting</th><th>Views Status</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     {fetchingAds ? <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>Loading Ads...</td></tr> : 
                                     adList.length > 0 ? adList.map((ad, idx) => (
                                         <tr key={idx} style={{ opacity: ad.isActive ? 1 : 0.6 }}>
-                                            <td style={{width: '60px'}}>
+                                            <td style={{width: '80px', cursor: 'pointer'}} onClick={() => setPreviewAd(ad)}>
                                                 {ad.fileType === 'video' ? 
-                                                    <video src={getCleanUrl(ad.file)} style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'5px'}} /> :
-                                                    <img src={getCleanUrl(ad.file)} style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'5px'}} />
+                                                    <div style={{position:'relative', width:'60px', height:'60px'}}>
+                                                        <video src={getCleanUrl(ad.file)} style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'5px'}} />
+                                                        <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, -50%)', color:'white', fontSize:'12px', background:'rgba(0,0,0,0.5)', padding:'2px', borderRadius:'50%'}}>▶️</div>
+                                                    </div> :
+                                                    <img src={getCleanUrl(ad.file)} style={{width:'60px', height:'60px', objectFit:'cover', borderRadius:'5px', border:'1px solid #ddd'}} />
                                                 }
+                                                <div style={{fontSize:'9px', color:'#3498db', textAlign:'center', marginTop:'2px'}}>Click to preview</div>
                                             </td>
                                             <td>
                                                 <strong>{ad.title}</strong><br/>
-                                                <a href={ad.actionLink} target="_blank" style={{fontSize:'10px', color:'#3498db'}}>View Link</a>
+                                                <a href={ad.actionLink} target="_blank" rel="noreferrer" style={{fontSize:'10px', color:'#3498db'}}>Test Link ↗️</a>
                                             </td>
                                             <td style={{fontSize:'12px'}}>
                                                 📍 {ad.targetLocation}<br/>
@@ -1243,16 +1266,36 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </td>
                                             <td>
                                                 <strong style={{color: '#27ae60'}}>{ad.currentViews}</strong> / {ad.maxViews === 0 ? '∞' : ad.maxViews}
-                                                <br/><span style={{fontSize:'10px', color: ad.isActive ? '#2ecc71' : '#e74c3c'}}>{ad.isActive ? 'Active' : 'Completed'}</span>
+                                                <br/><span style={{fontSize:'10px', color: ad.isActive ? '#2ecc71' : '#e74c3c', fontWeight:'bold'}}>{ad.isActive ? '🟢 Active' : '🔴 Stopped'}</span>
                                             </td>
                                             <td>
-                                                <button onClick={() => handleDeleteAd(ad._id)} className="pdf-btn" style={{background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer'}}>Delete</button>
+                                                <button onClick={() => {
+                                                    setEditingAdId(ad._id);
+                                                    setAdForm({ title: ad.title, location: ad.targetLocation, interest: ad.targetInterest, link: ad.actionLink, maxViews: ad.maxViews });
+                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                }} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', marginRight: '5px', fontSize:'11px'}}>✏️ Edit</button>
+                                                <button onClick={() => handleDeleteAd(ad._id)} className="pdf-btn" style={{background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize:'11px'}}>🗑️ Delete</button>
                                             </td>
                                         </tr>
                                     )) : <tr><td colSpan="5" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No Ads currently running.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* ✅ FULL SCREEN AD PREVIEW MODAL */}
+                        {previewAd && (
+                            <div style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.9)', zIndex: 999999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
+                                <button onClick={() => setPreviewAd(null)} style={{position: 'absolute', top: '20px', right: '20px', background: 'red', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '18px', cursor: 'pointer', zIndex: 10}}>✖</button>
+                                <h3 style={{color: '#fff', marginBottom: '15px'}}>{previewAd.title}</h3>
+                                <div style={{width: '90%', maxWidth: '400px', height: '70vh', background: '#000', borderRadius: '15px', overflow: 'hidden', border: '2px solid #333'}}>
+                                    {previewAd.fileType === 'video' ? (
+                                        <video src={getCleanUrl(previewAd.file)} controls autoPlay style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+                                    ) : (
+                                        <img src={getCleanUrl(previewAd.file)} style={{width: '100%', height: '100%', objectFit: 'contain'}} />
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

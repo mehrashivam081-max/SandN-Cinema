@@ -74,6 +74,30 @@ const StudioDashboard = ({ user, onLogout }) => {
         expiryHours: '48'
     });
 
+    // ✅ LOAD PENDING DRAFT ON START
+    useEffect(() => {
+        const savedDraft = localStorage.getItem('feedUploadDraft');
+        if (savedDraft) {
+            const parsed = JSON.parse(savedDraft);
+            setFeedDescription(parsed.desc || '');
+            setFeedCategory(parsed.cat || 'trending');
+            setFeedPrice(parsed.price || '');
+            setFeedExpiryType(parsed.expType || 'permanent');
+            setCustomExpiryHours(parsed.customExp || '');
+        }
+    }, []);
+
+    // ✅ SAVE DRAFT AUTOMATICALLY ON CHANGE
+    useEffect(() => {
+        localStorage.setItem('feedUploadDraft', JSON.stringify({
+            desc: feedDescription,
+            cat: feedCategory,
+            price: feedPrice,
+            expType: feedExpiryType,
+            customExp: customExpiryHours
+        }));
+    }, [feedDescription, feedCategory, feedPrice, feedExpiryType, customExpiryHours]);
+
     // --- PROFILE EDIT STATES (WITH PORTFOLIO) ---
     const [profileEdit, setProfileEdit] = useState({
         studioName: user.studioName || '',
@@ -387,6 +411,10 @@ const StudioDashboard = ({ user, onLogout }) => {
                 
                 if (backendRes.data.success) {
                     setUploadETA('Complete!');
+                    
+                    // ✅ CLEAR DRAFT ON SUCCESS
+                    localStorage.removeItem('feedUploadDraft');
+
                     setTimeout(() => {
                         alert(`✅ Success: ${backendRes.data.message}`);
                         setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
@@ -759,6 +787,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>🗓️ {sub.name}</span>
                                                                     <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, sub.name)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}>Delete Sub-Folder</button>
                                                                 </div>
+                                                                
                                                                 {sub.files && sub.files.length > 0 ? (
                                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px' }}>
                                                                         {sub.files.map((subFileUrl, fidx) => (
@@ -975,6 +1004,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
+                                {/* ✅ PER-FILE PROGRESS BLOCK (CLIENT UPLOAD) */}
                                 {loading && (
                                     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
@@ -986,6 +1016,18 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         </div>
                                         <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>
                                             ⏳ {uploadETA}
+                                        </div>
+                                        
+                                        <div style={{marginTop: '15px', maxHeight: '150px', overflowY: 'auto', borderTop: '1px solid #eee', paddingTop: '10px'}}>
+                                            <p style={{fontSize: '11px', color: '#888', fontWeight: 'bold', margin: '0 0 10px 0'}}>PER FILE UPLOAD STATUS:</p>
+                                            {files.map((f, i) => (
+                                                <div key={i} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px', background: '#f9f9f9', marginBottom: '5px', borderRadius: '4px', fontSize: '10px', color: '#444'}}>
+                                                    <span style={{width: '60%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>📄 {f.name}</span>
+                                                    <span style={{color: uploadProgress >= ((i+1)/files.length)*100 ? '#2ecc71' : '#f39c12', fontWeight: 'bold'}}>
+                                                        {uploadProgress >= ((i+1)/files.length)*100 ? '✅ Uploaded' : '⏳ Queued...'}
+                                                    </span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -1061,7 +1103,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         <input type="number" value={feedPrice} onChange={(e) => setFeedPrice(e.target.value)} className="custom-admin-input" placeholder="e.g. 15000" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}} />
                                     </div>
 
-                                    {/* ✅ FOMO Expiry Logic Input (CUSTOM OPTIONS) */}
+                                    {/* ✅ FOMO Expiry Logic Input */}
                                     <div style={{ flex: '1 1 100%' }}>
                                         <label style={{fontWeight:'bold', fontSize:'13px', color: '#d4ac0d'}}>⏳ Limited Time Offer Expiry</label>
                                         
@@ -1127,6 +1169,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 </div>
                             )}
 
+                            {/* ✅ PER-FILE PROGRESS BLOCK (FEED UPLOAD) */}
                             {loading && (
                                 <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginTop: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
@@ -1139,6 +1182,18 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>
                                         ⏳ {uploadETA}
                                     </div>
+
+                                    <div style={{marginTop: '15px', maxHeight: '150px', overflowY: 'auto', borderTop: '1px solid #eee', paddingTop: '10px'}}>
+                                        <p style={{fontSize: '11px', color: '#888', fontWeight: 'bold', margin: '0 0 10px 0'}}>PER FILE UPLOAD STATUS:</p>
+                                        {feedFiles.map((f, i) => (
+                                            <div key={i} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px', background: '#fdfbf7', marginBottom: '5px', borderRadius: '4px', fontSize: '10px', color: '#444'}}>
+                                                <span style={{width: '60%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>📄 {f.name}</span>
+                                                <span style={{color: uploadProgress >= ((i+1)/feedFiles.length)*100 ? '#2ecc71' : '#f39c12', fontWeight: 'bold'}}>
+                                                    {uploadProgress >= ((i+1)/feedFiles.length)*100 ? '✅ Uploaded' : '⏳ Queued...'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                             
@@ -1147,45 +1202,45 @@ const StudioDashboard = ({ user, onLogout }) => {
                             </button>
                         </div>
 
-                    {/* ✅ FEED ANALYTICS DISPLAY */}
-                    <div className="update-creation-container" style={{ maxWidth: '900px', margin: '30px auto', background: '#f8f9fa' }}>
-                        <h3 style={{ color: '#2c3e50', borderBottom: '2px solid #eee', paddingBottom: '10px', textAlign: 'left' }}>📊 My Feed Analytics</h3>
-                        {fetchingFeed ? (
-                            <p style={{ color: '#888', textAlign: 'center', marginTop: '20px' }}>Loading your feed posts...</p>
-                        ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '15px', marginTop: '20px' }}>
-                                {myFeedPosts.length > 0 ? myFeedPosts.map((post, idx) => (
-                                    <div key={idx} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', position: 'relative' }}>
-                                        {/* Views Counter Overlay */}
-                                        <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 10 }}>
-                                            👁️ {post.views || 0} Views
-                                        </div>
-                                        <div style={{ height: '180px', background: '#000', position: 'relative' }}>
-                                            {post.fileType === 'video' ? (
-                                                <>
-                                                    <video src={getCleanUrl(post.file)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>🎥</div>
-                                                </>
-                                            ) : (
-                                                <img src={getCleanUrl(post.file)} alt="Feed" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            )}
-                                        </div>
-                                        <div style={{ padding: '12px', textAlign: 'left' }}>
-                                            <p style={{ margin: '0 0 5px 0', fontSize: '12px', fontWeight: 'bold', color: post.feedCategory === 'trending' ? '#e74c3c' : '#3498db' }}>{post.feedCategory === 'trending' ? '🔥 Trending' : '🚀 Viral'}</p>
-                                            <p style={{ margin: 0, fontSize: '11px', color: '#777', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.description}</p>
-                                            <p style={{ margin: '8px 0', fontSize: '14px', color: '#27ae60', fontWeight: 'bold' }}>₹{post.price}</p>
-                                            {/* Timer/Expiry Tag */}
-                                            <div style={{ background: post.expiryDate ? '#fdf2e9' : '#ebf5fb', color: post.expiryDate ? '#e67e22' : '#2980b9', padding: '5px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', textAlign: 'center' }}>
-                                                {post.expiryDate ? `⏳ Expires: ${new Date(post.expiryDate).toLocaleString()}` : '♾️ Permanent Post'}
+                        {/* ✅ FEED ANALYTICS DISPLAY */}
+                        <div className="update-creation-container" style={{ maxWidth: '900px', margin: '30px auto', background: '#f8f9fa' }}>
+                            <h3 style={{ color: '#2c3e50', borderBottom: '2px solid #eee', paddingBottom: '10px', textAlign: 'left' }}>📊 My Feed Analytics</h3>
+                            {fetchingFeed ? (
+                                <p style={{ color: '#888', textAlign: 'center', marginTop: '20px' }}>Loading your feed posts...</p>
+                            ) : (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '15px', marginTop: '20px' }}>
+                                    {myFeedPosts.length > 0 ? myFeedPosts.map((post, idx) => (
+                                        <div key={idx} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', position: 'relative' }}>
+                                            {/* Views Counter Overlay */}
+                                            <div style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 10 }}>
+                                                👁️ {post.views || 0} Views
+                                            </div>
+                                            <div style={{ height: '180px', background: '#000', position: 'relative' }}>
+                                                {post.fileType === 'video' ? (
+                                                    <>
+                                                        <video src={getCleanUrl(post.file)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>🎥</div>
+                                                    </>
+                                                ) : (
+                                                    <img src={getCleanUrl(post.file)} alt="Feed" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                )}
+                                            </div>
+                                            <div style={{ padding: '12px', textAlign: 'left' }}>
+                                                <p style={{ margin: '0 0 5px 0', fontSize: '12px', fontWeight: 'bold', color: post.feedCategory === 'trending' ? '#e74c3c' : '#3498db' }}>{post.feedCategory === 'trending' ? '🔥 Trending' : '🚀 Viral'}</p>
+                                                <p style={{ margin: 0, fontSize: '11px', color: '#777', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{post.description}</p>
+                                                <p style={{ margin: '8px 0', fontSize: '14px', color: '#27ae60', fontWeight: 'bold' }}>₹{post.price}</p>
+                                                {/* Timer/Expiry Tag */}
+                                                <div style={{ background: post.expiryDate ? '#fdf2e9' : '#ebf5fb', color: post.expiryDate ? '#e67e22' : '#2980b9', padding: '5px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', textAlign: 'center' }}>
+                                                    {post.expiryDate ? `⏳ Expires: ${new Date(post.expiryDate).toLocaleString()}` : '♾️ Permanent Post'}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )) : (
-                                    <p style={{ color: '#888', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px 0' }}>You haven't uploaded any public feed posts yet.</p>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                                    )) : (
+                                        <p style={{ color: '#888', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px 0' }}>You haven't uploaded any public feed posts yet.</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 

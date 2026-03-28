@@ -4,8 +4,24 @@ import axios from 'axios'; // ✅ AXIOS IMPORTED
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
+import axios from 'axios';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+
+// 🔒 GLOBAL AXIOS INTERCEPTOR (The Auto-Attacher)
+// Ye app se jaane wali har request me digital lock/token add kar dega
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 function App() {
 

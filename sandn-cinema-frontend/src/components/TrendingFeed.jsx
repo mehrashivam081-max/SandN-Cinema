@@ -22,17 +22,20 @@ const TrendingFeed = ({ type, onClose }) => {
 
     // 🟢 OPTIMIZATION REFS
     const observer = useRef(null);
-    const viewedAds = useRef(new Set()); // To track which ads are already counted
+    const viewedAds = useRef(new Set()); 
     const videoRefs = useRef({});
 
     useEffect(() => {
         const fetchFeedAndAds = async () => {
             try {
-                // 1. Fetch Posts
+                // 1. Fetch Posts (Anti-Cache)
                 const postRes = await axios.get(`${API_BASE}/get-public-feed?t=${Date.now()}`);
                 let posts = [];
                 if (postRes.data.success) {
-                    posts = postRes.data.data.map(item => ({
+                    // ✅ FIX 1: Filter strictly by category (trending vs viral)
+                    const filteredPosts = postRes.data.data.filter(item => item.feedCategory === type || !item.feedCategory);
+                    
+                    posts = filteredPosts.map(item => ({
                         ...item,
                         likes: Math.floor(Math.random() * 500) + 50,
                         isLiked: false,
@@ -42,9 +45,9 @@ const TrendingFeed = ({ type, onClose }) => {
                     posts = posts.sort(() => 0.5 - Math.random()); // Shuffle posts
                 }
 
-                // 2. Fetch Targeted Ads (Getting User Context from Session)
+                // 2. Fetch Targeted Ads
                 let userLoc = 'ALL';
-                let userInt = type; // 'trending' or 'viral'
+                let userInt = type; 
                 const userStr = sessionStorage.getItem('user');
                 if(userStr) {
                     const u = JSON.parse(userStr);
@@ -55,24 +58,22 @@ const TrendingFeed = ({ type, onClose }) => {
                 let ads = [];
                 if (adRes.data.success) ads = adRes.data.data;
 
-                // 3. 🚀 THE SMART AD INSERTION ALGORITHM (5-7 then 15-20)
+                // 3. ✅ FIX 2: TRUE RANDOM AD ALGORITHM (Unpredictable injection)
                 let mergedFeed = [];
-                let adIndex = 0;
-                let postCounter = 0;
-                // Pehla ad 5 se 7 ke beech (random)
-                let nextAdTarget = Math.floor(Math.random() * 3) + 5; 
+                let adQueue = ads.sort(() => 0.5 - Math.random()); 
 
-                for (let i = 0; i < posts.length; i++) {
-                    mergedFeed.push(posts[i]);
-                    postCounter++;
-
-                    if (postCounter === nextAdTarget && adIndex < ads.length) {
-                        mergedFeed.push({ ...ads[adIndex], isAdvertisement: true });
-                        adIndex++;
-                        postCounter = 0;
-                        // Agla ad 15 se 20 ke beech (random)
-                        nextAdTarget = Math.floor(Math.random() * 6) + 15; 
+                posts.forEach((post, i) => {
+                    mergedFeed.push(post);
+                    
+                    // 25% Chance to show an ad after a post (but never at the very first swipe)
+                    if (i > 0 && adQueue.length > 0 && Math.random() < 0.25) {
+                        mergedFeed.push({ ...adQueue.shift(), isAdvertisement: true });
                     }
+                });
+
+                // If any ads are left and posts are over, just push them at the end
+                while(adQueue.length > 0) {
+                    mergedFeed.push({ ...adQueue.shift(), isAdvertisement: true });
                 }
 
                 setFeedData(mergedFeed);
@@ -85,7 +86,7 @@ const TrendingFeed = ({ type, onClose }) => {
         fetchFeedAndAds();
     }, [type]);
 
-    // 🚀 ENTERPRISE OPTIMIZATION: Intersection Observer for Video Playback & Ad Tracking
+    // 🚀 ENTERPRISE OPTIMIZATION: Intersection Observer
     const handleObserver = useCallback((node, index, isAd, adId) => {
         if (!observer.current) {
             observer.current = new IntersectionObserver((entries) => {
@@ -94,7 +95,6 @@ const TrendingFeed = ({ type, onClose }) => {
                     const adTargetId = entry.target.dataset.adid;
                     const isAdNode = entry.target.dataset.isad === "true";
                     
-                    // 1. Memory Management: Auto Play/Pause Videos
                     const vid = videoRefs.current[idx];
                     if (vid) {
                         if (entry.isIntersecting) {
@@ -104,17 +104,16 @@ const TrendingFeed = ({ type, onClose }) => {
                         }
                     }
 
-                    // 2. Anti-Spam Ad View Tracking (Only count if in view for > 1.5 seconds)
                     if (entry.isIntersecting && isAdNode && adTargetId && !viewedAds.current.has(adTargetId)) {
                         entry.target.viewTimer = setTimeout(() => {
                             viewedAds.current.add(adTargetId);
-                            axios.post(`${API_BASE}/track-ad-view`, { adId: adTargetId }).catch(()=>console.log("Ad track failed quietly"));
-                        }, 1500); // 1.5 seconds delay
+                            axios.post(`${API_BASE}/track-ad-view`, { adId: adTargetId }).catch(()=>{});
+                        }, 1500); 
                     } else if (!entry.isIntersecting && entry.target.viewTimer) {
-                        clearTimeout(entry.target.viewTimer); // Cancel if user scrolls away fast
+                        clearTimeout(entry.target.viewTimer); 
                     }
                 });
-            }, { threshold: 0.6 }); // 60% of item must be visible
+            }, { threshold: 0.6 }); 
         }
         
         if (node) {
@@ -168,7 +167,9 @@ const TrendingFeed = ({ type, onClose }) => {
         } catch (e) { console.log(e); }
     };
 
-    const openStudioProfile = async (mobile) => {
+    // ✅ FIX 3: stopPropagation so clicking popup doesn't trigger swipe issues
+    const openStudioProfile = async (e, mobile) => {
+        e.stopPropagation();
         try {
             const res = await axios.post(`${API_BASE}/search-account`, { mobile, roleFilter: 'STUDIO' });
             if (res.data.success) setSelectedStudio(res.data.data);
@@ -176,7 +177,8 @@ const TrendingFeed = ({ type, onClose }) => {
         } catch (e) { console.error(e); }
     };
 
-    const handleAddToCart = (item) => {
+    const handleAddToCart = (e, item) => {
+        e.stopPropagation();
         const userStr = sessionStorage.getItem('user');
         const serviceToBook = {
             _id: item._id || Date.now().toString(),
@@ -201,7 +203,8 @@ const TrendingFeed = ({ type, onClose }) => {
         }
     };
 
-    const handleDirectBook = async (item) => {
+    const handleDirectBook = async (e, item) => {
+        e.stopPropagation();
         const userStr = sessionStorage.getItem('user');
         if (userStr) {
             const userObj = JSON.parse(userStr);
@@ -233,7 +236,7 @@ const TrendingFeed = ({ type, onClose }) => {
     };
 
     return (
-        <div className="modal-overlay" style={{ background: `rgba(0,0,0, ${1 - Math.abs(translateX)/(screenWidth*1.5)})` }}>
+        <div className="modal-overlay" style={{ background: `rgba(0,0,0, ${1 - Math.abs(translateX)/(screenWidth*1.5)})`, zIndex: 9999 }}>
             <div 
                 className="modal-card full-screen fade-in"
                 style={{
@@ -259,8 +262,13 @@ const TrendingFeed = ({ type, onClose }) => {
                         feedData.map((item, index) => {
                             const fileUrl = getCleanUrl(item.file);
                             const isVid = isVideo(item.file);
+                            
+                            // ✅ FIX 4: Read More Logic Implementation
                             const maxChars = 60;
                             const isExpanded = expandedTextIndex === index;
+                            const fullDesc = item.description || "Check out this beautiful shot! ✨";
+                            const showReadMore = fullDesc.length > maxChars;
+                            const displayDesc = isExpanded || !showReadMore ? fullDesc : fullDesc.substring(0, maxChars) + '...';
                             
                             return (
                                 <div 
@@ -269,7 +277,6 @@ const TrendingFeed = ({ type, onClose }) => {
                                     className="feed-item" 
                                     style={{ height: '100dvh', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden', background: '#111' }}
                                 >
-                                    
                                     {/* 📢 ADVERTISEMENT BADGE */}
                                     {item.isAdvertisement && (
                                         <div style={{ position: 'absolute', top: '70px', left: '15px', background: 'rgba(255,255,255,0.8)', color: '#000', padding: '4px 8px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', zIndex: 15, backdropFilter: 'blur(5px)' }}>
@@ -277,14 +284,14 @@ const TrendingFeed = ({ type, onClose }) => {
                                         </div>
                                     )}
 
-                                    {/* ⏳ FOMO Expiry Timer Highlight (Top Center) */}
+                                    {/* ⏳ FOMO Expiry Timer */}
                                     {item.expiryDate && !item.isAdvertisement && (
                                         <div style={{ position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg, #e74c3c, #c0392b)', color: '#fff', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 15, boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '1px solid #fff' }}>
                                             ⏳ Offer Ends: {new Date(item.expiryDate).toLocaleDateString()}
                                         </div>
                                     )}
 
-                                    {/* ✅ Media Layer (objectFit: contain ensures no cropping) */}
+                                    {/* ✅ FIX 5: Original Aspect Ratio (objectFit: contain) */}
                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {isVid ? (
                                             <video 
@@ -306,17 +313,16 @@ const TrendingFeed = ({ type, onClose }) => {
                                     {/* Content Info (Left Bottom) */}
                                     <div style={{ position: 'absolute', bottom: '30px', left: '15px', right: '80px', zIndex: 5, color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
                                         
-                                        {/* ADVERTISEMENT VS NORMAL POST UI */}
                                         {item.isAdvertisement ? (
                                             <>
                                                 <h3 style={{margin: '0 0 5px 0', fontSize: '20px', color: '#f1c40f'}}>{item.title}</h3>
-                                                <button onClick={() => window.open(item.actionLink, '_blank')} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '25px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', marginTop: '10px', width: '100%', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}>
+                                                <button onClick={(e) => { e.stopPropagation(); window.open(item.actionLink, '_blank'); }} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '25px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', marginTop: '10px', width: '100%', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}>
                                                     Learn More ↗️
                                                 </button>
                                             </>
                                         ) : (
                                             <>
-                                                <div onClick={() => openStudioProfile(item.studioMobile)} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer'}}>
+                                                <div onClick={(e) => openStudioProfile(e, item.studioMobile)} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer'}}>
                                                     <div style={{width: '35px', height: '35px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', color: '#000', border: '2px solid #fff'}}>
                                                         {(item.studioName || 'S')[0].toUpperCase()}
                                                     </div>
@@ -327,15 +333,18 @@ const TrendingFeed = ({ type, onClose }) => {
                                                 </div>
                                                 
                                                 <p style={{margin: '0 0 10px 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9}}>
-                                                    {item.description && item.description.length > maxChars && !isExpanded ? item.description.substring(0, maxChars) + '...' : (item.description || "Check out this beautiful shot! ✨")}
-                                                    {item.description && item.description.length > maxChars && !isExpanded && (
-                                                        <span onClick={() => setExpandedTextIndex(index)} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}>Read More</span>
+                                                    {displayDesc}
+                                                    {showReadMore && !isExpanded && (
+                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(index); }} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}> Read More</span>
+                                                    )}
+                                                    {showReadMore && isExpanded && (
+                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(null); }} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}> Show Less</span>
                                                     )}
                                                 </p>
 
                                                 <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                                    <button onClick={() => handleAddToCart(item)} style={{ flex: 1, background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid #fff', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', backdropFilter: 'blur(5px)' }}>🛒 Add to Cart</button>
-                                                    <button onClick={() => handleDirectBook(item)} disabled={bookingLoading} style={{ flex: 1.5, background: 'linear-gradient(90deg, #f1c40f, #f39c12)', color: '#000', border: 'none', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: bookingLoading ? 'not-allowed' : 'pointer', animation: 'pulse 2s infinite' }}>
+                                                    <button onClick={(e) => handleAddToCart(e, item)} style={{ flex: 1, background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid #fff', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', backdropFilter: 'blur(5px)' }}>🛒 Add to Cart</button>
+                                                    <button onClick={(e) => handleDirectBook(e, item)} disabled={bookingLoading} style={{ flex: 1.5, background: 'linear-gradient(90deg, #f1c40f, #f39c12)', color: '#000', border: 'none', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: bookingLoading ? 'not-allowed' : 'pointer', animation: 'pulse 2s infinite' }}>
                                                         {bookingLoading ? '⏳ Wait...' : `⚡ Book @ ₹${item.price || 5000}`}
                                                     </button>
                                                 </div>
@@ -345,17 +354,17 @@ const TrendingFeed = ({ type, onClose }) => {
 
                                     {/* Action Bar (Right Side) */}
                                     <div style={{ position: 'absolute', bottom: '50px', right: '15px', zIndex: 5, display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
-                                        <div onClick={() => handleLike(index)} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
+                                        <div onClick={(e) => { e.stopPropagation(); handleLike(index); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
                                             <div style={{fontSize: '28px', transform: item.isLiked ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s'}}>{item.isLiked ? '❤️' : '🤍'}</div>
                                             <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.likes || '1.2k'}</span>
                                         </div>
                                         {!item.isAdvertisement && (
-                                            <div onClick={() => alert("Comments phase 2")} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
+                                            <div onClick={(e) => { e.stopPropagation(); alert("Comments phase 2"); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
                                                 <div style={{fontSize: '28px'}}>💬</div>
                                                 <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.commentsCount || 45}</span>
                                             </div>
                                         )}
-                                        <div onClick={() => handleShare(item)} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
+                                        <div onClick={(e) => { e.stopPropagation(); handleShare(item); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
                                             <div style={{fontSize: '28px'}}>↗️</div>
                                             <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.shares || 12}</span>
                                         </div>
@@ -379,11 +388,11 @@ const TrendingFeed = ({ type, onClose }) => {
                 </div>
             </div>
 
-            {/* ✅ STUDIO PROFILE POPUP MODAL */}
+            {/* ✅ FIX 6: STUDIO PROFILE POPUP (Z-Index increased drastically to overlap everything) */}
             {selectedStudio && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
-                    <div style={{ background: '#fff', width: '90%', maxWidth: '350px', borderRadius: '20px', padding: '30px', textAlign: 'center', position: 'relative', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-                        <button onClick={() => setSelectedStudio(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: '#eee', border: 'none', width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px', cursor: 'pointer' }}>✖</button>
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)' }} onClick={(e) => e.stopPropagation()}>
+                    <div style={{ background: '#fff', width: '90%', maxWidth: '350px', borderRadius: '20px', padding: '30px', textAlign: 'center', position: 'relative', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', zIndex: 10000000 }}>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ position: 'absolute', top: '15px', right: '15px', background: '#eee', color: '#333', border: 'none', width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px', cursor: 'pointer' }}>✖</button>
                         
                         <div style={{ width: '80px', height: '80px', background: 'linear-gradient(45deg, #3498db, #8e44ad)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', color: '#fff', fontWeight: 'bold', border: '4px solid #fdfdfd', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                             {(selectedStudio.studioName || 'S')[0].toUpperCase()}
@@ -401,7 +410,7 @@ const TrendingFeed = ({ type, onClose }) => {
                             <p style={{ background: '#f4f6f7', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#95a5a6' }}>No portfolio link available.</p>
                         )}
 
-                        <button onClick={() => setSelectedStudio(null)} style={{ width: '100%', padding: '12px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ width: '100%', padding: '12px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
                     </div>
                 </div>
             )}
