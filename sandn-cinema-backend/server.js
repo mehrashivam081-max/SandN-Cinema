@@ -5,6 +5,8 @@ require('dotenv').config();
 const axios = require('axios'); 
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'sandn_cinema_super_secret_key_2024';
 
 // ✅ Added New Models Here
 const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require('./models');
@@ -472,6 +474,19 @@ app.post('/api/auth/create-password', async (req, res) => {
     } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
 });
 
+// ==========================================
+// 🔒 SECURE LOGIN & SESSION ROUTES (JWT)
+// ==========================================
+
+// Helper Function to Generate JWT
+const generateToken = (userData) => {
+    return jwt.sign(
+        { mobile: userData.mobile, role: userData.role }, 
+        JWT_SECRET, 
+        { expiresIn: '7d' } // Token expires in 7 days
+    );
+};
+
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
     const identifier = getCleanMobile(req.body.mobile); 
@@ -479,14 +494,18 @@ app.post('/api/auth/login-otp', async (req, res) => {
     
     if(identifier === "0000000000CODEIS*@OWNER*" && otpStore[identifier] === otp) {
         delete otpStore[identifier];
-        return res.json({ success: true, user: { name: "Owner", mobile: identifier, role: "ADMIN" } });
+        const userObj = { name: "Owner", mobile: identifier, role: "ADMIN" };
+        const token = generateToken(userObj);
+        return res.json({ success: true, token, user: userObj });
     }
 
     if (otpStore[identifier] === otp) { 
         delete otpStore[identifier];
         const account = await findAccount(identifier, roleFilter); 
         if(account) {
-            res.json({ success: true, user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type } });
+            const userObj = { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type };
+            const token = generateToken(userObj);
+            res.json({ success: true, token, user: userObj });
         } else {
             res.json({ success: false, message: "Account not found" });
         }
@@ -502,16 +521,38 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const account = await findAccount(identifier, roleFilter); 
         if (account && account.data.password === password) {
-            res.json({
-                success: true,
-                user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type, email: account.data.email, isFeedApproved: account.data.isFeedApproved }
-            });
+            const userObj = { 
+                name: account.data.name || account.data.ownerName, 
+                mobile: account.data.mobile, 
+                role: account.type, 
+                email: account.data.email, 
+                isFeedApproved: account.data.isFeedApproved 
+            };
+            const token = generateToken(userObj);
+            res.json({ success: true, token, user: userObj });
         } else {
             res.json({ success: false, message: "Invalid Password or Role" });
         }
     } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
+// 🔒 NEW: Verify Session (Anti-Hack Route)
+app.post('/api/auth/verify-session', (req, res) => {
+    const { token, roleExpected } = req.body;
+    
+    if (!token) return res.json({ success: false, message: "No token provided" });
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) return res.json({ success: false, message: "Invalid or Expired Session" });
+        
+        // Extra Security: Check if hacker changed role in local storage
+        if (roleExpected && decoded.role !== roleExpected) {
+            return res.json({ success: false, message: "Role mismatch detected!" });
+        }
+        
+        res.json({ success: true, valid: true, user: decoded });
+    });
+});
 
 // ==============================================================
 // ✅ 8. UPLOAD LOGIC (MULTER - LOCAL) WITH SUBFOLDERS
