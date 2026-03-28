@@ -4,7 +4,6 @@ import axios from 'axios'; // ✅ AXIOS IMPORTED
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
-import axios from 'axios';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
