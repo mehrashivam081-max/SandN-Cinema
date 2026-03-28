@@ -85,7 +85,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const calculatedTotal = accounts.length * 1500; 
     const [incomeData, setIncomeData] = useState({ total: calculatedTotal, transactions: [] });
 
-    // ✅ MANAGE SERVICES STATES (Updated for Discount & Offer)
+    // ✅ MANAGE SERVICES STATES 
     const [newService, setNewService] = useState({ title: '', shortDescription: '', fullDescription: '', startingPrice: '', features: '', discountPercentage: '', offerText: '' });
     const [serviceImage, setServiceImage] = useState(null);
     const [availableServices, setAvailableServices] = useState([]);
@@ -95,12 +95,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [showProposalModal, setShowProposalModal] = useState(false);
     const [proposalData, setProposalData] = useState({ bookingId: '', clientName: '', deliverables: '', totalPrice: '', advanceAmount: '', terms: '', expiryHours: '24' });
 
-    // ✅ NEW: DENIAL MODAL STATES
+    // ✅ DENIAL MODAL STATES
     const [showDenyModal, setShowDenyModal] = useState(false);
     const [bookingToDeny, setBookingToDeny] = useState(null);
     const [denyReason, setDenyReason] = useState('Booking session full.');
     const [customDenyReason, setCustomDenyReason] = useState('');
     const PRESET_DENY_REASONS = ['Booking session full.', 'Equipment not available.', 'Venue booking conflicts.', 'Service area not covered.', 'Other Custom logic...'];
+
+    // 📣 NEW: SMART AD MANAGER STATES
+    const [adForm, setAdForm] = useState({ title: '', location: 'ALL', interest: 'ALL', link: '', maxViews: '0' });
+    const [adFile, setAdFile] = useState(null);
+    const [adList, setAdList] = useState([]);
+    const [fetchingAds, setFetchingAds] = useState(false);
 
     // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
     useEffect(() => {
@@ -117,27 +123,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     // ✅ SMART BACK BUTTON FOR OWNER DASHBOARD
     useBackButton(() => {
-        if (showDenyModal) {
-            setShowDenyModal(false);
-        } else if (showProposalModal) {
-            setShowProposalModal(false);
-        } else if (showLogoutPopup) {
-            setShowLogoutPopup(false);
-        } else if (globalRemoveUserObj) {
-            setGlobalRemoveUserObj(null);
-        } else if (activeTab === 'UPLOAD' && uploadSubTab === 'CHARGES') {
-            setUploadSubTab('LIMITS');
-        } else if (activeTab === 'UPLOAD' && uploadSubTab === 'LIMITS') {
-            setUploadSubTab('BASIC');
-        } else if (activeTab !== 'DASHBOARD') {
-            setActiveTab('DASHBOARD');
-        } else {
-            // 👈 Yahan pehle setShowLogoutPopup tha, jise fix kar diya hai
-            setShowExitPopup(true); 
-        }
+        if (showDenyModal) setShowDenyModal(false);
+        else if (showProposalModal) setShowProposalModal(false);
+        else if (showLogoutPopup) setShowLogoutPopup(false);
+        else if (globalRemoveUserObj) setGlobalRemoveUserObj(null);
+        else if (activeTab === 'UPLOAD' && uploadSubTab === 'CHARGES') setUploadSubTab('LIMITS');
+        else if (activeTab === 'UPLOAD' && uploadSubTab === 'LIMITS') setUploadSubTab('BASIC');
+        else if (activeTab !== 'DASHBOARD') setActiveTab('DASHBOARD');
+        else setShowExitPopup(true); 
     });
 
-    // ✅ FEATURE 3: ENTER KEY SUPPORT HELPER
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -151,7 +146,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchPlatformSettings(); 
         fetchBookings();         
         fetchCollabs();
-        fetchServices(); // Fetch active services        
+        fetchServices(); 
+        fetchAds(); // Fetch active Ads
 
         const syncAdminData = async () => {
             try {
@@ -231,6 +227,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
         try { const res = await axios.get(`${API_BASE}/get-available-services`); if (res.data.success) setAvailableServices(res.data.data || []); } catch(e) {} 
     };
 
+    const fetchAds = async () => {
+        setFetchingAds(true);
+        try {
+            const res = await axios.post(`${API_BASE}/get-targeted-ads`, { userLocation: '', userInterest: '' });
+            if (res.data.success) setAdList(res.data.data || []);
+        } catch(e) { console.error("Failed to fetch ads"); }
+        setFetchingAds(false);
+    };
+
     // ==========================================
     // 🚀 HELPERS
     // ==========================================
@@ -258,6 +263,82 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
     };
     const removeDp = () => { setAdminDp(''); localStorage.removeItem('adminDp'); };
+
+    // ==========================================
+    // 🚀 AD MANAGER LOGIC (NEW)
+    // ==========================================
+    const handleAdSubmit = async (e) => {
+        e.preventDefault();
+        if(!adFile) return alert("Please select an Image or Video file for the Ad.");
+        if(!adForm.title) return alert("Please enter an Ad Title.");
+
+        setLoading(true);
+        setUploadProgress(0);
+        setUploadSpeed('Uploading Ad Media...');
+        
+        try {
+            // 1. Upload Media to Cloudinary
+            const fd = new FormData();
+            fd.append('file', adFile);
+            fd.append('upload_preset', 'xgujeuol'); 
+            
+            const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(Math.min(percentCompleted, 99));
+                }
+            });
+            
+            const fileUrl = cloudRes.data.secure_url;
+            const fileType = fileUrl.match(/\.(mp4|mov|avi|wmv|webm)$/i) ? 'video' : 'image';
+
+            setUploadProgress(100);
+            setUploadSpeed('Publishing Ad Campaign...');
+
+            // 2. Save Ad to Database
+            const payload = {
+                title: adForm.title,
+                file: fileUrl,
+                fileType: fileType,
+                targetLocation: adForm.location || 'ALL',
+                targetInterest: adForm.interest || 'ALL',
+                actionLink: adForm.link,
+                maxViews: parseInt(adForm.maxViews) || 0
+            };
+
+            const res = await axios.post(`${API_BASE}/upload-ad`, payload);
+            
+            if(res.data.success) {
+                alert("✅ Smart Ad Published Successfully!");
+                fetchAds();
+                setAdForm({ title: '', location: 'ALL', interest: 'ALL', link: '', maxViews: '0' });
+                setAdFile(null);
+                document.getElementById('ad-file-input').value = '';
+            } else {
+                alert("Failed to publish Ad: " + res.data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error uploading Ad. Please check connection.");
+        } finally {
+            setLoading(false);
+            setUploadProgress(0);
+            setUploadSpeed('');
+        }
+    };
+
+    const handleDeleteAd = async (adId) => {
+        if(!window.confirm("Are you sure you want to permanently delete this Ad campaign?")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/delete-ad`, { adId });
+            if(res.data.success) {
+                alert("🗑️ Ad Deleted Successfully.");
+                fetchAds();
+            }
+        } catch (e) {
+            alert("Error deleting ad.");
+        }
+    };
 
     // ==========================================
     // 🚀 UPLOAD DATA LOGIC
@@ -319,31 +400,25 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
-    // 🚀 CLOUDINARY UPLOAD WITH SMART DATE FOLDER LOGIC
-    const handleAddManualUser = async (e) => {
-        if(e) e.preventDefault(); 
-        if (formData.mobile.length !== 10) return alert("Valid 10-digit mobile required!");
-        if (formData.files.length === 0) return alert("Please select files to upload.");
-        
-        // ✅ Calculate Final Folder Name dynamically based on Date Checkbox
-        let baseFolder = formData.folderName.trim() || 'Stranger Photography';
-        let submitFolderName = baseFolder;
-        if (useDateFolder) {
-            const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
-            submitFolderName = `${baseFolder} ➔ ${dateStr}`;
+ // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
+    const handleUpload = async (isFeed = false) => {
+        if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
+        const currentFiles = isFeed ? feedFiles : files;
+        if (currentFiles.length === 0) return alert("Please select files to upload.");
+
+        let baseFolder = folderName.trim() || 'Stranger Photography';
+        let targetSubFolder = '';
+        if (useDateFolder && !isFeed) {
+            targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
         }
-        const displayFolder = submitFolderName;
-
-        const expiryText = formData.expiryDays === '0' ? 'Never' : `${formData.expiryDays} Days`;
-        if (!window.confirm(`Upload Data for ${formData.name || formData.mobile}?\n\nTarget Folder: 📂 ${displayFolder}\nFolder Expiry: ${expiryText}\nImage Cost: ${formData.imageCost} Coins\nVideo Cost: ${formData.videoCost} Coins\nUnlock Validity: ${formData.unlockValidity}`)) return;
-
+        
         setLoading(true);
         setUploadProgress(0);
-        setUploadSpeed('Starting Upload...');
+        setUploadSpeed('Preparing 5x Speed Upload...');
         setUploadETA('Calculating...');
 
-        const totalBytes = formData.files.reduce((acc, file) => acc + file.size, 0);
-        const loadedBytesArray = new Array(formData.files.length).fill(0);
+        const totalBytes = currentFiles.reduce((acc, file) => acc + file.size, 0);
+        const loadedBytesArray = new Array(currentFiles.length).fill(0);
         const uploadedUrls = [];
 
         let startTime = Date.now();
@@ -351,93 +426,144 @@ const OwnerDashboard = ({ user, onLogout }) => {
         let lastTotalLoaded = 0;
 
         try {
-            // STEP 1: UPLOAD TO CLOUDINARY
-            for (let i = 0; i < formData.files.length; i++) {
-                const file = formData.files[i];
-                const fd = new FormData();
-                fd.append('file', file);
-                fd.append('upload_preset', 'xgujeuol'); 
-
-                const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                    onUploadProgress: (progressEvent) => {
-                        const { loaded } = progressEvent;
-                        loadedBytesArray[i] = loaded;
-
-                        const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
-                        const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
-                        setUploadProgress(Math.min(percentCompleted, 99));
-
-                        const currentTime = Date.now();
-                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
-
-                        if (timeElapsedLimit > 0.5) {
-                            const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
-                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                            const speedKbps = speedBps / 1024;
-                            const speedMbps = speedKbps / 1024;
-
-                            if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
-                            else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
-
-                            const bytesRemaining = totalBytes - totalLoaded;
-                            const etaSeconds = bytesRemaining / speedBps;
-
-                            if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                            else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
-                            else setUploadETA(`Almost done...`);
-
-                            lastTotalLoaded = totalLoaded;
-                            lastTime = currentTime;
-                        }
-                    }
-                });
+            // ✅ ENTERPRISE UPGRADE: Chunked Parallel Uploads (5 files at a time)
+            const CONCURRENT_UPLOADS = 5; 
+            
+            for (let i = 0; i < currentFiles.length; i += CONCURRENT_UPLOADS) {
+                const chunk = currentFiles.slice(i, i + CONCURRENT_UPLOADS);
                 
-                uploadedUrls.push(res.data.secure_url);
+                const uploadPromises = chunk.map(async (file, index) => {
+                    const globalIndex = i + index;
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('upload_preset', 'xgujeuol'); 
+
+                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                        onUploadProgress: (progressEvent) => {
+                            const { loaded } = progressEvent;
+                            loadedBytesArray[globalIndex] = loaded;
+
+                            const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
+                            const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
+                            setUploadProgress(Math.min(percentCompleted, 99)); 
+
+                            const currentTime = Date.now();
+                            const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+
+                            if (timeElapsedLimit > 0.5) {
+                                const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
+                                const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                                const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+
+                                setUploadSpeed(`${speedMbps} MB/s (Turbo Mode 🚀)`);
+
+                                const bytesRemaining = totalBytes - totalLoaded;
+                                const etaSeconds = bytesRemaining / speedBps;
+
+                                if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                                else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
+                                else setUploadETA(`Almost done...`);
+
+                                lastTotalLoaded = totalLoaded;
+                                lastTime = currentTime;
+                            }
+                        }
+                    });
+                    return res.data.secure_url;
+                });
+
+                // Wait for the chunk of 5 to finish before starting the next 5
+                const chunkResults = await Promise.all(uploadPromises);
+                uploadedUrls.push(...chunkResults);
             }
 
-            // STEP 2: SEND LINKS TO BACKEND TO SAVE
             setUploadProgress(100);
             setUploadSpeed('Finalizing...');
             setUploadETA('Saving Data to Server...');
 
-            const payloadData = {
-                type: formData.type,
-                name: formData.name,
-                mobile: formData.mobile,
-                email: formData.email, 
-                folderName: submitFolderName, 
-                expiryDays: formData.expiryDays,
-                downloadLimit: formData.downloadLimit,
-                addedBy: 'ADMIN',
-                fileUrls: uploadedUrls,
-                imageCost: formData.imageCost,
-                videoCost: formData.videoCost,
-                unlockValidity: formData.unlockValidity 
+            // ✅ IF UPLOADING TO PUBLIC FEED
+            if (isFeed) {
+                let finalExpiryHours = '';
+                if (feedExpiryType === 'custom') {
+                    finalExpiryHours = customExpiryHours;
+                } else if (feedExpiryType !== 'permanent') {
+                    finalExpiryHours = feedExpiryType;
+                }
+
+                const feedPayload = {
+                    mobile: studioProfile.mobile,
+                    studioName: studioProfile.studioName || user.ownerName,
+                    description: feedDescription,
+                    feedCategory: feedCategory,
+                    price: feedPrice,
+                    expiryHours: finalExpiryHours, 
+                    fileUrls: uploadedUrls 
+                };
+                
+                const backendRes = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload);
+                
+                if (backendRes.data.success) {
+                    setUploadETA('Complete!');
+                    setTimeout(() => {
+                        alert(`✅ Success: ${backendRes.data.message}`);
+                        setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
+                        setFeedFiles([]); setFeedPreviews([]);
+                        setFeedDescription(''); setFeedPrice(''); setFeedCategory('trending');
+                        setFeedExpiryType('permanent'); setCustomExpiryHours('');
+                        setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
+                        setLoading(false);
+                        fetchMyFeedPosts(); // Refresh the grid
+                    }, 500);
+                } else {
+                    alert(`❌ Error: ${backendRes.data.message}`); 
+                    setLoading(false);
+                }
+                return; 
+            }
+
+            // Normal Client Data Payload
+            const payload = {
+                mobile: clientMobile,
+                name: clientName || 'Client',
+                type: 'USER',
+                folderName: baseFolder,
+                subFolderName: targetSubFolder, 
+                email: clientEmail,
+                expiryDays: expiryDays,
+                downloadLimit: downloadLimit,
+                addedBy: user.mobile,
+                fileUrls: uploadedUrls 
             };
 
-            const res = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData);
-            
-            if (res.data.success) {
+            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
+
+            if (backendRes.data.success) {
                 setUploadETA('Complete!');
                 setTimeout(() => {
-                    alert(`✅ Success: Data saved in folder "${displayFolder}"\n📩 Notifications triggered!`);
-                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' }); 
-                    setPreviews([]); 
-                    setIsEmailLocked(false);
-                    setUseDateFolder(false); // Reset checkbox
-                    setFileStats({ photos: 0, videos: 0 });
-                    document.getElementById('admin-file-input').value = '';
-                    setUploadSubTab('BASIC');
-                    fetchAccounts();
+                    alert(`✅ Success: ${backendRes.data.message}\n📩 Notification sent!`);
+                    
+                    setUploadProgress(0);
+                    setUploadSpeed('');
+                    setUploadETA('');
+
+                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
+                    setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
+                    setFiles([]);
+                    document.getElementById('file-input-field').value = '';
+                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    
+                    fetchClients();
+                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
                     setLoading(false);
                 }, 500);
             } else { 
-                alert(res.data.message); 
+                alert(`❌ Error from Database: ${backendRes.data.message}`); 
                 setLoading(false);
             }
         } catch (error) { 
-            alert("Upload Error. Please check your internet connection."); 
-            setLoading(false); 
+            alert("Upload Failed. Check internet connection."); 
+            console.error(error);
+            setLoading(false);
         } 
     };
 
@@ -781,7 +907,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ NEW: EMERGENCY ROW CSS */}
+            {/* ✅ EMERGENCY ROW CSS */}
             <style>{`
                 @keyframes pulse-red {
                     0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
@@ -919,7 +1045,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     <p style={{ margin: 0, fontSize: '13px', color: '#4dabf7', fontWeight: 'bold' }}>{adminProfile.name}</p>
                 </div>
 
-                {/* ✅ NEW: CATEGORIZED DROPDOWN SIDEBAR */}
                 <ul className="sidebar-menu">
                     
                     {/* 🌍 GLOBAL PLATFORM */}
@@ -936,6 +1061,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_REMOVE')}>🗑️ Global Remove</li>
                                 <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
                                 <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
+                                {/* 📣 NEW ADS TAB */}
+                                <li className={activeTab === 'ADS' ? 'active' : ''} onClick={() => setActiveTab('ADS')} style={{color: '#f1c40f'}}>📣 Ad Manager</li>
                                 <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income</li>
                             </div>
                         )}
@@ -1026,6 +1153,105 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <h3 style={{margin: 0, fontSize: '28px', color: 'white'}}>{availableServices.length}</h3>
                                 <p style={{margin: '5px 0 0 0', fontSize: '14px', color: 'white', fontWeight: 'bold'}}>Total Services</p>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 📣 NEW: SMART AD MANAGER TAB */}
+                {activeTab === 'ADS' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>📣 Smart Ad Manager</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Create targeted ads or promotions that automatically inject into user feeds.</p>
+
+                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+                            <form onSubmit={handleAdSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Ad Campaign Title</label>
+                                        <input type="text" placeholder="e.g. Diwali Mega Sale" value={adForm.title} onChange={e => setAdForm({...adForm, title: e.target.value})} className="custom-admin-input" required/>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Media (Image/Video)</label>
+                                        <input type="file" accept="image/*,video/*" onChange={e => setAdFile(e.target.files[0])} className="custom-admin-input" id="ad-file-input" style={{padding: '9px'}} required/>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '15px', background: '#f4f6f9', padding: '15px', borderRadius: '8px', border: '1px dashed #3498db' }}>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Location</label>
+                                        <input type="text" placeholder="e.g. Mumbai (or ALL)" value={adForm.location} onChange={e => setAdForm({...adForm, location: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}/>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Interest (Category)</label>
+                                        <select value={adForm.interest} onChange={e => setAdForm({...adForm, interest: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}>
+                                            <option value="ALL">ALL (Global)</option>
+                                            <option value="trending">🔥 Trending</option>
+                                            <option value="viral">🚀 Viral</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div style={{flex: 2}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Action Link (On Click)</label>
+                                        <input type="url" placeholder="https://..." value={adForm.link} onChange={e => setAdForm({...adForm, link: e.target.value})} className="custom-admin-input" />
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Max Views Limit</label>
+                                        <input type="number" placeholder="0 = Unlimited" value={adForm.maxViews} onChange={e => setAdForm({...adForm, maxViews: e.target.value})} className="custom-admin-input" />
+                                    </div>
+                                </div>
+
+                                {loading && (
+                                    <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
+                                            <span>{uploadSpeed} {uploadProgress}%</span>
+                                        </div>
+                                        <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #f39c12, #e74c3c)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#f39c12', padding: '15px', marginTop: '10px' }}>
+                                    {loading ? 'Publishing Ad...' : '🚀 Publish Smart Ad Campaign'}
+                                </button>
+                            </form>
+                        </div>
+
+                        <h3 style={{ padding: '15px' }}>📊 Live Advertisement Campaigns</h3>
+                        <div className="data-table-container">
+                            <table className="admin-table">
+                                <thead><tr><th>Preview</th><th>Ad Title</th><th>Targeting</th><th>Views (Current / Limit)</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    {fetchingAds ? <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>Loading Ads...</td></tr> : 
+                                    adList.length > 0 ? adList.map((ad, idx) => (
+                                        <tr key={idx} style={{ opacity: ad.isActive ? 1 : 0.6 }}>
+                                            <td style={{width: '60px'}}>
+                                                {ad.fileType === 'video' ? 
+                                                    <video src={getCleanUrl(ad.file)} style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'5px'}} /> :
+                                                    <img src={getCleanUrl(ad.file)} style={{width:'50px', height:'50px', objectFit:'cover', borderRadius:'5px'}} />
+                                                }
+                                            </td>
+                                            <td>
+                                                <strong>{ad.title}</strong><br/>
+                                                <a href={ad.actionLink} target="_blank" style={{fontSize:'10px', color:'#3498db'}}>View Link</a>
+                                            </td>
+                                            <td style={{fontSize:'12px'}}>
+                                                📍 {ad.targetLocation}<br/>
+                                                🎯 {ad.targetInterest}
+                                            </td>
+                                            <td>
+                                                <strong style={{color: '#27ae60'}}>{ad.currentViews}</strong> / {ad.maxViews === 0 ? '∞' : ad.maxViews}
+                                                <br/><span style={{fontSize:'10px', color: ad.isActive ? '#2ecc71' : '#e74c3c'}}>{ad.isActive ? 'Active' : 'Completed'}</span>
+                                            </td>
+                                            <td>
+                                                <button onClick={() => handleDeleteAd(ad._id)} className="pdf-btn" style={{background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer'}}>Delete</button>
+                                            </td>
+                                        </tr>
+                                    )) : <tr><td colSpan="5" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No Ads currently running.</td></tr>}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
@@ -1520,7 +1746,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🔴 TAB: BOOKINGS (WITH EMERGENCY HIGHLIGHT & SEND PROPOSAL) */}
+                {/* 🔴 TAB: BOOKINGS */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
                         <div className="section-header"><h2>📅 Direct Bookings & Emergencies</h2></div>
@@ -1581,7 +1807,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <div className="setting-card" style={{background: '#fcf3cf'}}>
                                 <h3 style={{color:'#d4ac0d'}}>📢 Business & Ads</h3>
                                 <p>Manage homepage banners and promotions.</p>
-                                <button className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px' }}>Manage Ad Banners</button>
+                                <button onClick={() => setActiveTab('ADS')} className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px' }}>Manage Ad Banners</button>
                             </div>
                         </div>
 

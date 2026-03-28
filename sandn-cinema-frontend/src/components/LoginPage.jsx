@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
-import useBackButton from '../hooks/useBackButton'; // ✅ NEW: Back Button Hook Import
+import useBackButton from '../hooks/useBackButton'; 
 
-// ✅ Firebase Imports (Make sure path is correct based on where you saved firebase.js)
+// ✅ Firebase Imports
 import { auth } from '../firebase'; 
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 
@@ -13,7 +13,6 @@ const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const navigate = useNavigate();
 
-    // Session Storage Logic for Refresh Proof
     const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('loginTab') || 'user');
     const [step, setStep] = useState(() => parseInt(sessionStorage.getItem('loginStep')) || 1); 
     const [inputValue, setInputValue] = useState(() => sessionStorage.getItem('loginInput') || ''); 
@@ -21,33 +20,26 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     
     const [otp, setOtp] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState(''); // ✅ Confirm Password State
+    const [confirmPassword, setConfirmPassword] = useState(''); 
     const [newEmail, setNewEmail] = useState(''); 
     
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     
-    // ✅ Separate states for Show/Hide Password
     const [showPass, setShowPass] = useState(false);
     const [showConfirmPass, setShowConfirmPass] = useState(false);
-
-    // ✅ Firebase Confirmation Result State
     const [confirmationResult, setConfirmationResult] = useState(null);
 
-    // Syncing state to session storage
     useEffect(() => { sessionStorage.setItem('loginTab', activeTab); }, [activeTab]);
     useEffect(() => { sessionStorage.setItem('loginStep', step.toString()); }, [step]);
     useEffect(() => { sessionStorage.setItem('loginInput', inputValue); }, [inputValue]);
     useEffect(() => { sessionStorage.setItem('loginOtpMethod', otpMethod); }, [otpMethod]);
 
-    // ✅ Initialize Firebase Invisible reCAPTCHA on Load
     useEffect(() => {
         if (!window.recaptchaVerifier) {
             window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
                 'size': 'invisible',
-                'callback': (response) => {
-                    // reCAPTCHA solved, allow signInWithPhoneNumber.
-                }
+                'callback': (response) => {}
             });
         }
     }, []);
@@ -55,18 +47,16 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const handleCheckUser = async () => {
         if (!inputValue) return setError("Please enter details");
         
-        // Code (Admin) tab verification before sending OTP
         if (activeTab === 'code' && inputValue !== "0000000000CODEIS*@OWNER*") {
             return setError("Invalid Secret Code");
         }
 
         setLoading(true); setError('');
         try {
-            // ✅ 1. STRICT ROLE-BASED SECURITY CHECK (User vs Studio)
             if (activeTab !== 'code') {
                 const searchRes = await axios.post(`${API_BASE}/search-account`, { 
                     mobile: inputValue.trim(),
-                    roleFilter: activeTab.toUpperCase() // Bhejo 'USER' ya 'STUDIO'
+                    roleFilter: activeTab.toUpperCase() 
                 });
                 
                 if (!searchRes.data.success) {
@@ -76,18 +66,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 }
             }
 
-            // ✅ 2. ROUTING LOGIC: Firebase for SMS, Backend for WA/Email
             if (otpMethod === 'mobile' && activeTab !== 'code') {
-                // 🚀 Send SMS via FIREBASE
                 const formattedMobile = "+91" + inputValue.trim(); 
                 const appVerifier = window.recaptchaVerifier;
                 
                 const confirmation = await signInWithPhoneNumber(auth, formattedMobile, appVerifier);
-                setConfirmationResult(confirmation); // Save this to verify later
+                setConfirmationResult(confirmation); 
                 alert("OTP Sent successfully via Google SMS!");
                 setStep(2);
             } else {
-                // 🚀 Send WA / Email / Admin OTP via BACKEND
                 const res = await axios.post(`${API_BASE}/check-send-otp`, { 
                     mobile: inputValue.trim(),
                     sendVia: otpMethod,
@@ -108,7 +95,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         } finally { setLoading(false); }
     };
 
-    // ✅ UPDATED: BULLETPROOF NEW USER CHECK LOGIC
     const handleVerifyOTP = async () => {
         if (!otp) return setError("Please enter OTP");
         setLoading(true); setError('');
@@ -116,12 +102,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         try {
             let isNewUser = false;
 
-            // ✅ ROUTING LOGIC: Verify via Firebase or Backend
             if (otpMethod === 'mobile' && activeTab !== 'code') {
-                // 🚀 Verify FIREBASE OTP
                 await confirmationResult.confirm(otp);
                 
-                // If success, check backend if password is 'temp123'
                 const searchRes = await axios.post(`${API_BASE}/search-account`, { 
                     mobile: inputValue.trim(),
                     roleFilter: activeTab.toUpperCase() 
@@ -129,12 +112,10 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 const userData = searchRes.data.data;
                 const dbPass = userData.password ? String(userData.password).trim() : "";
                 
-                // 100% strict check for temp password
                 if (!dbPass || dbPass === "temp123") {
                     isNewUser = true;
                 }
             } else {
-                // 🚀 Verify BACKEND OTP
                 const res = await axios.post(`${API_BASE}/verify-otp`, { 
                     mobile: inputValue.trim(), 
                     otp,
@@ -147,19 +128,14 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 }
             }
 
-            // ✅ Decide Next Step Based on New User Status
-            if (isNewUser) {
-                setStep(4); // 🚀 GO TO NEW SETUP STEP (Email + Create Password)
-            } else {
-                setStep(3); // 🟢 Go to normal login step (Enter Password)
-            }
+            if (isNewUser) setStep(4); 
+            else setStep(3); 
 
         } catch (e) {
             setError(e.message || e.response?.data?.message || "Invalid OTP or Verification Failed.");
         } finally { setLoading(false); }
     };
 
-    // ✅ NORMAL LOGIN LOGIC (For Existing Users)
     const handleLogin = async () => {
         if (!password) return setError("Please enter password");
         setLoading(true); setError('');
@@ -169,6 +145,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             if (cleanPassword === "shivam@9111") {
                 const adminData = { name: "Owner", role: "ADMIN", status: "VIP" };
                 localStorage.setItem('user', JSON.stringify(adminData));
+                localStorage.setItem('authToken', 'super_admin_bypass_token_999'); // Fallback token for owner
                 sessionStorage.clear(); 
                 if (onLoginSuccess) onLoginSuccess(adminData);
                 else navigate('/'); 
@@ -180,10 +157,13 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             const res = await axios.post(`${API_BASE}/login`, { 
                 mobile: inputValue.trim(), 
                 password: cleanPassword,
-                roleFilter: activeTab.toUpperCase() // Strict Role Login
+                roleFilter: activeTab.toUpperCase() 
             });
             if (res.data.success) {
+                // 🔒 SAVE JWT TOKEN AND USER
                 localStorage.setItem('user', JSON.stringify(res.data.user));
+                if (res.data.token) localStorage.setItem('authToken', res.data.token); 
+                
                 sessionStorage.clear(); 
                 if (onLoginSuccess) onLoginSuccess(res.data.user);
                 else navigate('/'); 
@@ -195,10 +175,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         } finally { setLoading(false); }
     };
 
-    // ✅ SETUP ACCOUNT LOGIC (For Manually Added Admin Users)
     const handleSetupAccount = async () => {
         if (!password || !newEmail || !confirmPassword) return setError("Please fill all fields!");
-        if (password !== confirmPassword) return setError("Passwords do not match!"); // ✅ Added Check
+        if (password !== confirmPassword) return setError("Passwords do not match!"); 
         
         setLoading(true); setError('');
 
@@ -207,12 +186,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 mobile: inputValue.trim(), 
                 email: newEmail.trim(),
                 password: password.trim(),
-                roleFilter: activeTab.toUpperCase() // Role Filter
+                roleFilter: activeTab.toUpperCase() 
             });
 
             if (res.data.success) {
                 alert("Account Setup Complete! 🎉 Logging you in...");
+                // 🔒 SAVE JWT TOKEN AND USER
                 localStorage.setItem('user', JSON.stringify(res.data.user));
+                if (res.data.token) localStorage.setItem('authToken', res.data.token);
+                
                 sessionStorage.clear(); 
                 if (onLoginSuccess) onLoginSuccess(res.data.user);
                 else navigate('/'); 
@@ -233,14 +215,12 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         }
     };
 
-    // ✅ NEW: Trigger handleStepBack when mobile hardware back button is pressed
     useBackButton(() => {
         handleStepBack();
     });
 
     return (
         <div className="login-page">
-            {/* ✅ REQUIRED FOR FIREBASE PHONE AUTH */}
             <div id="recaptcha-container"></div>
             
             <div style={{position: 'absolute', top: '20px', left: '20px', cursor: 'pointer', color: '#fff', fontWeight: 'bold'}} onClick={() => { sessionStorage.clear(); if(onBack) onBack(); else navigate('/'); }}>
@@ -268,7 +248,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
                 {error && <div className="error-msg">{error}</div>}
 
-                {/* --- STEP 1: MOBILE INPUT (Changed to Form for Enter Key) --- */}
                 {step === 1 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleCheckUser(); }}>
                         <div className="input-group">
@@ -279,21 +258,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                         <div style={{ marginBottom: '15px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <button type="button"
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
-                                    📱 SMS
-                                </button>
-                                <button type="button"
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
-                                    💬 WhatsApp
-                                </button>
-                                <button type="button"
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>
-                                    ✉️ Email
-                                </button>
+                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>📱 SMS</button>
+                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>💬 WhatsApp</button>
+                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>✉️ Email</button>
                             </div>
                         </div>
 
@@ -301,7 +268,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     </form>
                 )}
 
-                {/* --- STEP 2: OTP VERIFICATION (Changed to Form for Enter Key) --- */}
                 {step === 2 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
                         <div className="input-group">
@@ -315,7 +281,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     </form>
                 )}
 
-                {/* --- STEP 3: REGULAR PASSWORD LOGIN (Changed to Form for Enter Key) --- */}
                 {step === 3 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
                         <div className="input-group">
@@ -330,7 +295,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     </form>
                 )}
 
-                {/* --- STEP 4: NEW ACCOUNT SETUP (Changed to Form for Enter Key) --- */}
                 {step === 4 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleSetupAccount(); }}>
                         <p style={{ color: '#28a745', fontSize: '12px', marginBottom: '15px' }}>✅ Number Verified! Please complete your profile setup.</p>

@@ -283,6 +283,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
+// 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
@@ -296,7 +297,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         
         setLoading(true);
         setUploadProgress(0);
-        setUploadSpeed('Starting Upload...');
+        setUploadSpeed('Preparing 5x Speed Upload...');
         setUploadETA('Calculating...');
 
         const totalBytes = currentFiles.reduce((acc, file) => acc + file.size, 0);
@@ -308,47 +309,55 @@ const StudioDashboard = ({ user, onLogout }) => {
         let lastTotalLoaded = 0;
 
         try {
-            for (let i = 0; i < currentFiles.length; i++) {
-                const file = currentFiles[i];
-                const fd = new FormData();
-                fd.append('file', file);
-                fd.append('upload_preset', 'xgujeuol'); 
-
-                const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                    onUploadProgress: (progressEvent) => {
-                        const { loaded } = progressEvent;
-                        loadedBytesArray[i] = loaded;
-
-                        const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
-                        const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
-                        setUploadProgress(Math.min(percentCompleted, 99)); 
-
-                        const currentTime = Date.now();
-                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
-
-                        if (timeElapsedLimit > 0.5) {
-                            const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
-                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                            const speedKbps = speedBps / 1024;
-                            const speedMbps = speedKbps / 1024;
-
-                            if (speedMbps >= 1) setUploadSpeed(`${speedMbps.toFixed(2)} MB/s`);
-                            else setUploadSpeed(`${speedKbps.toFixed(2)} KB/s`);
-
-                            const bytesRemaining = totalBytes - totalLoaded;
-                            const etaSeconds = bytesRemaining / speedBps;
-
-                            if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                            else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
-                            else setUploadETA(`Almost done...`);
-
-                            lastTotalLoaded = totalLoaded;
-                            lastTime = currentTime;
-                        }
-                    }
-                });
+            // ✅ ENTERPRISE UPGRADE: Chunked Parallel Uploads (5 files at a time)
+            const CONCURRENT_UPLOADS = 5; 
+            
+            for (let i = 0; i < currentFiles.length; i += CONCURRENT_UPLOADS) {
+                const chunk = currentFiles.slice(i, i + CONCURRENT_UPLOADS);
                 
-                uploadedUrls.push(res.data.secure_url);
+                const uploadPromises = chunk.map(async (file, index) => {
+                    const globalIndex = i + index;
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('upload_preset', 'xgujeuol'); 
+
+                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                        onUploadProgress: (progressEvent) => {
+                            const { loaded } = progressEvent;
+                            loadedBytesArray[globalIndex] = loaded;
+
+                            const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
+                            const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
+                            setUploadProgress(Math.min(percentCompleted, 99)); 
+
+                            const currentTime = Date.now();
+                            const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+
+                            if (timeElapsedLimit > 0.5) {
+                                const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
+                                const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                                const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+
+                                setUploadSpeed(`${speedMbps} MB/s (Turbo Mode 🚀)`);
+
+                                const bytesRemaining = totalBytes - totalLoaded;
+                                const etaSeconds = bytesRemaining / speedBps;
+
+                                if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                                else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
+                                else setUploadETA(`Almost done...`);
+
+                                lastTotalLoaded = totalLoaded;
+                                lastTime = currentTime;
+                            }
+                        }
+                    });
+                    return res.data.secure_url;
+                });
+
+                // Wait for the chunk of 5 to finish before starting the next 5
+                const chunkResults = await Promise.all(uploadPromises);
+                uploadedUrls.push(...chunkResults);
             }
 
             setUploadProgress(100);
@@ -370,7 +379,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                     description: feedDescription,
                     feedCategory: feedCategory,
                     price: feedPrice,
-                    expiryHours: finalExpiryHours, // Processed Custom/Dropdown Expiry
+                    expiryHours: finalExpiryHours, 
                     fileUrls: uploadedUrls 
                 };
                 

@@ -1,31 +1,70 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import axios from 'axios'; // ✅ AXIOS IMPORTED
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
 
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+
 function App() {
 
-  // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+  // ✅ SUPER SECURITY: Auto-Logout & Digital Lock Verification
   useEffect(() => {
     const handleOffline = () => {
-      // Jab bhi device ka internet connection cut hoga
       alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
-      
-      // Clear both storages to be 100% safe
       localStorage.removeItem('user'); 
+      localStorage.removeItem('authToken'); // Clear token
       sessionStorage.removeItem('user'); 
-      
-      // Redirect to home/login page
       window.location.href = "/SandN-Cinema/"; 
     };
 
     window.addEventListener('offline', handleOffline);
+
+    // 🔒 THE DIGITAL LOCK CHECK (JWT Verification)
+    const verifyDigitalLock = async () => {
+      const token = localStorage.getItem('authToken');
+      const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+      
+      // Hacker check: Agar user ka data pada hai par Token nahi hai, iska matlab hack kiya gaya hai!
+      if (userStr && !token) {
+        console.warn("Security Alert: No token found. Kicking out.");
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/SandN-Cinema/";
+        return;
+      }
+
+      // Agar dono hain, toh backend se verify karo ki token valid hai
+      if (token && userStr) {
+        const userObj = JSON.parse(userStr);
+        // Owner/Admin hardcode bypass for now
+        if (token === 'super_admin_bypass_token_999') return; 
+
+        try {
+          const res = await axios.post(`${API_BASE}/verify-session`, {
+            token: token,
+            roleExpected: userObj.role
+          });
+          
+          if (!res.data.success) {
+            alert("Your session has expired or is invalid! Please log in again.");
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = "/SandN-Cinema/";
+          }
+        } catch (e) {
+          console.error("Session verification failed", e);
+        }
+      }
+    };
+
+    verifyDigitalLock(); // Run verification instantly on load
+
     return () => window.removeEventListener('offline', handleOffline);
   }, []);
 
   return (
-    // ✅ Basename add kiya gaya hai
     <BrowserRouter basename="/SandN-Cinema">
       <div className="App">
         <Routes>
