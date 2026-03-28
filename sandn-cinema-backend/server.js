@@ -487,6 +487,31 @@ const generateToken = (userData) => {
     );
 };
 
+// ==========================================
+// 🔒 THE DIGITAL BOUNCER (JWT MIDDLEWARE)
+// ==========================================
+const authenticateToken = (req, res, next) => {
+    // 1. Get the token from headers
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Format: "Bearer <token>"
+
+    // 2. If no token, kick them out!
+    if (!token) {
+        return res.json({ success: false, message: "Access Denied: 🛑 No Security Token Found!" });
+    }
+
+    // 3. Verify the token is real and not tampered with
+    jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
+        if (err) {
+            return res.json({ success: false, message: "Access Denied: 🛑 Invalid or Expired Token!" });
+        }
+        
+        // 4. Token is real! Attach user data to request and let them in
+        req.user = decodedUser; 
+        next(); // Go to the actual route
+    });
+};
+
 // 6. Login via OTP
 app.post('/api/auth/login-otp', async (req, res) => {
     const identifier = getCleanMobile(req.body.mobile); 
@@ -698,7 +723,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 // ==============================================================
 // 🚀 CLOUDINARY FAST UPLOAD ROUTE
 // ==============================================================
-app.post('/api/auth/admin-add-user-cloud', async (req, res) => {
+app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity } = req.body; 
 
@@ -838,7 +863,7 @@ app.post('/api/auth/list-accounts', async (req, res) => {
 });
 
 // 10. Delete an Account
-app.post('/api/auth/delete-account', async (req, res) => {
+app.post('/api/auth/delete-account', authenticateToken, async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
     const { targetRole } = req.body; 
     try {
@@ -1844,7 +1869,7 @@ const feedPostSchema = new mongoose.Schema({
 const FeedPost = mongoose.models.FeedPost || mongoose.model('FeedPost', feedPostSchema);
 
 // Upload a new post to the Feed (From Studio Dashboard)
-app.post('/api/auth/upload-feed-post', async (req, res) => {
+app.post('/api/auth/upload-feed-post', authenticateToken, async (req, res) => {
     try {
         const { mobile, studioName, fileUrls, description, feedCategory, price, expiryHours } = req.body;
         
