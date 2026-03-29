@@ -11,6 +11,9 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('DASHBOARD');
     const [showExitPopup, setShowExitPopup] = useState(false);
 
+    // ✅ NEW: DROPDOWN MENU STATE FOR SIDEBAR
+    const [openDropdown, setOpenDropdown] = useState(null);
+
     // --- DATA STATES ---
     const [studioProfile, setStudioProfile] = useState(user);
     const [clientMobile, setClientMobile] = useState('');
@@ -661,16 +664,26 @@ const StudioDashboard = ({ user, onLogout }) => {
                 </div>
 
                 <ul className="sidebar-menu">
-                    <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>👥 My Clients</li>
-                    <li className={activeTab === 'LEADS' ? 'active' : ''} onClick={() => setActiveTab('LEADS')}>📅 Booking Leads</li>
-                    <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Client Data</li>
-                    
-                    {studioProfile.isFeedApproved && (
-                        <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => setActiveTab('FEED')}>🌟 Feed Management</li>
-                    )}
+                    <div className="menu-group">
+                        <div className={`menu-group-header ${openDropdown === 'MENU' ? 'open' : ''}`} onClick={() => setOpenDropdown(openDropdown === 'MENU' ? null : 'MENU')} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#1a1a2e', cursor: 'pointer', fontWeight: 'bold', color: '#fff', borderRadius: '5px', marginBottom: '5px' }}>
+                            <span>📁 Studio Options</span>
+                            <span>{openDropdown === 'MENU' ? '▲' : '▼'}</span>
+                        </div>
+                        {openDropdown === 'MENU' && (
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => { setActiveTab('DASHBOARD'); setOpenDropdown(null); }}>👥 My Clients</li>
+                                <li className={activeTab === 'LEADS' ? 'active' : ''} onClick={() => { setActiveTab('LEADS'); setOpenDropdown(null); }}>📅 Booking Leads</li>
+                                <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('UPLOAD'); setOpenDropdown(null); }}>📤 Upload Client Data</li>
+                                
+                                {studioProfile.isFeedApproved && (
+                                    <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => { setActiveTab('FEED'); setOpenDropdown(null); }}>🌟 Feed Management</li>
+                                )}
 
-                    <li className={activeTab === 'REVENUE' ? 'active' : ''} onClick={() => setActiveTab('REVENUE')}>💰 Revenue</li>
-                    <li className={activeTab === 'PROFILE' ? 'active' : ''} onClick={() => setActiveTab('PROFILE')}>⚙️ Studio Profile</li>
+                                <li className={activeTab === 'REVENUE' ? 'active' : ''} onClick={() => { setActiveTab('REVENUE'); setOpenDropdown(null); }}>💰 Revenue</li>
+                                <li className={activeTab === 'PROFILE' ? 'active' : ''} onClick={() => { setActiveTab('PROFILE'); setOpenDropdown(null); }}>⚙️ Studio Profile</li>
+                            </div>
+                        )}
+                    </div>
                 </ul>
                 <button onClick={onLogout} className="admin-logout-btn">Log Out</button>
             </aside>

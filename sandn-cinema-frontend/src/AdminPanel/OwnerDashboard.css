@@ -441,37 +441,36 @@
 }
 
 /* ========================================================
-   📱 OVERLAPPING MENU DROPDOWN (PREMIUM UX FIX)
+   📱 OVERLAPPING GLASSMORPHISM DROPDOWN (PREMIUM BLUR)
    ======================================================== */
 @media screen and (max-width: 768px) {
-    /* 1. Sidebar ko anchor point banao */
     .admin-sidebar {
         position: relative !important; 
-        z-index: 999 !important; /* Sidebar ko sabse upar rakho */
+        z-index: 999 !important; 
     }
-    
-    /* 2. Menu aur Groups ko static karo taaki dropdown bahar nikal sake */
     .sidebar-menu, .menu-group {
         position: static !important; 
     }
     
-    /* 3. The Magic: Dropdown ko hawa mein tairao (Absolute Position) */
     .menu-dropdown-content {
         position: absolute !important;
-        top: 100% !important; /* Sidebar ke theek neeche se khulega */
+        top: 100% !important; 
         left: 0 !important;
-        width: 100vw !important; /* Pura screen width lega */
+        width: 100vw !important; 
         max-width: 100% !important;
-        z-index: 9999 !important; /* Content ke upar aayega */
+        z-index: 9999 !important; 
         
-        /* Premium Solid Design taaki peeche ka content na dikhe */
-        background: #1a1a2e !important; 
-        border-bottom: 3px solid #3498db !important;
-        box-shadow: 0 15px 30px rgba(0,0,0,0.8) !important;
+        /* ✨ TRUE GLASSMORPHISM (Low Opacity + High Blur) */
+        background: rgba(15, 23, 42, 0.35) !important; /* 35% Dark Color */
+        backdrop-filter: blur(15px) !important; /* Asli Blur Effect */
+        -webkit-backdrop-filter: blur(15px) !important; /* For iOS/iPhone */
+        
+        border-bottom: 2px solid rgba(52, 152, 219, 0.6) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
         
         margin: 0 !important;
         padding: 15px 20px !important;
         box-sizing: border-box !important;
     }
 }
-
