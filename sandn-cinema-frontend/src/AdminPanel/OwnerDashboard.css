@@ -474,3 +474,38 @@
         box-sizing: border-box !important;
     }
 }
+
+/* ========================================================
+       📱 PREMIUM MENU TEXT & BUTTON STYLING
+       ======================================================== */
+    .menu-dropdown-content li {
+        list-style: none !important;
+        padding: 12px 15px !important; /* Touch karne ke liye perfect space */
+        color: #e2e8f0 !important; /* Premium off-white color */
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        border-radius: 8px !important;
+        margin-bottom: 4px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important; /* Halki si line */
+        transition: all 0.2s ease-in-out !important;
+        cursor: pointer !important;
+    }
+
+    /* Aakhiri item se border hata do */
+    .menu-dropdown-content li:last-child {
+        border-bottom: none !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Jo Tab abhi khula hai (Active state) uska premium look */
+    .menu-dropdown-content li.active {
+        background: rgba(52, 152, 219, 0.15) !important; /* Halka blue background */
+        color: #3498db !important; /* Bright blue text */
+        font-weight: bold !important;
+        border-bottom: none !important;
+    }
+
+    /* Click karne par kaisa dikhega */
+    .menu-dropdown-content li:active {
+        background: rgba(255, 255, 255, 0.1) !important;
+    }
