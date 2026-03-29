@@ -439,3 +439,39 @@
         white-space: nowrap;
     }
 }
+
+/* ========================================================
+   📱 OVERLAPPING MENU DROPDOWN (PREMIUM UX FIX)
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Sidebar ko anchor point banao */
+    .admin-sidebar {
+        position: relative !important; 
+        z-index: 999 !important; /* Sidebar ko sabse upar rakho */
+    }
+    
+    /* 2. Menu aur Groups ko static karo taaki dropdown bahar nikal sake */
+    .sidebar-menu, .menu-group {
+        position: static !important; 
+    }
+    
+    /* 3. The Magic: Dropdown ko hawa mein tairao (Absolute Position) */
+    .menu-dropdown-content {
+        position: absolute !important;
+        top: 100% !important; /* Sidebar ke theek neeche se khulega */
+        left: 0 !important;
+        width: 100vw !important; /* Pura screen width lega */
+        max-width: 100% !important;
+        z-index: 9999 !important; /* Content ke upar aayega */
+        
+        /* Premium Solid Design taaki peeche ka content na dikhe */
+        background: #1a1a2e !important; 
+        border-bottom: 3px solid #3498db !important;
+        box-shadow: 0 15px 30px rgba(0,0,0,0.8) !important;
+        
+        margin: 0 !important;
+        padding: 15px 20px !important;
+        box-sizing: border-box !important;
+    }
+}
+

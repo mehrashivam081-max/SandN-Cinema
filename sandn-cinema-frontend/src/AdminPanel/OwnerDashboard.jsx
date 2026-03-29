@@ -1066,15 +1066,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
                         {openDropdown === 'GLOBAL' && (
                             <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                                <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => setActiveTab('DASHBOARD')}>📊 Dashboard</li>
-                                <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => setActiveTab('UPLOAD')}>📤 Upload Data</li>
-                                <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_CHARGES')}>💰 Global Charges</li>
-                                <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => setActiveTab('GLOBAL_REMOVE')}>🗑️ Global Remove</li>
-                                <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => setActiveTab('ACCOUNTS')}>👥 Manage Accounts</li>
-                                <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => setActiveTab('CRITERIA')}>📈 Criteria & Traffic</li>
+                                <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => { setActiveTab('DASHBOARD'); setOpenDropdown(null); }}>📊 Dashboard</li>
+                                <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('UPLOAD'); setOpenDropdown(null); }}>📤 Upload Data</li>
+                                <li className={activeTab === 'GLOBAL_CHARGES' ? 'active' : ''} onClick={() => { setActiveTab('GLOBAL_CHARGES'); setOpenDropdown(null); }}>💰 Global Charges</li>
+                                <li className={activeTab === 'GLOBAL_REMOVE' ? 'active' : ''} onClick={() => { setActiveTab('GLOBAL_REMOVE'); setOpenDropdown(null); }}>🗑️ Global Remove</li>
+                                <li className={activeTab === 'ACCOUNTS' ? 'active' : ''} onClick={() => { setActiveTab('ACCOUNTS'); setOpenDropdown(null); }}>👥 Manage Accounts</li>
+                                <li className={activeTab === 'CRITERIA' ? 'active' : ''} onClick={() => { setActiveTab('CRITERIA'); setOpenDropdown(null); }}>📈 Criteria & Traffic</li>
                                 {/* 📣 NEW ADS TAB */}
-                                <li className={activeTab === 'ADS' ? 'active' : ''} onClick={() => setActiveTab('ADS')} style={{color: '#f1c40f'}}>📣 Ad Manager</li>
-                                <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => setActiveTab('INCOME')}>💰 Income</li>
+                                <li className={activeTab === 'ADS' ? 'active' : ''} onClick={() => { setActiveTab('ADS'); setOpenDropdown(null); }} style={{color: '#f1c40f'}}>📣 Ad Manager</li>
+                                <li className={activeTab === 'INCOME' ? 'active' : ''} onClick={() => { setActiveTab('INCOME'); setOpenDropdown(null); }}>💰 Income</li>
                             </div>
                         )}
                     </div>
@@ -1087,8 +1087,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
                         {openDropdown === 'USER' && (
                             <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                                <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => setActiveTab('BOOKINGS')}>📅 Direct Bookings</li>
-                                <li className={activeTab === 'MANAGE_SERVICES' ? 'active' : ''} onClick={() => setActiveTab('MANAGE_SERVICES')} style={{ color: '#f1c40f' }}>🛠️ Manage Services</li>
+                                <li className={activeTab === 'BOOKINGS' ? 'active' : ''} onClick={() => { setActiveTab('BOOKINGS'); setOpenDropdown(null); }}>📅 Direct Bookings</li>
+                                <li className={activeTab === 'MANAGE_SERVICES' ? 'active' : ''} onClick={() => { setActiveTab('MANAGE_SERVICES'); setOpenDropdown(null); }} style={{ color: '#f1c40f' }}>🛠️ Manage Services</li>
                             </div>
                         )}
                     </div>
@@ -1114,10 +1114,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
                         {openDropdown === 'ADMIN' && (
                             <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                                <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => setActiveTab('SOCIAL')}>🌐 Social Links</li>
-                                <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => setActiveTab('SECURITY')}>🔒 Security Policy</li>
-                                <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => setActiveTab('SUB_ADMIN')}>🧑‍💼 Sub-Admins</li> 
-                                <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => setActiveTab('SETTINGS')}>⚙️ Settings</li>
+                                <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => { setActiveTab('SOCIAL'); setOpenDropdown(null); }}>🌐 Social Links</li>
+                                <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => { setActiveTab('SECURITY'); setOpenDropdown(null); }}>🔒 Security Policy</li>
+                                <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => { setActiveTab('SUB_ADMIN'); setOpenDropdown(null); }}>🧑‍💼 Sub-Admins</li> 
+                                <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => { setActiveTab('SETTINGS'); setOpenDropdown(null); }}>⚙️ Settings</li>
                             </div>
                         )}
                     </div>

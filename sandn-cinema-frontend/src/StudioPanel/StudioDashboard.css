@@ -359,3 +359,40 @@
         white-space: nowrap;
     }
 }
+
+/* ========================================================
+   📱 OVERLAPPING MENU DROPDOWN (PREMIUM UX FIX)
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Sidebar ko anchor point banao */
+    .admin-sidebar {
+        position: relative !important; 
+        z-index: 999 !important; /* Sidebar ko sabse upar rakho */
+    }
+    
+    /* 2. Menu aur Groups ko static karo taaki dropdown bahar nikal sake */
+    .sidebar-menu, .menu-group {
+        position: static !important; 
+    }
+    
+   /* 3. The Magic: Glassmorphism Dropdown (Blur Effect) */
+    .menu-dropdown-content {
+        position: absolute !important;
+        top: 100% !important; 
+        left: 0 !important;
+        width: 100vw !important; 
+        max-width: 100% !important;
+        z-index: 9999 !important; 
+        
+        /* 🌟 PREMIUM BLUR & FADE EFFECT */
+        background: rgba(15, 23, 42, 0.80) !important; /* 80% Dark, 20% Transparent */
+        backdrop-filter: blur(12px) !important; /* Peeche ka content blur karega */
+        -webkit-backdrop-filter: blur(12px) !important; /* iOS/iPhone support ke liye */
+        
+        border-bottom: 2px solid rgba(52, 152, 219, 0.5) !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6) !important;
+        
+        margin: 0 !important;
+        padding: 15px 20px !important;
+        box-sizing: border-box !important;
+    } }
