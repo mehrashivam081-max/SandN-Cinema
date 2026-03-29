@@ -348,7 +348,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                     fd.append('file', file);
                     fd.append('upload_preset', 'xgujeuol'); 
 
-                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                    const res = await axios.create().post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                         onUploadProgress: (progressEvent) => {
                             const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
