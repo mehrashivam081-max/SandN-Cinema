@@ -203,6 +203,22 @@ const TrendingFeed = ({ type, onClose }) => {
         }
     };
 
+    // ✅ SAFE EXTERNAL LINK OPENER (Crash-Proof)
+    const handleOpenPortfolio = (url) => {
+        if (!url || typeof url !== 'string' || url.trim() === '') {
+            alert("No valid portfolio link available for this profile.");
+            return;
+        }
+        
+        let finalUrl = url.trim();
+        // Agar link me http nahi hai, toh auto-add karo taaki error na aaye
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+            finalUrl = 'https://' + finalUrl;
+        }
+        
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    };
+
     const handleDirectBook = async (e, item) => {
         e.stopPropagation();
         const userStr = sessionStorage.getItem('user');
@@ -402,12 +418,16 @@ const TrendingFeed = ({ type, onClose }) => {
                         </h2>
                         <p style={{ margin: '0 0 15px 0', color: '#7f8c8d', fontSize: '13px' }}>Location: {selectedStudio.location || 'India'}</p>
 
+                        {/* ✅ BULLETPROOF PORTFOLIO BUTTON */}
                         {selectedStudio.portfolioUrl ? (
-                            <a href={selectedStudio.portfolioUrl.startsWith('http') ? selectedStudio.portfolioUrl : `https://${selectedStudio.portfolioUrl}`} target="_blank" rel="noopener noreferrer" style={{ display: 'block', background: '#fdf2e9', color: '#e67e22', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px', border: '1px solid #f8c471', marginBottom: '15px' }}>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleOpenPortfolio(selectedStudio.portfolioUrl); }} 
+                                style={{ width: '100%', display: 'block', background: '#fdf2e9', color: '#e67e22', padding: '12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px', border: '1px solid #f8c471', marginBottom: '15px', cursor: 'pointer' }}
+                            >
                                 🌐 View Complete Portfolio
-                            </a>
+                            </button>
                         ) : (
-                            <p style={{ background: '#f4f6f7', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#95a5a6' }}>No portfolio link available.</p>
+                            <p style={{ background: '#f4f6f7', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#95a5a6', marginBottom: '15px' }}>No portfolio link available.</p>
                         )}
 
                         <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ width: '100%', padding: '12px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
