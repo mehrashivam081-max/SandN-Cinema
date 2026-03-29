@@ -1526,7 +1526,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 </button>
                             </div>
 
-                            <form onSubmit={handleAddManualUser} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <form onSubmit={(e) => { e.preventDefault(); handleUpload(false); }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
                                 {uploadSubTab === 'BASIC' && (
                                     <>

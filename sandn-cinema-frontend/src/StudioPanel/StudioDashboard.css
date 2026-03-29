@@ -294,3 +294,68 @@
     background: #ff4d4d;
     color: white;
 }
+
+/* ========================================================
+   📱 SIMPLE & SOLID MOBILE LAYOUT FIX
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Stack the layout vertically */
+    .owner-dashboard-container {
+        display: flex !important;
+        flex-direction: column !important; /* Sidebar on top, Content below */
+        width: 100% !important;
+    }
+
+    /* 2. Fix the Sidebar */
+    .admin-sidebar {
+        width: 100% !important;
+        min-height: auto !important;
+        border-right: none !important;
+        border-bottom: 2px solid #2c3e50 !important;
+        padding: 15px !important;
+    }
+
+    /* 3. Make Sidebar Menu scrollable horizontally */
+    .sidebar-menu {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        gap: 10px !important;
+        padding-bottom: 5px !important;
+    }
+
+    .sidebar-menu li {
+        white-space: nowrap !important; /* Menu items ek line me rahenge */
+        flex-shrink: 0 !important;
+    }
+
+    /* 4. Fix Main Content Area */
+    .admin-main-content {
+        width: 100% !important;
+        padding: 15px 10px !important;
+    }
+
+    /* 5. Fix Stats Grid (1 item per row) */
+    .dashboard-stats-grid,
+    .update-creation-container > div[style*="display: flex"] {
+        display: grid !important;
+        grid-template-columns: 1fr !important; /* Sab kuch ek ke neeche ek */
+        gap: 15px !important;
+    }
+
+    /* 6. Fix Tables cutting out of screen */
+    .data-table-container {
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .admin-table {
+        min-width: 600px !important; /* Table text chota na ho */
+    }
+    
+    /* 7. Dropdown fixes */
+    .menu-group-header {
+        white-space: nowrap;
+    }
+}

@@ -307,3 +307,77 @@
     .user-main-content { padding: 15px 15px; }
     .ud-grid-vip { grid-template-columns: repeat(auto-fill, minmax(100%, 1fr)); }
 }
+
+/* ========================================================
+   📱 PREMIUM MOBILE FIX: USER DASHBOARD (APP STYLE)
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Header Optimization - Stop Overlapping */
+    .ud-header-vip {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important; /* Split into 2 sides */
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 15px 15px !important;
+        background: rgba(15, 23, 42, 0.85) !important;
+        backdrop-filter: blur(15px) !important; /* Glassmorphism */
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+    }
+    
+    /* Logo adjustments */
+    .brand-logo-vip {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .brand-logo-vip h2 { font-size: 16px !important; margin: 0 !important; line-height: 1.2 !important; }
+    .vip-badge-tag { font-size: 9px !important; padding: 2px 6px !important; margin-top: 2px !important; }
+
+    /* Action Icons Group (Right Side) */
+    .ud-header-vip > div:last-child {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+    
+    /* Compact Buttons */
+    .emergency-pulse-btn { padding: 6px 10px !important; font-size: 11px !important; border-radius: 20px !important; }
+    .cart-icon-wrapper { font-size: 20px !important; }
+    .ud-coin-badge-vip { padding: 4px 10px !important; border-radius: 20px !important; }
+    .coin-val-vip { font-size: 13px !important; }
+    .coin-label-vip { display: none !important; } /* Hide 'COINS+' text on mobile to save space */
+
+    /* 2. Premium Folder Cards */
+    .folder-card {
+        background: linear-gradient(145deg, #1e293b, #0f172a) !important;
+        border: 1px solid rgba(255,255,255,0.05) !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important;
+        border-radius: 20px !important;
+        padding: 25px 15px !important;
+    }
+
+    /* 3. Bottom Navigation - True App Feel */
+    .bottom-nav-bar {
+        background: rgba(15, 23, 42, 0.9) !important;
+        backdrop-filter: blur(20px) !important;
+        border-top: 1px solid rgba(255,255,255,0.1) !important;
+        padding: 10px 5px 20px 5px !important; /* Extra bottom padding for iOS swipe bar */
+        box-shadow: 0 -5px 25px rgba(0,0,0,0.5) !important;
+    }
+    
+    .nav-item {
+        opacity: 0.5 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .nav-item.active {
+        opacity: 1 !important;
+        color: #f1c40f !important;
+        transform: translateY(-4px) !important; /* Slightly pop up active icon */
+    }
+}

@@ -243,3 +243,199 @@
     .admin-filter-tabs { padding: 5px; }
     .admin-filter-tabs button { font-size: 12px; padding: 8px 12px; }
 }
+
+/* ========================================================
+   📱 2. DASHBOARD MOBILE LAYOUT RESTRUCTURE
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* Main container ko column me badlo */
+    .owner-dashboard-container {
+        display: flex !important;
+        flex-direction: column !important; /* Sidebar Top, Content Bottom */
+        width: 100vw !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+        min-height: 100vh;
+    }
+
+    /* Sidebar full width karo aur fix position hatao */
+    .admin-sidebar {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: auto !important;
+        position: relative !important; 
+        padding: 15px !important;
+        box-sizing: border-box !important;
+        border-right: none !important;
+        border-bottom: 2px solid #333 !important;
+    }
+
+    /* Main Content Area ko limit me rakho */
+    .admin-main-content {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        padding: 10px !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Tables aur Forms jo screen todte hain, unko scrollable banao */
+    .data-table-container, .update-creation-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        box-sizing: border-box !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .admin-table {
+        min-width: 600px !important; /* Table mobile me choti na ho, scroll ho */
+    }
+
+    /* Inputs bahar na nikle */
+    .custom-admin-input, input, select, textarea {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    /* Stats Grid ko mobile pe 1 by 1 karo */
+    .dashboard-stats-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ========================================================
+   📱 PREMIUM MOBILE FIX: ADMIN / OWNER DASHBOARD
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    .owner-dashboard-container {
+        background: #0f172a !important; /* Unified dark premium background */
+    }
+    
+    /* Top Profile Section - Make it compact */
+    .admin-sidebar {
+        padding: 15px !important;
+        background: #1e293b !important;
+        border-bottom: 1px solid #334155 !important;
+        border-radius: 0 0 25px 25px !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+        z-index: 50;
+    }
+    
+    .admin-sidebar > div:nth-child(2) {
+        display: flex !important;
+        align-items: center !important;
+        text-align: left !important;
+        padding: 10px !important;
+        gap: 15px !important;
+        background: transparent !important;
+    }
+    
+    .admin-sidebar > div:nth-child(2) > div:first-child {
+        margin: 0 !important; 
+        width: 55px !important; 
+        height: 55px !important;
+    }
+
+    /* Fix Menu Mess: Make it a clean Vertical Accordion */
+    .sidebar-menu {
+        display: flex !important;
+        flex-direction: column !important; /* Stack vertically, no horizontal scroll */
+        overflow: visible !important;
+        white-space: normal !important;
+        gap: 10px !important;
+        padding-top: 10px;
+    }
+    
+    .menu-group {
+        width: 100% !important;
+    }
+    
+    .menu-group-header {
+        padding: 15px !important;
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 10px !important;
+        font-size: 14px !important;
+    }
+    
+    .menu-dropdown-content {
+        background: rgba(0,0,0,0.2) !important;
+        border-radius: 0 0 10px 10px !important;
+        margin-top: -5px !important;
+        padding: 10px 15px !important;
+    }
+
+    /* Clean Content Area Background */
+    .admin-main-content {
+        background: #f4f6f9 !important; /* Light premium gray */
+        border-radius: 25px 25px 0 0 !important;
+        margin-top: 15px !important;
+        padding: 25px 15px !important;
+    }
+}
+
+/* ========================================================
+   📱 SIMPLE & SOLID MOBILE LAYOUT FIX
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Stack the layout vertically */
+    .owner-dashboard-container {
+        display: flex !important;
+        flex-direction: column !important; /* Sidebar on top, Content below */
+        width: 100% !important;
+    }
+
+    /* 2. Fix the Sidebar */
+    .admin-sidebar {
+        width: 100% !important;
+        min-height: auto !important;
+        border-right: none !important;
+        border-bottom: 2px solid #2c3e50 !important;
+        padding: 15px !important;
+    }
+
+    /* 3. Make Sidebar Menu scrollable horizontally */
+    .sidebar-menu {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        gap: 10px !important;
+        padding-bottom: 5px !important;
+    }
+
+    .sidebar-menu li {
+        white-space: nowrap !important; /* Menu items ek line me rahenge */
+        flex-shrink: 0 !important;
+    }
+
+    /* 4. Fix Main Content Area */
+    .admin-main-content {
+        width: 100% !important;
+        padding: 15px 10px !important;
+    }
+
+    /* 5. Fix Stats Grid (1 item per row) */
+    .dashboard-stats-grid,
+    .update-creation-container > div[style*="display: flex"] {
+        display: grid !important;
+        grid-template-columns: 1fr !important; /* Sab kuch ek ke neeche ek */
+        gap: 15px !important;
+    }
+
+    /* 6. Fix Tables cutting out of screen */
+    .data-table-container {
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .admin-table {
+        min-width: 600px !important; /* Table text chota na ho */
+    }
+    
+    /* 7. Dropdown fixes */
+    .menu-group-header {
+        white-space: nowrap;
+    }
+}
