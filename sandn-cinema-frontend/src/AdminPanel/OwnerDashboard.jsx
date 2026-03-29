@@ -111,8 +111,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [editingAdId, setEditingAdId] = useState(null); // ✅ NEW: Edit State
 
     // ✅ Dynamic Location Counter
-    const locationStats = accounts.reduce((acc, user) => {
-        const loc = user.location ? user.location.trim() : 'Unknown';
+    // ✅ Dynamic Location Counter (BUG FIXED - Safe Check Added)
+    const locationStats = accounts.reduce((acc, userObj) => {
+        // Checking if location exists AND is actually a string before trimming
+        const loc = (userObj.location && typeof userObj.location === 'string') ? userObj.location.trim() : 'Unknown';
         if(loc) acc[loc] = (acc[loc] || 0) + 1;
         return acc;
     }, {});
