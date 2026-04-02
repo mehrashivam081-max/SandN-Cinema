@@ -16,7 +16,7 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [openDropdown, setOpenDropdown] = useState(null);
 
     // ✅ NEW: LONG MEDIA (CINEMATIC) UPLOAD STATES
-    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '' });
+    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
     const [longMediaFile, setLongMediaFile] = useState(null);
     const [longMediaPreview, setLongMediaPreview] = useState('');
     const [isLongUploading, setIsLongUploading] = useState(false);
@@ -1291,6 +1291,19 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                     <div>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Video Title</label>
+                                        {/* YOUTUBE LINK INPUT */}
+                                    <div style={{ background: '#fdf2e9', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #e67e22' }}>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>🔗 YouTube Video Link (Unlisted)</label>
+                                        <input 
+                                            type="url" 
+                                            placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" 
+                                            value={longMediaForm.ytLink} 
+                                            onChange={(e) => setLongMediaForm({...longMediaForm, ytLink: e.target.value})} 
+                                            className="custom-admin-input" 
+                                            style={{marginTop: '5px'}}
+                                        />
+                                        <p style={{fontSize: '10px', color: '#7f8c8d', margin: '5px 0 0 0'}}>Upload the muted video to your channel and paste the link here.</p>
+                                    </div>
                                         <input type="text" placeholder="e.g. Royal Rajput Wedding Highlight" value={longMediaForm.title} onChange={(e) => setLongMediaForm({...longMediaForm, title: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
                                     </div>
                                     <div>
@@ -1368,13 +1381,24 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 )}
 
                                 <button 
-                                    disabled={isLongUploading || !longMediaFile || !longMediaForm.title}
+                                    disabled={isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink}
                                     onClick={async () => {
                                         setIsLongUploading(true);
                                         setUploadProgress(0);
                                         setUploadSpeed('Starting...');
                                         setUploadETA('Calculating...');
                                         
+                                        // Extract Video ID from YT Link
+                                        let extractedYtId = "";
+                                        try {
+                                            const urlObj = new URL(longMediaForm.ytLink);
+                                            extractedYtId = urlObj.searchParams.get("v") || urlObj.pathname.split('/').pop();
+                                        } catch(e) {
+                                            alert("Invalid YouTube Link!");
+                                            setIsLongUploading(false);
+                                            return;
+                                        }
+
                                         let startTime = Date.now();
                                         let lastTime = startTime;
                                         let lastLoaded = 0;
@@ -1382,7 +1406,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         try {
                                             const fd = new FormData();
                                             fd.append('videoFile', longMediaFile);
-                                            fd.append('title', longMediaForm.title);
                                             
                                             const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
                                             
@@ -1393,23 +1416,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     setUploadProgress(percentCompleted);
 
                                                     const currentTime = Date.now();
-                                                    const timeElapsedLimit = (currentTime - lastTime) / 1000; 
-
-                                                    // Update speed every 0.5 seconds to avoid flickering
-                                                    if (timeElapsedLimit > 0.5) { 
-                                                        const bytesLoadedSinceLast = progressEvent.loaded - lastLoaded;
-                                                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                                                        const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
-                                                        
-                                                        setUploadSpeed(`${speedMbps} MB/s`);
-
-                                                        const bytesRemaining = progressEvent.total - progressEvent.loaded;
-                                                        const secondsRemaining = bytesRemaining / speedBps;
-
-                                                        if (secondsRemaining > 60) setUploadETA(`${Math.floor(secondsRemaining / 60)}m ${Math.floor(secondsRemaining % 60)}s left`);
-                                                        else if (secondsRemaining > 0) setUploadETA(`${Math.floor(secondsRemaining)}s left`);
-                                                        else setUploadETA(`Processing file...`);
-
+                                                    if ((currentTime - lastTime) / 1000 > 0.5) { 
+                                                        const speedBps = (progressEvent.loaded - lastLoaded) / ((currentTime - lastTime) / 1000);
+                                                        setUploadSpeed(`${(speedBps / (1024 * 1024)).toFixed(2)} MB/s`);
+                                                        const secs = (progressEvent.total - progressEvent.loaded) / speedBps;
+                                                        setUploadETA(secs > 60 ? `${Math.floor(secs / 60)}m ${Math.floor(secs % 60)}s left` : `${Math.floor(secs)}s left`);
                                                         lastLoaded = progressEvent.loaded;
                                                         lastTime = currentTime;
                                                     }
@@ -1417,26 +1428,25 @@ const StudioDashboard = ({ user, onLogout }) => {
                                             });
 
                                             if(res.data.success) {
-                                                alert(`✅ Success!\nAudio saved to Cloud: ${res.data.data.audioCloudUrl}\nVideo sent to YT (Dummy): ${res.data.data.ytVideoId}`);
+                                                alert(`✅ Success!\nAudio Extracted to Cloud: ${res.data.data.audioCloudUrl}\nYT ID Linked: ${extractedYtId}`);
+                                                // Yahan par Database save logic aayega (Next step me)
+                                                
                                                 setLongMediaFile(null);
                                                 setLongMediaPreview('');
-                                                setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '' });
+                                                setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
                                             } else {
                                                 alert("❌ Failed: " + res.data.message);
                                             }
                                         } catch (error) {
-                                            alert("Upload Error. Make sure backend is running and keys are correct.");
+                                            alert(`❌ Upload Error: ${error.response?.data?.message || error.message}`);
                                         } finally {
                                             setIsLongUploading(false);
-                                            setUploadProgress(0);
-                                            setUploadSpeed('');
-                                            setUploadETA('');
                                         }
                                     }}
                                     className="global-update-btn" 
-                                    style={{ width: '100%', marginTop: '20px', padding: '15px', fontSize: '16px', background: (isLongUploading || !longMediaFile || !longMediaForm.title) ? '#bdc3c7' : '#2ecc71', cursor: (isLongUploading || !longMediaFile || !longMediaForm.title) ? 'not-allowed' : 'pointer' }}
+                                    style={{ width: '100%', marginTop: '20px', padding: '15px', fontSize: '16px', background: (isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink) ? '#bdc3c7' : '#2ecc71', cursor: (isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink) ? 'not-allowed' : 'pointer' }}
                                 >
-                                    {isLongUploading ? '🚀 Uploading & Processing...' : '📤 Split & Upload Media'}
+                                    {isLongUploading ? '🚀 Uploading & Extracting...' : '📤 Extract Audio & Link to YT'}
                                 </button>
                             </div>
 
