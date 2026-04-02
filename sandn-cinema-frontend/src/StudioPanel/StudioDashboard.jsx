@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './StudioDashboard.css'; 
 import useBackButton from '../hooks/useBackButton';
+import SyncPlayer from '../components/SyncPlayer'; // Path apne hisaab se set kar lenaimport SyncPlayer from '../components/SyncPlayer'; // Path apne hisaab se set kar lena
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -13,6 +14,12 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     // ✅ NEW: DROPDOWN MENU STATE FOR SIDEBAR
     const [openDropdown, setOpenDropdown] = useState(null);
+
+    // ✅ NEW: LONG MEDIA (CINEMATIC) UPLOAD STATES
+    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '' });
+    const [longMediaFile, setLongMediaFile] = useState(null);
+    const [longMediaPreview, setLongMediaPreview] = useState('');
+    const [isLongUploading, setIsLongUploading] = useState(false);
 
     // --- DATA STATES ---
     const [studioProfile, setStudioProfile] = useState(user);
@@ -588,6 +595,19 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="owner-dashboard-container"> 
+        {/* 🔥 TEST ZONE: THE SYNC PLAYER POC 🔥 */}
+<div style={{ padding: '30px', background: '#2c3e50', borderRadius: '15px', marginTop: '20px' }}>
+    <h2 style={{ color: '#fff', textAlign: 'center', marginBottom: '20px' }}>Audio-Video Sync Test</h2>
+    
+    <SyncPlayer 
+        ytVideoId="LXb3EKWsInQ" // Ek 4K Nature Video ka ID
+        audioUrl="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" // Public Dummy MP3 Link
+    />
+    
+    <p style={{ color: '#ccc', fontSize: '12px', textAlign: 'center', marginTop: '15px' }}>
+        *Video mute chalegi, aur aawaz tumhare local MP3 link se aayegi.
+    </p>
+</div>
 
             {/* ✅ STUDIO EXIT APP POPUP */}
             {showExitPopup && (
@@ -678,7 +698,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 {studioProfile.isFeedApproved && (
                                     <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => { setActiveTab('FEED'); setOpenDropdown(null); }}>🌟 Feed Management</li>
                                 )}
-
+                                <li className={activeTab === 'LONG_UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('LONG_UPLOAD'); setOpenDropdown(null); }} style={{color: '#3498db', fontWeight: 'bold'}}>🎬 Cinematic Upload (Pro)</li>
                                 <li className={activeTab === 'REVENUE' ? 'active' : ''} onClick={() => { setActiveTab('REVENUE'); setOpenDropdown(null); }}>💰 Revenue</li>
                                 <li className={activeTab === 'PROFILE' ? 'active' : ''} onClick={() => { setActiveTab('PROFILE'); setOpenDropdown(null); }}>⚙️ Studio Profile</li>
                             </div>
@@ -1256,6 +1276,174 @@ const StudioDashboard = ({ user, onLogout }) => {
                         </div>
                     </div>
                 )}
+
+                {/* 🔴 TAB 6: LONG MEDIA / CINEMATIC UPLOAD */}
+                {activeTab === 'LONG_UPLOAD' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>🎬 Cinematic & Long Video Upload</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upload large videos. System will automatically extract audio to secure cloud and upload muted video to YouTube for zero copyright strikes.</p>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+                            
+                            {/* LEFT COLUMN: FORM DETAILS */}
+                            <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, borderTop: '4px solid #3498db' }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📝 Video Details</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Video Title</label>
+                                        <input type="text" placeholder="e.g. Royal Rajput Wedding Highlight" value={longMediaForm.title} onChange={(e) => setLongMediaForm({...longMediaForm, title: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Category</label>
+                                        <select value={longMediaForm.category} onChange={(e) => setLongMediaForm({...longMediaForm, category: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}>
+                                            <option value="Wedding Highlight">Wedding Highlight</option>
+                                            <option value="Pre-Wedding">Pre-Wedding Song</option>
+                                            <option value="Documentary">Documentary</option>
+                                            <option value="Portfolio">Fashion Portfolio</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Description / Setup Details</label>
+                                        <textarea rows="4" placeholder="Camera used, location, couple names..." value={longMediaForm.description} onChange={(e) => setLongMediaForm({...longMediaForm, description: e.target.value})} className="custom-admin-input" style={{marginTop: '5px', resize: 'vertical'}}></textarea>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Unlock Price (Optional)</label>
+                                        <input type="number" placeholder="Leave blank for free" value={longMediaForm.customPrice} onChange={(e) => setLongMediaForm({...longMediaForm, customPrice: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* RIGHT COLUMN: PREVIEW & UPLOAD ACTION */}
+                            <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, background: '#f8f9fa', border: '1px dashed #bdc3c7' }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📺 Media Preview</h3>
+                                
+                                {/* FILE SELECTION AREA */}
+                                {!longMediaPreview ? (
+                                    <div 
+                                        style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ecf0f1', borderRadius: '10px', cursor: 'pointer', border: '2px dashed #95a5a6' }}
+                                        onClick={() => document.getElementById('long-video-upload').click()}
+                                    >
+                                        <span style={{ fontSize: '40px' }}>📁</span>
+                                        <p style={{ margin: '10px 0 0 0', fontWeight: 'bold', color: '#34495e' }}>Click to Select Video File (.mp4)</p>
+                                        <input 
+                                            id="long-video-upload" 
+                                            type="file" 
+                                            accept="video/mp4,video/mov" 
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => {
+                                                const file = e.target.files[0];
+                                                if(file) {
+                                                    setLongMediaFile(file);
+                                                    setLongMediaPreview(URL.createObjectURL(file));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div style={{ position: 'relative', width: '100%', borderRadius: '10px', overflow: 'hidden', background: '#000', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
+                                        <video src={longMediaPreview} controls style={{ width: '100%', height: 'auto', maxHeight: '300px', display: 'block' }} />
+                                        <button 
+                                            onClick={() => { setLongMediaFile(null); setLongMediaPreview(''); }} 
+                                            style={{ position: 'absolute', top: '10px', right: '10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                                            disabled={isLongUploading}
+                                        >
+                                            ✖ Remove
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* PROGRESS & ACTION BUTTON */}
+                                {isLongUploading && (
+                                    <div style={{ marginTop: '20px', padding: '15px', background: '#ebf5fb', borderRadius: '8px', border: '1px solid #3498db' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px', fontWeight: 'bold' }}>
+                                            <span style={{color: '#2980b9'}}>🚀 Speed: {uploadSpeed || 'Calculating...'}</span>
+                                            <span style={{color: '#e67e22'}}>⏳ ETA: {uploadETA || 'Calculating...'}</span>
+                                        </div>
+                                        <div style={{ width: '100%', height: '10px', background: '#ccc', borderRadius: '10px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${uploadProgress}%`, height: '100%', background: '#3498db', transition: 'width 0.3s' }}></div>
+                                        </div>
+                                        <p style={{ textAlign: 'center', fontSize: '11px', marginTop: '8px', color: '#555', fontWeight: 'bold' }}>Uploading to Server: {uploadProgress}%</p>
+                                        <p style={{ margin: '10px 0 0 0', fontSize: '10px', color: '#888', textAlign: 'center' }}>*FFmpeg will separate Audio & Video after 100% upload.</p>
+                                    </div>
+                                )}
+
+                                <button 
+                                    disabled={isLongUploading || !longMediaFile || !longMediaForm.title}
+                                    onClick={async () => {
+                                        setIsLongUploading(true);
+                                        setUploadProgress(0);
+                                        setUploadSpeed('Starting...');
+                                        setUploadETA('Calculating...');
+                                        
+                                        let startTime = Date.now();
+                                        let lastTime = startTime;
+                                        let lastLoaded = 0;
+
+                                        try {
+                                            const fd = new FormData();
+                                            fd.append('videoFile', longMediaFile);
+                                            fd.append('title', longMediaForm.title);
+                                            
+                                            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+                                            
+                                            const res = await axios.post(`${API_BASE}/upload-split-video`, fd, {
+                                                headers: { 'Authorization': `Bearer ${token}` },
+                                                onUploadProgress: (progressEvent) => {
+                                                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                                                    setUploadProgress(percentCompleted);
+
+                                                    const currentTime = Date.now();
+                                                    const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+
+                                                    // Update speed every 0.5 seconds to avoid flickering
+                                                    if (timeElapsedLimit > 0.5) { 
+                                                        const bytesLoadedSinceLast = progressEvent.loaded - lastLoaded;
+                                                        const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                                                        const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+                                                        
+                                                        setUploadSpeed(`${speedMbps} MB/s`);
+
+                                                        const bytesRemaining = progressEvent.total - progressEvent.loaded;
+                                                        const secondsRemaining = bytesRemaining / speedBps;
+
+                                                        if (secondsRemaining > 60) setUploadETA(`${Math.floor(secondsRemaining / 60)}m ${Math.floor(secondsRemaining % 60)}s left`);
+                                                        else if (secondsRemaining > 0) setUploadETA(`${Math.floor(secondsRemaining)}s left`);
+                                                        else setUploadETA(`Processing file...`);
+
+                                                        lastLoaded = progressEvent.loaded;
+                                                        lastTime = currentTime;
+                                                    }
+                                                }
+                                            });
+
+                                            if(res.data.success) {
+                                                alert(`✅ Success!\nAudio saved to Cloud: ${res.data.data.audioCloudUrl}\nVideo sent to YT (Dummy): ${res.data.data.ytVideoId}`);
+                                                setLongMediaFile(null);
+                                                setLongMediaPreview('');
+                                                setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '' });
+                                            } else {
+                                                alert("❌ Failed: " + res.data.message);
+                                            }
+                                        } catch (error) {
+                                            alert("Upload Error. Make sure backend is running and keys are correct.");
+                                        } finally {
+                                            setIsLongUploading(false);
+                                            setUploadProgress(0);
+                                            setUploadSpeed('');
+                                            setUploadETA('');
+                                        }
+                                    }}
+                                    className="global-update-btn" 
+                                    style={{ width: '100%', marginTop: '20px', padding: '15px', fontSize: '16px', background: (isLongUploading || !longMediaFile || !longMediaForm.title) ? '#bdc3c7' : '#2ecc71', cursor: (isLongUploading || !longMediaFile || !longMediaForm.title) ? 'not-allowed' : 'pointer' }}
+                                >
+                                    {isLongUploading ? '🚀 Uploading & Processing...' : '📤 Split & Upload Media'}
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+                
 
                 {/* 🔴 TAB 4: REVENUE (LIVE MONETIZATION UPDATE) */}
                 {activeTab === 'REVENUE' && (
