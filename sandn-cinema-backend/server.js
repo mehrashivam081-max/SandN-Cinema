@@ -2027,6 +2027,97 @@ app.post('/api/auth/delete-ad', async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to delete ad." });
     }
 });
+
+// ==========================================
+// 🚀 26. YOUTUBE + CLOUD AUTO-SPLIT UPLOADER
+// ==========================================
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+ffmpeg.setFfmpegPath(ffmpegPath);
+const cloudinary = require('cloudinary').v2;
+
+// 🔒 SECURE CLOUDINARY CONFIG (Reading from .env)
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+    api_key: process.env.CLOUDINARY_API_KEY,       
+    api_secret: process.env.CLOUDINARY_API_SECRET  
+});
+
+// Route for separating Audio & Video
+app.post('/api/auth/upload-split-video', authenticateToken, upload.single('videoFile'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ success: false, message: "No video file uploaded." });
+
+        const inputFilePath = req.file.path;
+        const tempDir = path.join(__dirname, 'temp');
+
+        // Create temp folder if not exists
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+        const timestamp = Date.now();
+        const audioOutputPath = path.join(tempDir, `audio_${timestamp}.mp3`);
+        const mutedVideoOutputPath = path.join(tempDir, `muted_${timestamp}.mp4`);
+
+        console.log("⚙️ FFmpeg Processing Started...");
+
+        // 🎵 Extract Audio (Save as MP3)
+        await new Promise((resolve, reject) => {
+            ffmpeg(inputFilePath)
+                .output(audioOutputPath)
+                .noVideo() 
+                .audioCodec('libmp3lame')
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        console.log("✅ Audio Extracted Successfully!");
+
+        // 🎥 Mute Video (Remove Audio Track)
+        await new Promise((resolve, reject) => {
+            ffmpeg(inputFilePath)
+                .output(mutedVideoOutputPath)
+                .noAudio() 
+                .videoCodec('copy') 
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+        console.log("✅ Video Muted Successfully!");
+
+        console.log("☁️ Uploading Audio to Cloudinary securely...");
+
+        // ☁️ Secure Upload to Cloudinary using .env keys
+        const cloudAudioRes = await cloudinary.uploader.upload(audioOutputPath, {
+            resource_type: 'video', // Cloudinary treats MP3 as video type
+            folder: 'sandn_audio_splits'
+        });
+
+        // 🔴 YOUTUBE LOGIC WILL GO HERE (Using Dummy ID for testing right now)
+        const ytVideoId = "DUMMY_YT_ID_READY"; 
+
+        // 🧹 Clean up temp files from server
+        fs.unlinkSync(inputFilePath);
+        fs.unlinkSync(audioOutputPath);
+        fs.unlinkSync(mutedVideoOutputPath);
+
+        console.log("🎉 Processing & Upload Complete!");
+
+        return res.status(200).json({
+            success: true,
+            message: "Video processed successfully!",
+            data: {
+                audioCloudUrl: cloudAudioRes.secure_url,
+                ytVideoId: ytVideoId
+            }
+        });
+
+    } catch (error) {
+        console.error("Split Upload Error:", error);
+        return res.status(500).json({ success: false, message: "Server Error during FFmpeg processing." });
+    }
+});
+
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
