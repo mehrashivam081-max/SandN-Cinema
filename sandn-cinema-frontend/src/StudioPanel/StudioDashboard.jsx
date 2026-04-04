@@ -565,6 +565,9 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     const isVideo = (filePath) => {
         if (!filePath || typeof filePath !== 'string') return false;
+        // 👇 YE NAYI LINE ADD KARNI HAI 👇
+        if (filePath.startsWith('CINEMATIC::')) return true; 
+        
         if (filePath.includes('/video/upload/')) return true; 
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
@@ -801,7 +804,15 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                             {folder.files.map((fileUrl, idx) => (
                                                                 <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fdfefe', border: '1px solid #eee', padding: '8px', borderRadius: '4px' }}>
                                                                     <div style={{ width: '100%', height: '80px', background: '#000', marginBottom: '8px', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
-                                                                        {isVideo(fileUrl) ? (<><video src={getCleanUrl(fileUrl)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>) : <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                                                        {fileUrl.startsWith('CINEMATIC::') ? (
+    <div style={{width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'#2c3e50', color:'#f1c40f', fontSize:'10px', textAlign:'center', padding:'5px'}}>
+        <span style={{fontSize: '20px'}}>🎬</span><span style={{fontWeight: 'bold', marginTop: '5px'}}>Cinematic<br/>(YT Sync)</span>
+    </div>
+) : isVideo(fileUrl) ? (
+    <><video src={getCleanUrl(fileUrl)} playsInline muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white'}}>▶️</div></>
+) : (
+    <img src={getCleanUrl(fileUrl)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+)}
                                                                     </div>
                                                                     <button onClick={() => handleAdvancedDelete(studioRemoveUserObj.mobile, folder.folderName, null, fileUrl)} style={{ background: 'transparent', color: '#e74c3c', border: '1px solid #e74c3c', padding: '3px 6px', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', width: '100%' }}>Delete File</button>
                                                                 </div>
@@ -1281,87 +1292,94 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {activeTab === 'LONG_UPLOAD' && (
                     <div className="view-section">
                         <div className="section-header"><h2>🎬 Cinematic & Long Video Upload</h2></div>
-                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upload large videos. System will automatically extract audio to secure cloud and upload muted video to YouTube for zero copyright strikes.</p>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upload large videos directly to client's account. System will extract audio, link YouTube, and send SMS/Email notifications automatically.</p>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
                             
+                            {/* 👤 TOP ROW: CLIENT ASSIGNMENT */}
+                            <div className="update-creation-container" style={{ flex: '1 1 100%', margin: 0, borderTop: '4px solid #f39c12', display: 'flex', flexWrap: 'wrap', gap: '15px', background: '#fffdf5' }}>
+                                <div style={{ flex: '1 1 200px', position: 'relative' }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>👤 Assign to Client Mobile</label>
+                                    <input 
+                                        type="number" placeholder="10-Digit Number" value={clientMobile} onChange={handleMobileChange}
+                                        onFocus={() => setShowMobileSuggestions(true)} onBlur={() => setTimeout(() => setShowMobileSuggestions(false), 200)}
+                                        className="custom-admin-input" style={{marginTop: '5px', border: '1px solid #f39c12'}}
+                                    />
+                                    {showMobileSuggestions && clientMobile && filteredMobileSuggestions.length > 0 && (
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                            {filteredMobileSuggestions.map((c, idx) => (
+                                                <li key={idx} onMouseDown={() => { setClientMobile(c.mobile); setClientName(c.name || 'Client'); setClientEmail(c.email || ''); setShowMobileSuggestions(false); }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                                    📞 <strong>{c.mobile}</strong> - {c.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <div style={{ flex: '1 1 200px' }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>Client Name {selectedClient && <span style={{color: '#2ecc71'}}>(Auto)</span>}</label>
+                                    <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                </div>
+                                <div style={{ flex: '1 1 200px' }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>Client Email {selectedClient && <span style={{color: '#2ecc71'}}>(Auto)</span>}</label>
+                                    <input type="email" placeholder="For Instant Link Delivery" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                </div>
+                                <div style={{ flex: '1 1 200px', position: 'relative' }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#444' }}>📂 Target Folder Name</label>
+                                    <input type="text" placeholder="e.g. Wedding Cinematic" value={folderName} onChange={(e) => { setFolderName(e.target.value); setShowFolderSuggestions(true); }} onFocus={() => setShowFolderSuggestions(true)} onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                    {showFolderSuggestions && existingFolders.length > 0 && (
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
+                                            {filteredFolderSuggestions.map((folder, idx) => (
+                                                <li key={idx} onMouseDown={() => { setFolderName(folder); setShowFolderSuggestions(false); }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>📁 <strong>{folder}</strong></li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* LEFT COLUMN: FORM DETAILS */}
                             <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, borderTop: '4px solid #3498db' }}>
                                 <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📝 Video Details</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                     <div>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Video Title</label>
-                                        {/* YOUTUBE LINK INPUT */}
-                                    <div style={{ background: '#fdf2e9', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #e67e22' }}>
-                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>🔗 YouTube Video Link (Unlisted)</label>
-                                        <input 
-                                            type="url" 
-                                            placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" 
-                                            value={longMediaForm.ytLink} 
-                                            onChange={(e) => setLongMediaForm({...longMediaForm, ytLink: e.target.value})} 
-                                            className="custom-admin-input" 
-                                            style={{marginTop: '5px'}}
-                                        />
-                                        <p style={{fontSize: '10px', color: '#7f8c8d', margin: '5px 0 0 0'}}>Upload the muted video to your channel and paste the link here.</p>
-                                    </div>
                                         <input type="text" placeholder="e.g. Royal Rajput Wedding Highlight" value={longMediaForm.title} onChange={(e) => setLongMediaForm({...longMediaForm, title: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
                                     </div>
+
+                                    {/* YOUTUBE LINK INPUT */}
+                                    <div style={{ background: '#fdf2e9', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #e67e22' }}>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>🔗 YouTube Video Link (Unlisted)</label>
+                                        <input type="url" placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" value={longMediaForm.ytLink} onChange={(e) => setLongMediaForm({...longMediaForm, ytLink: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                        <p style={{fontSize: '10px', color: '#7f8c8d', margin: '5px 0 0 0'}}>Upload the muted video to your channel and paste the link here.</p>
+                                    </div>
+
                                     <div>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Category</label>
                                         <select value={longMediaForm.category} onChange={(e) => setLongMediaForm({...longMediaForm, category: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}>
                                             <option value="Wedding Highlight">Wedding Highlight</option>
                                             <option value="Pre-Wedding">Pre-Wedding Song</option>
-                                            <option value="Documentary">Documentary</option>
-                                            <option value="Portfolio">Fashion Portfolio</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Description / Setup Details</label>
-                                        <textarea rows="4" placeholder="Camera used, location, couple names..." value={longMediaForm.description} onChange={(e) => setLongMediaForm({...longMediaForm, description: e.target.value})} className="custom-admin-input" style={{marginTop: '5px', resize: 'vertical'}}></textarea>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Unlock Price (Optional)</label>
-                                        <input type="number" placeholder="Leave blank for free" value={longMediaForm.customPrice} onChange={(e) => setLongMediaForm({...longMediaForm, customPrice: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Description (Optional)</label>
+                                        <textarea rows="3" value={longMediaForm.description} onChange={(e) => setLongMediaForm({...longMediaForm, description: e.target.value})} className="custom-admin-input" style={{marginTop: '5px', resize: 'vertical'}}></textarea>
                                     </div>
                                 </div>
                             </div>
 
                             {/* RIGHT COLUMN: PREVIEW & UPLOAD ACTION */}
                             <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, background: '#f8f9fa', border: '1px dashed #bdc3c7' }}>
-                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📺 Media Preview</h3>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📺 Original Media (.mp4)</h3>
                                 
-                                {/* FILE SELECTION AREA */}
                                 {!longMediaPreview ? (
-                                    <div 
-                                        style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ecf0f1', borderRadius: '10px', cursor: 'pointer', border: '2px dashed #95a5a6' }}
-                                        onClick={() => document.getElementById('long-video-upload').click()}
-                                    >
+                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ecf0f1', borderRadius: '10px', cursor: 'pointer', border: '2px dashed #95a5a6' }} onClick={() => document.getElementById('long-video-upload').click()}>
                                         <span style={{ fontSize: '40px' }}>📁</span>
-                                        <p style={{ margin: '10px 0 0 0', fontWeight: 'bold', color: '#34495e' }}>Click to Select Video File (.mp4)</p>
-                                        <input 
-                                            id="long-video-upload" 
-                                            type="file" 
-                                            accept="video/mp4,video/mov" 
-                                            style={{ display: 'none' }}
-                                            onChange={(e) => {
-                                                const file = e.target.files[0];
-                                                if(file) {
-                                                    setLongMediaFile(file);
-                                                    setLongMediaPreview(URL.createObjectURL(file));
-                                                }
-                                            }}
-                                        />
+                                        <p style={{ margin: '10px 0 0 0', fontWeight: 'bold', color: '#34495e' }}>Select Original Video with Audio</p>
+                                        <input id="long-video-upload" type="file" accept="video/mp4,video/mov" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if(file) { setLongMediaFile(file); setLongMediaPreview(URL.createObjectURL(file)); } }}/>
                                     </div>
                                 ) : (
                                     <div style={{ position: 'relative', width: '100%', borderRadius: '10px', overflow: 'hidden', background: '#000', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
-                                        <video src={longMediaPreview} controls style={{ width: '100%', height: 'auto', maxHeight: '300px', display: 'block' }} />
-                                        <button 
-                                            onClick={() => { setLongMediaFile(null); setLongMediaPreview(''); }} 
-                                            style={{ position: 'absolute', top: '10px', right: '10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
-                                            disabled={isLongUploading}
-                                        >
-                                            ✖ Remove
-                                        </button>
+                                        <video src={longMediaPreview} controls style={{ width: '100%', height: 'auto', maxHeight: '250px', display: 'block' }} />
+                                        <button onClick={() => { setLongMediaFile(null); setLongMediaPreview(''); }} style={{ position: 'absolute', top: '10px', right: '10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }} disabled={isLongUploading}>✖ Remove</button>
                                     </div>
                                 )}
 
@@ -1369,84 +1387,101 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 {isLongUploading && (
                                     <div style={{ marginTop: '20px', padding: '15px', background: '#ebf5fb', borderRadius: '8px', border: '1px solid #3498db' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '13px', fontWeight: 'bold' }}>
-                                            <span style={{color: '#2980b9'}}>🚀 Speed: {uploadSpeed || 'Calculating...'}</span>
-                                            <span style={{color: '#e67e22'}}>⏳ ETA: {uploadETA || 'Calculating...'}</span>
+                                            <span style={{color: '#2980b9'}}>🚀 {uploadSpeed || 'Calculating...'}</span>
+                                            <span style={{color: '#e67e22'}}>⏳ {uploadETA || 'Calculating...'}</span>
                                         </div>
                                         <div style={{ width: '100%', height: '10px', background: '#ccc', borderRadius: '10px', overflow: 'hidden' }}>
                                             <div style={{ width: `${uploadProgress}%`, height: '100%', background: '#3498db', transition: 'width 0.3s' }}></div>
                                         </div>
-                                        <p style={{ textAlign: 'center', fontSize: '11px', marginTop: '8px', color: '#555', fontWeight: 'bold' }}>Uploading to Server: {uploadProgress}%</p>
-                                        <p style={{ margin: '10px 0 0 0', fontSize: '10px', color: '#888', textAlign: 'center' }}>*FFmpeg will separate Audio & Video after 100% upload.</p>
+                                        <p style={{ textAlign: 'center', fontSize: '11px', marginTop: '8px', color: '#555', fontWeight: 'bold' }}>Uploading: {uploadProgress}%</p>
                                     </div>
                                 )}
 
                                 <button 
                                     disabled={isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink}
                                     onClick={async () => {
+                                        if(!clientMobile || clientMobile.length !== 10) return alert("Please assign to a valid 10-digit client mobile number!");
+                                        if(!folderName) return alert("Please provide a Target Folder Name!");
+
                                         setIsLongUploading(true);
-                                        setUploadProgress(0);
-                                        setUploadSpeed('Starting...');
-                                        setUploadETA('Calculating...');
+                                        setUploadProgress(0); setUploadSpeed('Starting...'); setUploadETA('Calculating...');
                                         
-                                        // Extract Video ID from YT Link
+                                        // 1. Extract YouTube ID
                                         let extractedYtId = "";
                                         try {
                                             const urlObj = new URL(longMediaForm.ytLink);
                                             extractedYtId = urlObj.searchParams.get("v") || urlObj.pathname.split('/').pop();
                                         } catch(e) {
-                                            alert("Invalid YouTube Link!");
-                                            setIsLongUploading(false);
-                                            return;
+                                            alert("Invalid YouTube Link!"); setIsLongUploading(false); return;
                                         }
 
-                                        let startTime = Date.now();
-                                        let lastTime = startTime;
-                                        let lastLoaded = 0;
+                                        let startTime = Date.now(); let lastTime = startTime; let lastLoaded = 0;
 
                                         try {
                                             const fd = new FormData();
                                             fd.append('videoFile', longMediaFile);
-                                            
                                             const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
                                             
-                                            const res = await axios.post(`${API_BASE}/upload-split-video`, fd, {
+                                            // 2. Upload to Cloudinary (Audio Extraction)
+                                            const extractRes = await axios.post(`${API_BASE}/upload-split-video`, fd, {
                                                 headers: { 'Authorization': `Bearer ${token}` },
                                                 onUploadProgress: (progressEvent) => {
                                                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                                                     setUploadProgress(percentCompleted);
-
                                                     const currentTime = Date.now();
                                                     if ((currentTime - lastTime) / 1000 > 0.5) { 
                                                         const speedBps = (progressEvent.loaded - lastLoaded) / ((currentTime - lastTime) / 1000);
                                                         setUploadSpeed(`${(speedBps / (1024 * 1024)).toFixed(2)} MB/s`);
                                                         const secs = (progressEvent.total - progressEvent.loaded) / speedBps;
-                                                        setUploadETA(secs > 60 ? `${Math.floor(secs / 60)}m ${Math.floor(secs % 60)}s left` : `${Math.floor(secs)}s left`);
-                                                        lastLoaded = progressEvent.loaded;
-                                                        lastTime = currentTime;
+                                                        setUploadETA(secs > 60 ? `${Math.floor(secs / 60)}m left` : `${Math.floor(secs)}s left`);
+                                                        lastLoaded = progressEvent.loaded; lastTime = currentTime;
                                                     }
                                                 }
                                             });
 
-                                            if(res.data.success) {
-                                                alert(`✅ Success!\nAudio Extracted to Cloud: ${res.data.data.audioCloudUrl}\nYT ID Linked: ${extractedYtId}`);
-                                                // Yahan par Database save logic aayega (Next step me)
+                                            if(extractRes.data.success) {
+                                                setUploadSpeed('Linking to Client DB...'); setUploadETA('Sending Notification...');
                                                 
-                                                setLongMediaFile(null);
-                                                setLongMediaPreview('');
-                                                setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
+                                                // 3. Format String and Save to DB (Triggers Email/SMS Automatically!)
+                                                const cinematicMediaString = `CINEMATIC::${extractedYtId}::${extractRes.data.data.audioCloudUrl}`;
+                                                
+                                                const payload = {
+                                                    mobile: clientMobile,
+                                                    name: clientName || 'Client',
+                                                    type: 'USER',
+                                                    folderName: folderName.trim(),
+                                                    subFolderName: '', 
+                                                    email: clientEmail,
+                                                    addedBy: user.mobile,
+                                                    fileUrls: [cinematicMediaString] 
+                                                };
+
+                                                const dbRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
+                                                    headers: { 'Authorization': `Bearer ${token}` }
+                                                });
+
+                                                if(dbRes.data.success) {
+                                                    alert(`✅ Success!\nCinematic Video saved to ${clientName || clientMobile}'s account.\n📩 Notification Link Sent!`);
+                                                    setLongMediaFile(null); setLongMediaPreview('');
+                                                    setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
+                                                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName('');
+                                                    fetchClients(); // Refresh Dashboard List
+                                                } else {
+                                                    alert("❌ Database Error: " + dbRes.data.message);
+                                                }
                                             } else {
-                                                alert("❌ Failed: " + res.data.message);
+                                                alert("❌ Extraction Failed: " + extractRes.data.message);
                                             }
                                         } catch (error) {
                                             alert(`❌ Upload Error: ${error.response?.data?.message || error.message}`);
                                         } finally {
-                                            setIsLongUploading(false);
+                                            setIsLongUploading(false); setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
                                         }
                                     }}
                                     className="global-update-btn" 
                                     style={{ width: '100%', marginTop: '20px', padding: '15px', fontSize: '16px', background: (isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink) ? '#bdc3c7' : '#2ecc71', cursor: (isLongUploading || !longMediaFile || !longMediaForm.title || !longMediaForm.ytLink) ? 'not-allowed' : 'pointer' }}
                                 >
-                                    {isLongUploading ? '🚀 Uploading & Extracting...' : '📤 Extract Audio & Link to YT'}
+                                    {isLongUploading ? '🚀 Uploading & Linking...' : '📤 Link to Client & Notify'}
                                 </button>
                             </div>
 
