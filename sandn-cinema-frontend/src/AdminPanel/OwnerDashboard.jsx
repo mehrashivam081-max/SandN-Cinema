@@ -1041,8 +1041,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
             )}
 
             <aside className="admin-sidebar">
-                <div className="sidebar-header" style={{ paddingBottom: '10px' }}>
-                    <h1 className="admin-title">SandN Cinema</h1>
+                {/* 🚀 SNEVIO LOGO + SUPER ADMIN INDICATOR */}
+                <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '25px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <h2 style={{ margin: 0, fontSize: '26px', fontWeight: '400', letterSpacing: '3px', color: '#fff' }}>
+                            SNE<span style={{ fontWeight: '800', color: '#f1c40f' }}>VIO</span>
+                        </h2>
+                    </div>
+                    {/* 👇 Ye clear karega ki ye Owner/Admin Panel hai (Red color for Super Admin) 👇 */}
+                    <span style={{ marginTop: '8px', background: 'transparent', color: '#e74c3c', border: '1px solid #e74c3c', fontSize: '10px', padding: '3px 12px', borderRadius: '15px', letterSpacing: '2px', fontWeight: 'bold' }}>
+                        OWNER PANEL
+                    </span>
                 </div>
                 
                 <div style={{ background: '#0f3460', padding: '20px 15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', position: 'relative' }}>

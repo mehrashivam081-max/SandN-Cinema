@@ -598,19 +598,6 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     return (
         <div className="owner-dashboard-container"> 
-        {/* 🔥 TEST ZONE: THE SYNC PLAYER POC 🔥 */}
-<div style={{ padding: '30px', background: '#2c3e50', borderRadius: '15px', marginTop: '20px' }}>
-    <h2 style={{ color: '#fff', textAlign: 'center', marginBottom: '20px' }}>Audio-Video Sync Test</h2>
-    
-    <SyncPlayer 
-        ytVideoId="LXb3EKWsInQ" // Ek 4K Nature Video ka ID
-        audioUrl="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" // Public Dummy MP3 Link
-    />
-    
-    <p style={{ color: '#ccc', fontSize: '12px', textAlign: 'center', marginTop: '15px' }}>
-        *Video mute chalegi, aur aawaz tumhare local MP3 link se aayegi.
-    </p>
-</div>
 
             {/* ✅ STUDIO EXIT APP POPUP */}
             {showExitPopup && (
@@ -673,8 +660,17 @@ const StudioDashboard = ({ user, onLogout }) => {
             )}
             
             <aside className="admin-sidebar">
-                <div className="sidebar-header">
-                    <h1 className="admin-title">Studio Panel</h1>
+                {/* 🚀 SNEVIO LOGO + STUDIO PANEL INDICATOR */}
+                <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '25px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <h2 style={{ margin: 0, fontSize: '26px', fontWeight: '400', letterSpacing: '3px', color: '#fff' }}>
+                            SNE<span style={{ fontWeight: '800', color: '#f1c40f' }}>VIO</span>
+                        </h2>
+                    </div>
+                    {/* 👇 Ye clear karega ki ye Studio Panel hai 👇 */}
+                    <span style={{ marginTop: '8px', background: 'transparent', color: '#888', border: '1px solid #f1c40f', fontSize: '10px', padding: '3px 12px', borderRadius: '15px', letterSpacing: '2px', fontWeight: 'bold' }}>
+                        STUDIO PANEL
+                    </span>
                 </div>
                 
                 <div style={{ background: '#0f3460', padding: '15px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center' }}>

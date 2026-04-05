@@ -92,7 +92,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ NEW: ACCEPT PROPOSAL MODAL
     const [viewProposalBooking, setViewProposalBooking] = useState(null);
 
-    const DEFAULT_FOLDER = { folderName: 'Stranger Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'SandN Cinema', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
+    const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
@@ -1923,8 +1923,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             {/* ✅ HEADER MODIFIED: Added Cart and Emergency Button */}
             <header className="ud-header-vip" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="brand-logo-vip">
-                    <h2>SandN Cinema</h2><span className="vip-badge-tag">VIP</span>
+                
+                {/* 🚀 NAYA SNEVIO LOGO (Premium Cinematic Look) */}
+                <div className="brand-logo-vip" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '400', letterSpacing: '3px', color: '#fff' }}>
+                        SNE<span style={{ fontWeight: '800', color: '#f1c40f' }}>VIO</span>
+                    </h2>
+                    <span className="vip-badge-tag" style={{ background: '#f1c40f', color: '#000', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>VIP</span>
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
