@@ -3,6 +3,7 @@ import axios from 'axios';
 import './UserDashboard.css';
 import { calculateDailyReward } from '../utils/coinLogic';
 import useBackButton from '../hooks/useBackButton';
+import SyncPlayer from '../components/SyncPlayer';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -39,6 +40,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ ADVANCED MEDIA INTERFACE STATES (Share, Collab, Download)
     const [selectedMedia, setSelectedMedia] = useState(null); 
     const [showCollabModal, setShowCollabModal] = useState(false);
+
+    // ✅ NEW: TEMPORARY SECURE ACCESS STATES
+    const [showAccessModal, setShowAccessModal] = useState(false);
+    const [accessForm, setAccessForm] = useState({ receiverMobile: '', hours: '24' });
+    const [sharedWithMe, setSharedWithMe] = useState([]);
+    const [fetchingShared, setFetchingShared] = useState(false);
 
     // ✅ MONETIZATION STATES (Pay per View/Download)
     const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
@@ -197,6 +204,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                 // ✅ FETCH SERVICES & BOOKINGS
                 fetchServicesAndBookings(activeUser.mobile);
+                fetchSharedMedia(activeUser.mobile);
 
             } catch (error) {
                 console.error("Fetch error:", error);
@@ -205,6 +213,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 setLoading(false);
             }
         };
+
 
         fetchRealTimeData();
         
@@ -221,6 +230,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             setTimeout(() => setRewardPopup({ show: false }), 4000);
         }
     }, [user?.mobile]); 
+
+
+    const fetchSharedMedia = async (userMobile) => {
+        setFetchingShared(true);
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+            const res = await axios.post(`${API_BASE}/get-shared-media`, { mobile: userMobile }, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.data.success) setSharedWithMe(res.data.data || []);
+        } catch (e) { console.log(e); }
+        finally { setFetchingShared(false); }
+    };
 
     // --- FETCH SERVICES AND BOOKINGS ---
     const fetchServicesAndBookings = async (userMobile) => {
@@ -240,15 +260,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // --- HELPERS ---
+    const isCinematic = (url) => typeof url === 'string' && url.startsWith('CINEMATIC::');
+
     const isVideo = (filePath) => {
         if (!filePath || typeof filePath !== 'string') return false;
+        if (isCinematic(filePath)) return true; // Treat Cinematic as a video type
         if (filePath.includes('/video/upload/')) return true; 
         return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
 
     const getCleanUrl = (filePath) => {
         if (!filePath) return '';
-        if (filePath.startsWith('http')) return filePath; 
+        if (filePath.startsWith('http') || isCinematic(filePath)) return filePath; 
         return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
     };
 
@@ -714,7 +737,62 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         if (currentTab === 'BOOKINGS') return renderBookingsTab();
         if (currentTab === 'HISTORY') return renderHistoryTab();
         if (currentTab === 'PROFILE') return renderProfileTab();
+        if (currentTab === 'SHARED') return renderSharedTab(); // 👈 Nayi Tab 
         return renderHomeTab();
+    };
+
+    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
+    const renderSharedTab = () => {
+        return (
+            <div className="folders-view" style={{ paddingBottom: '80px' }}>
+                <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #3498db)' }}>
+                    <h1>🔐 Shared With Me</h1>
+                    <p>Temporary premium media securely shared with you.</p>
+                </div>
+                
+                {fetchingShared ? <div className="loading-state-vip">Checking for shared media...</div> : (
+                    <div className="ud-grid-vip mt-20" style={{ padding: '20px' }}>
+                        {sharedWithMe.length > 0 ? sharedWithMe.map((item, idx) => (
+                            <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: '1px solid #8e44ad' }}>
+                                
+                                <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => {
+                                    // Yahan click karne par media khulega
+                                    setSelectedMedia({ url: item.mediaUrl, type: item.mediaType, isUnlocked: true, isShared: true, senderName: item.senderName, expiryDate: item.expiryDate });
+                                }}>
+                                    {isCinematic(item.mediaUrl) ? (
+                                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #2c3e50, #1a1a2e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#f1c40f' }}>
+                                            <span style={{ fontSize: '40px', marginBottom: '5px' }}>🎬</span>
+                                            <span style={{ fontSize: '11px', fontWeight: 'bold' }}>CINEMATIC</span>
+                                        </div>
+                                    ) : isVideo(item.mediaUrl) ? (
+                                        <>
+                                            <video src={getCleanUrl(item.mediaUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
+                                        </>
+                                    ) : (
+                                        <img src={getCleanUrl(item.mediaUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    )}
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(231,76,60,0.9)', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>
+                                        View Only
+                                    </div>
+                                </div>
+                                
+                                <div style={{ padding: '10px 12px', background: '#0f172a' }}>
+                                    <p style={{ margin: '0 0 5px 0', color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>From: {item.senderName}</p>
+                                    <p style={{ margin: 0, color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
+                                </div>
+                            </div>
+                        )) : (
+                            <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888', width: '100%', gridColumn: '1 / -1' }}>
+                                <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                                <h3>No Media Shared With You</h3>
+                                <p style={{ fontSize: '13px' }}>If someone shares premium media with you, it will securely appear here.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     // ✅ NATIVE SERVICES TAB (UPDATED WITH DISCOUNT & OFFER UI)
@@ -1017,12 +1095,20 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             </div>
                                         )}
 
-                                        {isVideo(filePath) ? (
+                                        {isCinematic(filePath) ? (
+                                            // 🎬 CINEMATIC THUMBNAIL
+                                            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #2c3e50, #1a1a2e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#f1c40f', filter: isUnlocked ? 'none' : 'blur(2px)' }}>
+                                                <span style={{ fontSize: '40px', marginBottom: '5px' }}>🎬</span>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px' }}>CINEMATIC</span>
+                                            </div>
+                                        ) : isVideo(filePath) ? (
+                                            // 🎥 NORMAL VIDEO THUMBNAIL
                                             <>
                                                 <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
                                             </>
                                         ) : (
+                                            // 📸 IMAGE THUMBNAIL
                                             <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
                                         )}
 
@@ -1553,9 +1639,26 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     {/* Media Display */}
                     <div style={{ flex: 1, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px', position: 'relative' }}>
-                        {selectedMedia.type === 'Video' ? (
+                        {isCinematic(selectedMedia.url) ? (
+                            // 🎬 NAYA SYNC PLAYER (For Cinematic YT Videos)
+                            (() => {
+                                const parts = selectedMedia.url.split('::');
+                                const ytId = parts[1];
+                                const audioLink = parts[2];
+                                return (
+                                    <div style={{ width: '100%', maxWidth: '800px', background: '#000', borderRadius: '15px', padding: '10px', boxShadow: '0 10px 40px rgba(243, 156, 18, 0.2)' }}>
+                                        <div style={{ textAlign: 'center', marginBottom: '10px', color: '#f39c12', fontWeight: 'bold', fontSize: '14px', letterSpacing: '2px' }}>
+                                            🎬 PREMIUM CINEMATIC EXPERIENCE
+                                        </div>
+                                        <SyncPlayer ytVideoId={ytId} audioUrl={audioLink} />
+                                    </div>
+                                )
+                            })()
+                        ) : selectedMedia.type === 'Video' ? (
+                            // 📱 REGULAR VIDEO PLAYER
                             <video src={getCleanUrl(selectedMedia.url)} controls autoPlay style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '10px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} />
                         ) : (
+                            // 📸 IMAGE VIEWER
                             <img src={getCleanUrl(selectedMedia.url)} style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '10px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', objectFit: 'contain', filter: selectedMedia.isUnlocked ? 'none' : 'blur(5px)' }} />
                         )}
                         
@@ -1568,45 +1671,101 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         )}
                     </div>
 
-                    {/* Action Bar (Download, Share, Collab) */}
+                    {/* Action Bar (Download, Share, Collab, Access) */}
                     <div style={{ width: '100%', background: '#1a1a2e', padding: '20px', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '600px' }}>
                         
-                        {downloadingFile === selectedMedia.url ? (
-                            <div style={{ width: '100%', background: 'rgba(255,255,255,0.1)', padding: '15px', borderRadius: '12px', textAlign: 'center' }}>
-                                <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
-                                <div style={{ width: '100%', background: 'rgba(255,255,255,0.2)', height: '5px', borderRadius: '5px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
-                                </div>
+                        {/* 🚫 AGAR FILE KISI NE SHARE KI HAI TOH SIRF VIEW ALLOWED HAI 🚫 */}
+                        {selectedMedia.isShared ? (
+                            <div style={{ background: 'rgba(231,76,60,0.1)', color: '#e74c3c', padding: '15px', borderRadius: '10px', textAlign: 'center', border: '1px dashed #e74c3c', fontSize: '13px', fontWeight: 'bold' }}>
+                                🔒 View-Only Media. Shared with you by {selectedMedia.senderName}. Downloads and sharing are disabled for security.
                             </div>
                         ) : (
-                            <button 
-                                onClick={() => {
-                                    if (selectedMedia.isUnlocked) handleDownload(selectedMedia.url);
-                                    else {
-                                        setPurchaseModal({ show: true, file: selectedMedia.url, files: [selectedMedia.url], cost: selectedMedia.cost, type: selectedMedia.type, isBatch: false });
-                                    }
-                                }} 
-                                disabled={loading}
-                                style={{ background: selectedMedia.isUnlocked ? '#2ecc71' : '#3498db', color: '#fff', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', width: '100%', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
-                            >
-                                {loading ? 'Processing...' : (selectedMedia.isUnlocked ? '⬇️ Download Original Quality' : `🔓 Unlock for ${selectedMedia.cost} Coins`)}
-                            </button>
-                        )}
+                            // NORMAL USER ACTIONS (Owner)
+                            <>
+                                {downloadingFile === selectedMedia.url ? (
+                                    <div style={{ width: '100%', background: 'rgba(255,255,255,0.1)', padding: '15px', borderRadius: '12px', textAlign: 'center' }}>
+                                        <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
+                                        <div style={{ width: '100%', background: 'rgba(255,255,255,0.2)', height: '5px', borderRadius: '5px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${downloadProgress}%`, background: '#3498db', height: '100%', transition: '0.2s' }}></div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => {
+                                            if (selectedMedia.isUnlocked) handleDownload(selectedMedia.url);
+                                            else setPurchaseModal({ show: true, file: selectedMedia.url, files: [selectedMedia.url], cost: selectedMedia.cost, type: selectedMedia.type, isBatch: false });
+                                        }} 
+                                        disabled={loading}
+                                        style={{ background: selectedMedia.isUnlocked ? '#2ecc71' : '#3498db', color: '#fff', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', width: '100%', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
+                                    >
+                                        {loading ? 'Processing...' : (selectedMedia.isUnlocked ? '⬇️ Download Original Quality' : `🔓 Unlock for ${selectedMedia.cost} Coins`)}
+                                    </button>
+                                )}
 
-                        {/* Social Buttons - ONLY VISIBLE IF UNLOCKED */}
-                        {selectedMedia.isUnlocked && (
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button onClick={handleNativeShare} style={{ flex: 1, background: '#f39c12', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                    📤 Share Post
-                                </button>
-                                <button onClick={() => setShowCollabModal(true)} style={{ flex: 1, background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                    🤝 Instagram Collab
-                                </button>
-                            </div>
+                                {selectedMedia.isUnlocked && (
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <button onClick={handleNativeShare} style={{ flex: 1, minWidth: '120px', background: '#f39c12', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>📤 Share</button>
+                                        <button onClick={() => setShowCollabModal(true)} style={{ flex: 1, minWidth: '120px', background: 'linear-gradient(45deg, #f09433, #bc1888)', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>🤝 Collab</button>
+                                        {/* 👇 NAYA BUTTON: GRANT ACCESS 👇 */}
+                                        <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, minWidth: '120px', background: '#8e44ad', color: '#fff', border: 'none', padding: '12px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                                            🔐 Grant Access
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
                         <p style={{ textAlign: 'center', color: '#777', fontSize: '11px', margin: 0 }}>
-                            {selectedMedia.isUnlocked ? "You have full access to this media." : `Once unlocked, access validity: ${activeFolder?.unlockValidity || '24 Hours'}`}
+                            {selectedMedia.isShared ? `Access expires on: ${new Date(selectedMedia.expiryDate).toLocaleString()}` : (selectedMedia.isUnlocked ? "You have full access to this media." : `Once unlocked, access validity: ${activeFolder?.unlockValidity || '24 Hours'}`)}
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ GRANT SECURE ACCESS MODAL (Popup) */}
+            {showAccessModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(142,68,173,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ color: '#8e44ad', margin: 0 }}>🔐 Secure Access</h2>
+                            <button onClick={() => setShowAccessModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Grant temporary view-only access to another registered user. They cannot download or share it.</p>
+                        
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (accessForm.receiverMobile.length !== 10) return alert("Enter valid 10-digit number!");
+                            setLoading(true);
+                            try {
+                                const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+                                const res = await axios.post(`${API_BASE}/grant-media-access`, {
+                                    senderMobile: syncUser.mobile,
+                                    receiverMobile: accessForm.receiverMobile,
+                                    mediaUrl: selectedMedia.url,
+                                    mediaType: selectedMedia.type,
+                                    hours: accessForm.hours
+                                }, { headers: { 'Authorization': `Bearer ${token}` } });
+                                
+                                if (res.data.success) {
+                                    alert(`✅ ${res.data.message}`);
+                                    setShowAccessModal(false);
+                                } else { alert(`❌ ${res.data.message}`); }
+                            } catch (err) { alert("Server Error."); }
+                            finally { setLoading(false); }
+                        }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            
+                            <input type="number" placeholder="Recipient's 10-Digit Mobile" required value={accessForm.receiverMobile} onChange={e => setAccessForm({...accessForm, receiverMobile: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%' }} />
+                            
+                            <select value={accessForm.hours} onChange={e => setAccessForm({...accessForm, hours: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%' }}>
+                                <option value="1">⏳ 1 Hour Access</option>
+                                <option value="12">⏳ 12 Hours Access</option>
+                                <option value="24">⏳ 24 Hours Access</option>
+                                <option value="168">⏳ 7 Days Access</option>
+                            </select>
+
+                            <button type="submit" disabled={loading} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
+                                {loading ? 'Granting...' : 'Send Secure Link 🚀'}
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}
@@ -1686,6 +1845,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
                 <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
                     🏠<span>Home</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
+                    🔐<span>Shared</span>
                 </button>
                 <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
                     📸<span>Services</span>
