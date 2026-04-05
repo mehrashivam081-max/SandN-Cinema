@@ -49,8 +49,10 @@ const upload = multer({ storage: storage });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+// NOTE: Database name vahi rehne do taaki purana data na khoye, bas Website URL update karo
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
-const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema/"; 
+// ✅ URL wahi purana rakhenge taaki links na tootein
+const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema/";
 
 app.use(cors({
     origin: [
@@ -77,7 +79,7 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
     const brevoKey = process.env.BREVO_KEY;
 
     const data = {
-        sender: { name: "SandN Cinema", email: senderEmail },
+        sender: { name: "Snevio", email: senderEmail },
         to: [{ email: toEmail }],
         subject: subject,
         htmlContent: htmlContent
@@ -136,16 +138,16 @@ const sendUploadNotification = async (mobile, email, name) => {
         try {
             await sendBrevoEmail(
                 email, 
-                "Data Uploaded - SandN Cinema", 
+                "Data Uploaded - Snevio Studio Cloud", 
                 `<div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; border-radius: 10px;">
                     <h2 style="color: #2b5876;">Hello ${name},</h2>
-                    <p style="color: #444; font-size: 15px;">Your event data has been successfully uploaded to your account.</p>
-                    <p style="color: #444; font-size: 15px;">You can login using your mobile number or email to view and download your media.</p>
+                    <p style="color: #444; font-size: 15px;">New event media has been successfully uploaded to your account on <strong>Snevio</strong>.</p>
+                    <p style="color: #444; font-size: 15px;">Login to your cloud dashboard to view and manage your memories securely.</p>
                     <br/>
                     <div style="text-align: center; margin-top: 15px; margin-bottom: 25px;">
-                        <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Visit SandN Cinema</a>
+                        <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Access Snevio Cloud</a>
                     </div>
-                    <p style="color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px;">Thanks,<br/>Team SandN Cinema</p>
+                    <p style="color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px;">Best Regards,<br/>Team Snevio</p>
                 </div>`
             );
             console.log(`✅ Email Notification Sent to ${email}`);
@@ -284,7 +286,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
             try {
                 await sendBrevoEmail(
                     targetEmail,
-                    "Login Verification - SandN Cinema",
+                    "Login Verification - Snevio",
                     `<div style="font-family: Arial, sans-serif; padding: 20px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px; text-align: center;">
                         <h2 style="color: #2b5876;">Login Verification</h2>
                         <p style="color: #555;">Your Security OTP is:</p>
@@ -345,9 +347,9 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
             try {
                 await sendBrevoEmail(
                     email,
-                    "Verify Registration - SandN Cinema",
+                    "Verify Registration - Snevio",
                     `<div style="font-family: Arial, sans-serif; padding: 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
-                        <h2 style="color: #2b5876;">Welcome to SandN Cinema!</h2>
+                        <h2 style="color: #2b5876;">Welcome to Snevio!</h2>
                         <p style="color: #555;">Use the Verification Code below to create your account.</p>
                         <h1 style="color: #3498db; letter-spacing: 5px; margin: 20px 0;">${randomOTP}</h1>
                         <a href="${WEBSITE_URL}" style="background-color: #34495e; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 15px;">Go to Website</a>
@@ -680,7 +682,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             return res.json({ success: true, message: `Data appended to '${finalFolderName}' successfully!` });
         }
 
-        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
+        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@snevio.com`;
         
         const folderStructure = [{
             folderName: finalFolderName,
@@ -813,7 +815,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
         }
 
         // COMPLETELY NEW USER
-        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@sandn.com`;
+        const targetEmail = (email && email.trim() !== '') ? email : `dummy_${mobile}@snevio.com`;
         
         const folderStructure = [{
             folderName: finalFolderName,
@@ -1303,7 +1305,7 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
         else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
 
         // ✅ AUTO-CREDIT COINS TO STUDIO'S WALLET
-        if (targetStudio && targetStudio !== 'ADMIN' && targetStudio !== 'SandN Cinema') {
+        if (targetStudio && targetStudio !== 'ADMIN' && targetStudio !== 'Snevio') {
             try {
                 const studio = await Studio.findOne({ studioName: targetStudio });
                 if (studio) {
@@ -1332,12 +1334,12 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
         // ✅ EMAIL NOTIFICATION LOGIC
         const targetEmail = account.data.email;
         if (targetEmail && !targetEmail.includes('dummy_')) {
-            const subject = "Media Unlocked Successfully - SandN Cinema";
+            const subject = "Media Unlocked Successfully - Snevio";
             const htmlContent = `
                 <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 500px; margin: 0 auto; background: #fafafa;">
                     <h2 style="color: #2ecc71; text-align: center;">Unlock Successful! 🎉</h2>
                     <p style="color: #444;">Hello <strong>${account.data.name || account.data.studioName || 'User'}</strong>,</p>
-                    <p style="color: #444;">You have successfully unlocked <strong>${filesToUnlock.length}</strong> premium media file(s) on SandN Cinema.</p>
+                    <p style="color: #444;">You have successfully unlocked <strong>${filesToUnlock.length}</strong> premium media file(s) on Snevio.</p>
                     <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 15px 0; border: 1px dashed #ccc;">
                         <p style="margin: 5px 0;">Total Coins Deducted: <strong style="color: #e74c3c;">${amount}</strong></p>
                         <p style="margin: 5px 0;">Remaining Coin Balance: <strong style="color: #f39c12;">${wallet.coins}</strong></p>
@@ -1348,7 +1350,7 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
                         <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">View Unlocked Media</a>
                     </div>
                     <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
-                    <p style="font-size: 11px; color: #999; text-align: center;">Thank you for choosing SandN Cinema.</p>
+                    <p style="font-size: 11px; color: #999; text-align: center;">Thank you for choosing Snevio.</p>
                 </div>
             `;
             sendBrevoEmail(targetEmail, subject, htmlContent).catch(e => console.log("Email failed, but unlock success"));
@@ -1760,7 +1762,7 @@ app.post('/api/auth/send-proposal', async (req, res) => {
                     <div style="text-align: center; margin-top: 25px;">
                         <a href="${WEBSITE_URL}" style="background-color: #f39c12; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details & Pay Advance</a>
                     </div>
-                    <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Thank you for choosing SandN Cinema.</p>
+                    <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Thank you for choosing Snevio.</p>
                 </div>
             `;
             sendBrevoEmail(booking.email, "Action Required: Your Custom Booking Proposal", htmlContent).catch(()=>console.log("Proposal Email Failed"));
@@ -1839,7 +1841,7 @@ app.post('/api/auth/accept-proposal', async (req, res) => {
                     </div>
                 </div>
             `;
-            sendBrevoEmail(booking.email, "Booking Confirmed - SandN Cinema", htmlContent).catch(()=>console.log("Confirmation Email Failed"));
+            sendBrevoEmail(booking.email, "Booking Confirmed - Snevio", htmlContent).catch(()=>console.log("Confirmation Email Failed"));
         }
 
         res.json({ success: true, message: "Advance Paid! Booking Officially Confirmed.", data: booking });
@@ -2070,7 +2072,7 @@ app.post('/api/auth/upload-split-video', authenticateToken, upload.single('video
         console.log("☁️ Uploading Audio to Cloudinary...");
         const cloudAudioRes = await cloudinary.uploader.upload(audioOutputPath, {
             resource_type: 'video', 
-            folder: 'sandn_audio_splits'
+            folder: 'snevio_audio_splits'
         });
 
         // 🧹 Clean up temp files (Delete original video and temp audio from server)
@@ -2112,7 +2114,7 @@ app.post('/api/auth/grant-media-access', authenticateToken, async (req, res) => 
         
         // Check if receiver exists
         const receiverAcc = await findAccount(receiverMobile);
-        if (!receiverAcc) return res.json({ success: false, message: "User not found! Receiver must be registered on SandN Cinema." });
+        if (!receiverAcc) return res.json({ success: false, message: "User not found! Receiver must be registered on Snevio." });
 
         const expiryDate = new Date();
         expiryDate.setHours(expiryDate.getHours() + parseInt(hours));
