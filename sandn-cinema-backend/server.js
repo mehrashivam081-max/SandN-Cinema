@@ -2091,6 +2091,75 @@ app.post('/api/auth/upload-split-video', authenticateToken, upload.single('video
     }
 });
 
+// ==========================================
+// 🔐 27. TEMPORARY MEDIA ACCESS (VIEW-ONLY)
+// ==========================================
+const sharedMediaSchema = new mongoose.Schema({
+    senderMobile: String,
+    senderName: String,
+    receiverMobile: String,
+    mediaUrl: String,
+    mediaType: String,
+    expiryDate: Date,
+    createdAt: { type: Date, default: Date.now }
+});
+const SharedMedia = mongoose.models.SharedMedia || mongoose.model('SharedMedia', sharedMediaSchema);
+
+// 📤 API 1: Grant Temporary Access
+app.post('/api/auth/grant-media-access', authenticateToken, async (req, res) => {
+    try {
+        const { senderMobile, receiverMobile, mediaUrl, mediaType, hours } = req.body;
+        
+        // Check if receiver exists
+        const receiverAcc = await findAccount(receiverMobile);
+        if (!receiverAcc) return res.json({ success: false, message: "User not found! Receiver must be registered on SandN Cinema." });
+
+        const expiryDate = new Date();
+        expiryDate.setHours(expiryDate.getHours() + parseInt(hours));
+
+        const senderAcc = await findAccount(senderMobile);
+        const senderName = senderAcc ? (senderAcc.data.name || senderAcc.data.studioName) : "A User";
+
+        await SharedMedia.create({
+            senderMobile, senderName, receiverMobile, mediaUrl, mediaType, expiryDate
+        });
+
+        // Send Email Notification if receiver has an email
+        if (receiverAcc.data.email && !receiverAcc.data.email.includes('dummy_')) {
+            const subject = `You have been granted access to a Premium Media! 🔐`;
+            const html = `
+                <div style="font-family: Arial; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <h2 style="color: #2ecc71;">Temporary Access Granted! 🎬</h2>
+                    <p>Hello <strong>${receiverAcc.data.name || 'User'}</strong>,</p>
+                    <p><strong>${senderName}</strong> has shared a premium ${mediaType} with you.</p>
+                    <p style="color: #e74c3c;"><strong>⏳ Access expires in ${hours} hours.</strong></p>
+                    <a href="${WEBSITE_URL}" style="background: #3498db; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Login to View</a>
+                </div>
+            `;
+            sendBrevoEmail(receiverAcc.data.email, subject, html).catch(()=>console.log("Email failed"));
+        }
+
+        res.json({ success: true, message: `Access granted securely for ${hours} hours! Notification sent.` });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
+// 📥 API 2: Fetch Shared Media for User
+app.post('/api/auth/get-shared-media', authenticateToken, async (req, res) => {
+    try {
+        const { mobile } = req.body;
+        // Delete expired media first
+        await SharedMedia.deleteMany({ expiryDate: { $lt: new Date() } });
+        
+        const sharedFiles = await SharedMedia.find({ receiverMobile: mobile }).sort({ createdAt: -1 });
+        res.json({ success: true, data: sharedFiles });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
