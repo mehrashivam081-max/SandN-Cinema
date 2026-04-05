@@ -2146,15 +2146,30 @@ app.post('/api/auth/grant-media-access', authenticateToken, async (req, res) => 
     }
 });
 
-// 📥 API 2: Fetch Shared Media for User
+// 📥 API 2: Fetch Shared Media (Sent & Received)
 app.post('/api/auth/get-shared-media', authenticateToken, async (req, res) => {
     try {
         const { mobile } = req.body;
         // Delete expired media first
         await SharedMedia.deleteMany({ expiryDate: { $lt: new Date() } });
         
-        const sharedFiles = await SharedMedia.find({ receiverMobile: mobile }).sort({ createdAt: -1 });
-        res.json({ success: true, data: sharedFiles });
+        // Fetch both Received and Sent media
+        const sharedWithMe = await SharedMedia.find({ receiverMobile: mobile }).sort({ createdAt: -1 });
+        const sharedByMe = await SharedMedia.find({ senderMobile: mobile }).sort({ createdAt: -1 });
+        
+        res.json({ success: true, data: { sharedWithMe, sharedByMe } });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
+// 🗑️ API 3: Revoke Access (Cancel Sharing)
+app.post('/api/auth/revoke-media-access', authenticateToken, async (req, res) => {
+    try {
+        const { id, mobile } = req.body;
+        // Delete only if the sender is the one requesting
+        await SharedMedia.findOneAndDelete({ _id: id, senderMobile: mobile });
+        res.json({ success: true, message: "Access revoked successfully!" });
     } catch (e) {
         res.status(500).json({ success: false, message: "Server Error" });
     }
