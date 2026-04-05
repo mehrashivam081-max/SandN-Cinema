@@ -45,6 +45,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [showAccessModal, setShowAccessModal] = useState(false);
     const [accessForm, setAccessForm] = useState({ receiverMobile: '', hours: '24' });
     const [sharedWithMe, setSharedWithMe] = useState([]);
+    const [sharedByMe, setSharedByMe] = useState([]); // 👈 NEW
+    const [sharedTabFilter, setSharedTabFilter] = useState('RECEIVED'); // 👈 NEW
+    const [viewBookingDetails, setViewBookingDetails] = useState(null); // 👈 NEW (For Booking Details)
     const [fetchingShared, setFetchingShared] = useState(false);
 
     // ✅ MONETIZATION STATES (Pay per View/Download)
@@ -237,7 +240,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         try {
             const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
             const res = await axios.post(`${API_BASE}/get-shared-media`, { mobile: userMobile }, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (res.data.success) setSharedWithMe(res.data.data || []);
+            if (res.data.success) {
+                setSharedWithMe(res.data.data.sharedWithMe || []);
+                setSharedByMe(res.data.data.sharedByMe || []);
+            }
         } catch (e) { console.log(e); }
         finally { setFetchingShared(false); }
     };
@@ -273,6 +279,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         if (!filePath) return '';
         if (filePath.startsWith('http') || isCinematic(filePath)) return filePath; 
         return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
+    };
+
+    const handleRevokeAccess = async (id) => {
+        if (!window.confirm("Are you sure you want to revoke access? The user will no longer see this media.")) return;
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+            const res = await axios.post(`${API_BASE}/revoke-media-access`, { id, mobile: syncUser.mobile }, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.data.success) {
+                alert("Access Revoked Successfully!");
+                fetchSharedMedia(syncUser.mobile); // Refresh the lists
+            }
+        } catch (e) { alert("Error revoking access."); }
     };
 
     // ✅ CHECK IF FILE IS UNLOCKED (VALIDITY CHECK)
@@ -743,21 +761,34 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
     const renderSharedTab = () => {
+        const displayedList = sharedTabFilter === 'RECEIVED' ? sharedWithMe : sharedByMe;
+
         return (
             <div className="folders-view" style={{ paddingBottom: '80px' }}>
                 <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #3498db)' }}>
-                    <h1>🔐 Shared With Me</h1>
-                    <p>Temporary premium media securely shared with you.</p>
+                    <h1>🔐 Media Sharing</h1>
+                    <p>Manage access to premium content.</p>
                 </div>
                 
+                {/* 🎛️ NEW: TOGGLE BUTTONS */}
+                <div style={{ display: 'flex', gap: '10px', padding: '20px 20px 0 20px' }}>
+                    <button onClick={() => setSharedTabFilter('RECEIVED')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'RECEIVED' ? '#8e44ad' : '#1a1a2e', color: sharedTabFilter === 'RECEIVED' ? '#fff' : '#888' }}>
+                        📥 Received ({sharedWithMe.length})
+                    </button>
+                    <button onClick={() => setSharedTabFilter('SENT')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'SENT' ? '#3498db' : '#1a1a2e', color: sharedTabFilter === 'SENT' ? '#fff' : '#888' }}>
+                        📤 Shared By Me ({sharedByMe.length})
+                    </button>
+                </div>
+
                 {fetchingShared ? <div className="loading-state-vip">Checking for shared media...</div> : (
                     <div className="ud-grid-vip mt-20" style={{ padding: '20px' }}>
-                        {sharedWithMe.length > 0 ? sharedWithMe.map((item, idx) => (
-                            <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: '1px solid #8e44ad' }}>
+                        {displayedList.length > 0 ? displayedList.map((item, idx) => (
+                            <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: sharedTabFilter === 'RECEIVED' ? '1px solid #8e44ad' : '1px solid #3498db' }}>
                                 
                                 <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => {
-                                    // Yahan click karne par media khulega
-                                    setSelectedMedia({ url: item.mediaUrl, type: item.mediaType, isUnlocked: true, isShared: true, senderName: item.senderName, expiryDate: item.expiryDate });
+                                    if(sharedTabFilter === 'RECEIVED') {
+                                        setSelectedMedia({ url: item.mediaUrl, type: item.mediaType, isUnlocked: true, isShared: true, senderName: item.senderName, expiryDate: item.expiryDate });
+                                    }
                                 }}>
                                     {isCinematic(item.mediaUrl) ? (
                                         <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #2c3e50, #1a1a2e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#f1c40f' }}>
@@ -772,21 +803,31 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     ) : (
                                         <img src={getCleanUrl(item.mediaUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     )}
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(231,76,60,0.9)', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>
-                                        View Only
+                                    
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: sharedTabFilter === 'RECEIVED' ? 'rgba(231,76,60,0.9)' : 'rgba(52,152,219,0.9)', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>
+                                        {sharedTabFilter === 'RECEIVED' ? 'View Only' : 'Shared Out'}
                                     </div>
                                 </div>
                                 
                                 <div style={{ padding: '10px 12px', background: '#0f172a' }}>
-                                    <p style={{ margin: '0 0 5px 0', color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>From: {item.senderName}</p>
-                                    <p style={{ margin: 0, color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
+                                    <p style={{ margin: '0 0 5px 0', color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>
+                                        {sharedTabFilter === 'RECEIVED' ? `From: ${item.senderName}` : `To: ${item.receiverMobile}`}
+                                    </p>
+                                    <p style={{ margin: '0 0 10px 0', color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
+                                    
+                                    {/* 👇 NAYA BUTTON: REVOKE ACCESS (Sirf Sender ke liye) 👇 */}
+                                    {sharedTabFilter === 'SENT' && (
+                                        <button onClick={() => handleRevokeAccess(item._id)} style={{ width: '100%', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '8px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+                                            ❌ Revoke Access
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )) : (
                             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888', width: '100%', gridColumn: '1 / -1' }}>
                                 <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
-                                <h3>No Media Shared With You</h3>
-                                <p style={{ fontSize: '13px' }}>If someone shares premium media with you, it will securely appear here.</p>
+                                <h3>No Media Here</h3>
+                                <p style={{ fontSize: '13px' }}>{sharedTabFilter === 'RECEIVED' ? 'No one has shared media with you yet.' : 'You haven\'t shared any media securely yet.'}</p>
                             </div>
                         )}
                     </div>
@@ -943,7 +984,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                 ⚠️ View Proposal & Pay
                                             </button>
                                         ) : (
-                                            <button style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>View Details</button>
+                                            <button onClick={() => setViewBookingDetails(booking)} style={{ background: 'transparent', border: '1px solid #3498db', color: '#3498db', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>View Details</button>
                                         )}
                                     </div>
                                 </div>
@@ -1753,9 +1794,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             finally { setLoading(false); }
                         }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                             
-                            <input type="number" placeholder="Recipient's 10-Digit Mobile" required value={accessForm.receiverMobile} onChange={e => setAccessForm({...accessForm, receiverMobile: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%' }} />
+                            {/* Mobile Number Input */}
+                            <input 
+                                type="number" 
+                                placeholder="Recipient's 10-Digit Mobile" 
+                                required 
+                                value={accessForm.receiverMobile} 
+                                onChange={e => setAccessForm({...accessForm, receiverMobile: e.target.value})} 
+                                style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%', color: '#333', backgroundColor: '#f8f9fa', outline: 'none' }} 
+                            />
                             
-                            <select value={accessForm.hours} onChange={e => setAccessForm({...accessForm, hours: e.target.value})} style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%' }}>
+                            {/* Time Selection Dropdown */}
+                            <select 
+                                value={accessForm.hours} 
+                                onChange={e => setAccessForm({...accessForm, hours: e.target.value})} 
+                                style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%', color: '#333', backgroundColor: '#f8f9fa', outline: 'none' }}
+                            >
                                 <option value="1">⏳ 1 Hour Access</option>
                                 <option value="12">⏳ 12 Hours Access</option>
                                 <option value="24">⏳ 24 Hours Access</option>
@@ -1811,6 +1865,57 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <p style={{color:'#aaa', margin:'0 0 20px 0', fontSize:'14px'}}>{rewardPopup.type === 'EARNED' ? `You earned +${rewardPopup.coins} Coin.` : 'You missed a day. Start again!'}</p>
                         <div style={{background:'#f1c40f', color:'#000', padding:'5px 15px', borderRadius:'20px', fontWeight:'bold', display:'inline-block'}}>
                             🔥 {rewardPopup.streak} Day Streak
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ BOOKING DETAILS MODAL */}
+            {viewBookingDetails && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '30px', borderRadius: '25px', width: '90%', maxWidth: '450px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '1px solid #333', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '15px' }}>
+                            <h2 style={{ color: '#fff', margin: 0 }}>🧾 Booking Details</h2>
+                            <button onClick={() => setViewBookingDetails(null)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#fff', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div style={{ background: '#0f172a', padding: '15px', borderRadius: '10px' }}>
+                                <span style={{ color: '#888', fontSize: '11px' }}>Service Name</span>
+                                <h3 style={{ color: '#3498db', margin: '5px 0 0 0' }}>{viewBookingDetails.type}</h3>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div style={{ flex: 1, background: '#0f172a', padding: '15px', borderRadius: '10px' }}>
+                                    <span style={{ color: '#888', fontSize: '11px' }}>Status</span>
+                                    <p style={{ color: viewBookingDetails.status === 'Accepted' ? '#2ecc71' : '#f1c40f', margin: '5px 0 0 0', fontWeight: 'bold' }}>{viewBookingDetails.status}</p>
+                                </div>
+                                <div style={{ flex: 1, background: '#0f172a', padding: '15px', borderRadius: '10px' }}>
+                                    <span style={{ color: '#888', fontSize: '11px' }}>Date</span>
+                                    <p style={{ color: '#fff', margin: '5px 0 0 0', fontWeight: 'bold' }}>{new Date(viewBookingDetails.createdAt).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+
+                            {viewBookingDetails.proposal && (
+                                <>
+                                    <div style={{ background: '#0f172a', padding: '15px', borderRadius: '10px' }}>
+                                        <span style={{ color: '#888', fontSize: '11px' }}>Deliverables</span>
+                                        <p style={{ color: '#fff', margin: '5px 0 0 0', fontSize: '13px' }}>{viewBookingDetails.proposal.deliverables}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div style={{ flex: 1, background: 'rgba(46, 204, 113, 0.1)', border: '1px solid #2ecc71', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                                            <span style={{ color: '#2ecc71', fontSize: '11px' }}>Total Price</span>
+                                            <h3 style={{ color: '#2ecc71', margin: '5px 0 0 0' }}>₹{viewBookingDetails.proposal.totalPrice}</h3>
+                                        </div>
+                                        <div style={{ flex: 1, background: 'rgba(52, 152, 219, 0.1)', border: '1px solid #3498db', padding: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                                            <span style={{ color: '#3498db', fontSize: '11px' }}>Advance Paid</span>
+                                            <h3 style={{ color: '#3498db', margin: '5px 0 0 0' }}>₹{viewBookingDetails.proposal.advanceAmount}</h3>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            
+                            <button onClick={() => setViewBookingDetails(null)} style={{ width: '100%', padding: '15px', background: '#333', color: '#fff', border: 'none', borderRadius: '10px', marginTop: '10px', cursor: 'pointer', fontWeight: 'bold' }}>Close Details</button>
                         </div>
                     </div>
                 </div>

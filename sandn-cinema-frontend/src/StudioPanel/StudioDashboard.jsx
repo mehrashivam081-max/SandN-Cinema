@@ -16,7 +16,7 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [openDropdown, setOpenDropdown] = useState(null);
 
     // ✅ NEW: LONG MEDIA (CINEMATIC) UPLOAD STATES
-    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
+    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '', freeHours: '0', monthlyPrice: '', yearlyPrice: '' });
     const [longMediaFile, setLongMediaFile] = useState(null);
     const [longMediaPreview, setLongMediaPreview] = useState('');
     const [isLongUploading, setIsLongUploading] = useState(false);
@@ -1338,7 +1338,7 @@ const StudioDashboard = ({ user, onLogout }) => {
 
                             {/* LEFT COLUMN: FORM DETAILS */}
                             <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, borderTop: '4px solid #3498db' }}>
-                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📝 Video Details</h3>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📝 Video & Subscription Details</h3>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                     <div>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Video Title</label>
@@ -1347,9 +1347,26 @@ const StudioDashboard = ({ user, onLogout }) => {
 
                                     {/* YOUTUBE LINK INPUT */}
                                     <div style={{ background: '#fdf2e9', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #e67e22' }}>
-                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>🔗 YouTube Video Link (Unlisted)</label>
-                                        <input type="url" placeholder="e.g. https://youtu.be/dQw4w9WgXcQ" value={longMediaForm.ytLink} onChange={(e) => setLongMediaForm({...longMediaForm, ytLink: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
-                                        <p style={{fontSize: '10px', color: '#7f8c8d', margin: '5px 0 0 0'}}>Upload the muted video to your channel and paste the link here.</p>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>🔗 Real YouTube Link (Unlisted)</label>
+                                        <input type="url" placeholder="Paste your Unlisted YouTube link here" value={longMediaForm.ytLink} onChange={(e) => setLongMediaForm({...longMediaForm, ytLink: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                    </div>
+
+                                    {/* ✅ NEW: SUBSCRIPTION & FREE TIME LOGIC */}
+                                    <div style={{ background: '#e8f8f5', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #1abc9c' }}>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#16a085' }}>⏳ Free Access Time (Hours)</label>
+                                        <input type="number" placeholder="e.g. 24 (Leave 0 for always free)" value={longMediaForm.freeHours} onChange={(e) => setLongMediaForm({...longMediaForm, freeHours: e.target.value})} className="custom-admin-input" style={{marginTop: '5px', marginBottom: '10px'}}/>
+                                        
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#16a085' }}>Monthly Charge (₹)</label>
+                                                <input type="number" placeholder="e.g. 199" value={longMediaForm.monthlyPrice} onChange={(e) => setLongMediaForm({...longMediaForm, monthlyPrice: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#16a085' }}>Yearly Charge (₹)</label>
+                                                <input type="number" placeholder="e.g. 999" value={longMediaForm.yearlyPrice} onChange={(e) => setLongMediaForm({...longMediaForm, yearlyPrice: e.target.value})} className="custom-admin-input" style={{marginTop: '5px'}}/>
+                                            </div>
+                                        </div>
+                                        <p style={{fontSize: '10px', color: '#7f8c8d', margin: '5px 0 0 0'}}>Users can watch free for the specified time, then must buy a plan.</p>
                                     </div>
 
                                     <div>
@@ -1358,10 +1375,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                                             <option value="Wedding Highlight">Wedding Highlight</option>
                                             <option value="Pre-Wedding">Pre-Wedding Song</option>
                                         </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#7f8c8d' }}>Description (Optional)</label>
-                                        <textarea rows="3" value={longMediaForm.description} onChange={(e) => setLongMediaForm({...longMediaForm, description: e.target.value})} className="custom-admin-input" style={{marginTop: '5px', resize: 'vertical'}}></textarea>
                                     </div>
                                 </div>
                             </div>
@@ -1443,7 +1456,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 setUploadSpeed('Linking to Client DB...'); setUploadETA('Sending Notification...');
                                                 
                                                 // 3. Format String and Save to DB (Triggers Email/SMS Automatically!)
-                                                const cinematicMediaString = `CINEMATIC::${extractedYtId}::${extractRes.data.data.audioCloudUrl}`;
+                                                const cinematicMediaString = `CINEMATIC::${extractedYtId}::${extractRes.data.data.audioCloudUrl}::${longMediaForm.freeHours || 0}::${longMediaForm.monthlyPrice || 0}::${longMediaForm.yearlyPrice || 0}`;
                                                 
                                                 const payload = {
                                                     mobile: clientMobile,
@@ -1461,7 +1474,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 });
 
                                                 if(dbRes.data.success) {
-                                                    alert(`✅ Success!\nCinematic Video saved to ${clientName || clientMobile}'s account.\n📩 Notification Link Sent!`);
+                                                    alert(`✅ Success!\nCinematic Video saved to DB.\nSubscription Plans Applied.`);
                                                     setLongMediaFile(null); setLongMediaPreview('');
                                                     setLongMediaForm({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '' });
                                                     setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName('');
