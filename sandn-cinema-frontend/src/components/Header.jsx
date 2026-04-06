@@ -5,7 +5,9 @@ const Header = ({ user, onLoginClick, onProfileClick, theme, toggleTheme }) => {
     return (
         <header className="app-header">
             <div className="logo-container">
-                <h1 className="logo-text">SandN <span className="logo-highlight">Cinema</span></h1>
+                {/* Naya Logo Add Kiya Hai */}
+                <img src="/favicon.png" alt="Snevio Logo" className="header-logo-icon" />
+                <h1 className="logo-text">Snevio</h1>
             </div>
 
             <div className="header-actions">

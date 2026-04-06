@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import axios from 'axios'; // ✅ AXIOS IMPORTED
+import axios from 'axios'; 
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
 
+// Note: Agar tumne backend (Render) ka naam bhi change kiya hai, toh ye URL bhi update kar lena.
+// Abhi ke liye ye purane backend se connect rahega jo theek chalega.
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 // 🔒 GLOBAL AXIOS INTERCEPTOR (The Auto-Attacher)
-// Ye app se jaane wali har request me digital lock/token add kar dega
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
@@ -29,9 +30,9 @@ function App() {
     const handleOffline = () => {
       alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
       localStorage.removeItem('user'); 
-      localStorage.removeItem('authToken'); // Clear token
+      localStorage.removeItem('authToken'); 
       sessionStorage.removeItem('user'); 
-      window.location.href = "/SandN-Cinema/"; 
+      window.location.href = "/"; // ✅ CHANGED: Ab snevio.com/ par redirect karega
     };
 
     window.addEventListener('offline', handleOffline);
@@ -41,12 +42,12 @@ function App() {
       const token = localStorage.getItem('authToken');
       const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
       
-      // Hacker check: Agar user ka data pada hai par Token nahi hai, iska matlab hack kiya gaya hai!
+      // Hacker check: Agar user ka data pada hai par Token nahi hai!
       if (userStr && !token) {
         console.warn("Security Alert: No token found. Kicking out.");
         localStorage.clear();
         sessionStorage.clear();
-        window.location.href = "/SandN-Cinema/";
+        window.location.href = "/"; // ✅ CHANGED
         return;
       }
 
@@ -66,7 +67,7 @@ function App() {
             alert("Your session has expired or is invalid! Please log in again.");
             localStorage.clear();
             sessionStorage.clear();
-            window.location.href = "/SandN-Cinema/";
+            window.location.href = "/"; // ✅ CHANGED
           }
         } catch (e) {
           console.error("Session verification failed", e);
@@ -80,7 +81,8 @@ function App() {
   }, []);
 
   return (
-    <BrowserRouter basename="/SandN-Cinema">
+    // ✅ CHANGED: basename hata diya. Ab ye naye domain snevio.com ke liye ekdum ready hai!
+    <BrowserRouter>
       <div className="App">
         <Routes>
           <Route path="/" element={<MainLanding />} />

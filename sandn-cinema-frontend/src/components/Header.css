@@ -11,17 +11,56 @@
     z-index: 100;
 }
 
+/* Naya Logo aur Text Container */
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Logo aur text ke beech thoda gap */
+    cursor: pointer;
+}
+
+.header-logo-icon {
+    height: 32px;
+    width: 32px;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+/* Hover karne par logo halka sa rotate aur bada hoga */
+.logo-container:hover .header-logo-icon {
+    transform: scale(1.1) rotate(5deg); 
+}
+
 .logo-text {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 800;
     color: var(--text-main);
     letter-spacing: 0.5px;
+    margin: 0;
 }
 
+/* Premium Gradient Highlight for "Cloud" */
 .logo-highlight {
-    color: var(--primary);
-    text-shadow: 0 0 10px var(--glow-color);
+    background: linear-gradient(90deg, #ff7e5f, #feb47b); /* Orange-ish gradient matching your logo */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+    font-size: 1.4rem; /* "Cloud" ko thoda chota rakha premium look ke liye */
+    margin-left: 2px;
+    text-shadow: none; /* Gradient par text-shadow accha nahi lagta */
 }
+
+/* Theme mein badlaav aane par primary color use karega (Fallback) */
+[data-theme='theme-red'] .logo-highlight {
+    background: linear-gradient(90deg, var(--primary), #ff4d4d);
+    -webkit-background-clip: text;
+}
+
+[data-theme='theme-blue'] .logo-highlight {
+    background: linear-gradient(90deg, var(--primary), #3b82f6);
+    -webkit-background-clip: text;
+}
+
 
 .header-actions {
     display: flex;
@@ -39,6 +78,13 @@
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--glow-color);
 }
 
 .header-login-btn {
@@ -48,11 +94,14 @@
     padding: 6px 16px;
     border-radius: 20px;
     font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
 .header-login-btn:hover {
     background: var(--primary);
     color: white;
+    box-shadow: 0 0 10px var(--glow-color);
 }
 
 .user-profile-icon {
@@ -67,4 +116,9 @@
     font-weight: bold;
     cursor: pointer;
     box-shadow: 0 0 10px var(--glow-color);
+    transition: transform 0.2s ease;
+}
+
+.user-profile-icon:hover {
+    transform: scale(1.05);
 }
