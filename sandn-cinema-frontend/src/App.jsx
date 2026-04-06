@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; // ✅ Navigate import kar liya
 import axios from 'axios'; 
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
@@ -32,7 +32,7 @@ function App() {
       localStorage.removeItem('user'); 
       localStorage.removeItem('authToken'); 
       sessionStorage.removeItem('user'); 
-      window.location.href = "/"; // ✅ CHANGED: Ab snevio.com/ par redirect karega
+      window.location.href = "/"; // ✅ Ab snevio.com/ par redirect karega
     };
 
     window.addEventListener('offline', handleOffline);
@@ -88,6 +88,9 @@ function App() {
           <Route path="/" element={<MainLanding />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          
+          {/* ✅ THE FIX: Black screen hatane ke liye. Koi bhi galat link Home page par bhej dega */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </BrowserRouter>
