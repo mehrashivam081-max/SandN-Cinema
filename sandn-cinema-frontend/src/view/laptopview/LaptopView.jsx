@@ -236,7 +236,9 @@ const LaptopView = ({
               </svg>
             </div>
             <div className="brand-section">
-              <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>SandN Cinema</h1>
+              <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>
+                         S N E <span className="brand-highlight">V I O</span>
+              </h1>
               
               <div className="laptop-search-wrapper" style={{ flexDirection: 'column', gap: '8px' }}>
                  {searchStep === 0 && (

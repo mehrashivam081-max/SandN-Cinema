@@ -297,7 +297,9 @@ const MobileView = ({
                 <div className="menu-icon-mob" onClick={() => setMenuOpen(true)}>
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </div>
-                <h1 className="brand-title-mob" onClick={goHome} style={{cursor:'pointer'}}>SandN <br/> Cinema</h1>
+                <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>
+                         SNE<span className="brand-highlight">VIO</span>
+              </h1>
                 <div className="logo-circle-mob" onClick={() => setViewState('COLLAB')} style={{cursor:'pointer', fontSize:'10px', textAlign:'center', lineHeight:'1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
                     🤝<br/>Collab
                 </div>
