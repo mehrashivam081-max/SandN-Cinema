@@ -52,14 +52,16 @@ const PORT = process.env.PORT || 5000;
 // NOTE: Database name vahi rehne do taaki purana data na khoye, bas Website URL update karo
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
 // ✅ URL wahi purana rakhenge taaki links na tootein
-const WEBSITE_URL = "https://mehrashivam081-max.github.io/sandn-cinema/";
+const WEBSITE_URL = "https://www.google.com/search?q=https://snevio.com/";
 
 app.use(cors({
-    origin: [
-        "http://localhost:5173",                  
-        "http://localhost:3000",                  
-        "https://mehrashivam081-max.github.io"    
-    ],
+   origin: [
+    "http://localhost:5173",                   // Local Vite Frontend
+    "http://localhost:3000",                   // Local Backend/React
+    "https://mehrashivam081-max.github.io",    // Old GitHub Pages link (Backup)
+    "https://snevio.com",                      // New Main Domain
+    "https://www.snevio.com"                   // New Domain with WWW
+],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
