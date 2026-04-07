@@ -24,19 +24,14 @@ const LaptopView = ({
     isNotRegistered, setIsNotRegistered, loading, setLoading, handleLogout
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // States for Popup & Password Creation
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); 
   const [newEmail, setNewEmail] = useState(''); 
-  
-  // Confirm Password & Eye Icon States
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
-  // App Name Clickable as Home (Reset everything)
   const goHome = () => { 
       setViewState('HOME'); 
       setSearchStep(0); 
@@ -51,54 +46,57 @@ const LaptopView = ({
       setShowConfirmPass(false);
   };
 
-  // ✅ SMART BROWSER BACK BUTTON LOGIC (No Direct Logout)
+  // ==========================================
+  // 🧭 1. ADVANCED BROWSER HISTORY LOGIC
+  // ==========================================
   useEffect(() => {
-      window.history.pushState(null, null, window.location.href);
+      if (!userData) {
+          window.history.pushState({ step: searchStep, view: viewState }, "Snevio Step");
+      } else {
+          window.history.replaceState({ step: 3, view: 'HOME', loggedIn: true }, "Snevio Dashboard");
+      }
+  }, [searchStep, viewState, userData]);
 
-      const handlePopState = () => {
-          window.history.pushState(null, null, window.location.href); // Prevent default back
-
-          if (userData && searchStep === 3) {
-              // Prevent logout if user is in dashboard
-              console.log("Prevented logout from back button");
-          } else if (feedType) {
-              setFeedType(null); 
-          } else if (menuOpen) {
-              setMenuOpen(false); 
-          } else if (viewState !== 'HOME') {
-              setViewState('HOME'); 
-          } else if (searchStep > 0 && searchStep < 3) {
-              setSearchStep(prev => prev - 1); // Go back one step in login flow
-          } else if (showOtpPopup) {
-              setShowOtpPopup(false); 
+  useEffect(() => {
+      const handlePopState = (e) => {
+          if (userData) {
+              window.history.pushState({ step: 3, view: 'HOME', loggedIn: true }, ""); 
+          } else if (e.state) {
+              if (e.state.view) setViewState(e.state.view);
+              if (e.state.step !== undefined) setSearchStep(e.state.step);
+          } else {
+              goHome();
           }
       };
-
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [userData, searchStep, viewState, feedType, menuOpen, showOtpPopup, setFeedType, setViewState, setSearchStep]);
+  }, [userData, setViewState, setSearchStep]);
 
-  // ✅ ENTER KEY SUPPORT HELPER
-  const handleKeyDown = (e, action) => {
-      if (e.key === 'Enter') {
-          e.preventDefault();
-          action();
-      }
-  };
+  // ==========================================
+  // 🔄 2. GLOBAL AUTO-REFRESH ENGINE
+  // ==========================================
+  useEffect(() => {
+      const globalRefreshInterval = setInterval(() => {
+          if (userData) {
+              console.log("🔄 Global Auto-Refresh: Syncing data...");
+          }
+      }, 15000); 
+      return () => clearInterval(globalRefreshInterval);
+  }, [userData]);
 
-  // 1. Handle Search Click (Open Popup)
+
+  const handleKeyDown = (e, action) => { if (e.key === 'Enter') { e.preventDefault(); action(); } };
+
   const handleSearchClick = () => {
       if (mobile.length !== 10) return alert("Invalid Mobile Number");
       setShowOtpPopup(true); 
   };
 
-  // 2. Send OTP via Selected Method
   const handleSendOtp = async (selectedMethod) => {
       setOtpMethod(selectedMethod);
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: 'USER' });
-          
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
               alert(`OTP Sent successfully via ${methodLabel}`); 
@@ -108,73 +106,39 @@ const LaptopView = ({
               setIsNotRegistered(true);
               setShowOtpPopup(false);
           }
-      } catch (e) {
-          alert(e.response?.data?.message || "Server Error. Please try again.");
-      } finally { setLoading(false); }
+      } catch (e) { alert(e.response?.data?.message || "Server Error."); } finally { setLoading(false); }
   };
 
-  // 3. Verify OTP & Check User Status
   const handleVerifyOTP = async () => {
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
           const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: 'USER' });
           if (res.data.success) {
-              if (res.data.isNewUser) {
-                  setIsFirstTimeUser(true);
-                  setSearchStep(2); // Goes to Setup Step
-              } else {
-                  setIsFirstTimeUser(false);
-                  setSearchStep(2); // Goes to Login Step
-              }
-          } else {
-              alert(res.data.message || "Galat OTP! Kripya sahi OTP dalein.");
-          }
-      } catch (e) {
-          alert("Verification Failed. Server error.");
-      } finally { setLoading(false); }
+              setIsFirstTimeUser(res.data.isNewUser);
+              setSearchStep(2); 
+          } else alert(res.data.message || "Invalid OTP!");
+      } catch (e) { alert("Verification Failed."); } finally { setLoading(false); }
   };
 
-  // 4. Login OR Setup Password
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
-      
       try {
           if (isFirstTimeUser) {
-              // --- SETUP LOGIC ---
-              if (!newEmail) return alert("Please enter your email for account recovery.");
-              if (password !== confirmPassword) return alert("Passwords do not match!");
-              
-              const res = await axios.post(`${API_BASE}/create-password`, { 
-                  mobile, 
-                  password, 
-                  email: newEmail,
-                  roleFilter: 'USER'
-              });
-
+              if (!newEmail) return alert("Email required.");
+              if (password !== confirmPassword) return alert("Passwords don't match!");
+              const res = await axios.post(`${API_BASE}/create-password`, { mobile, password, email: newEmail, roleFilter: 'USER' });
               if (res.data.success) { 
-                  alert("Account Setup Successful! Logging in...");
-                  setUserData(res.data.user); 
-                  sessionStorage.setItem('user', JSON.stringify(res.data.user)); // ✅ SECURE SESSION LOGIC
-                  setSearchStep(3); 
-              } else {
-                  alert(res.data.message || "Setup Failed");
-              }
+                  setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
+              } else alert(res.data.message || "Setup Failed");
           } else {
-              // --- NORMAL LOGIN ---
               const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
               if (res.data.success) { 
-                  setUserData(res.data.user); 
-                  sessionStorage.setItem('user', JSON.stringify(res.data.user)); // ✅ SECURE SESSION LOGIC
-                  setSearchStep(3); 
-              } else {
-                  alert(res.data.message || "Wrong Password");
-              }
+                  setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
+              } else alert(res.data.message || "Wrong Password");
           }
-      } catch (e) {
-          alert("Action Failed. Server error.");
-      } finally { setLoading(false); }
+      } catch (e) { alert("Action Failed."); } finally { setLoading(false); }
   };
 
   const handleManualSwipe = (direction) => {
@@ -189,7 +153,6 @@ const LaptopView = ({
   };
 
   if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
-
   if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
   if (viewState === 'AUTH') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
   if (viewState === 'SIGNUP') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
@@ -203,115 +166,136 @@ const LaptopView = ({
 
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* ✅ PROFESSIONAL OTP POPUP OVERLAY */}
+      {/* OTP POPUP OVERLAY */}
       {showOtpPopup && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
               <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '350px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'popIn 0.3s ease' }}>
                   <h3 style={{ margin: '0 0 10px', color: '#333' }}>Send OTP to {mobile}</h3>
                   <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Select verification method:</p>
-                  
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                          📱 Send via Text SMS
-                      </button>
-                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                          💬 Send via WhatsApp
-                      </button>
-                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                          ✉️ Send via Email
-                      </button>
+                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>📱 Send via Text SMS</button>
+                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>💬 Send via WhatsApp</button>
+                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>✉️ Send via Email</button>
                   </div>
-
                   <p onClick={() => setShowOtpPopup(false)} style={{ marginTop: '20px', color: '#999', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel</p>
               </div>
           </div>
       )}
 
+      {/* ==========================================
+          💎 HEADER: ORIGINAL BRAND UI + NEW RIGHT SECTION
+          ========================================== */}
+{/* ==========================================
+          💎 HEADER: FIXED ALIGNMENT & CAPSULE SEARCH BAR
+          ========================================== */}
       {!userData && (
-          <header className="laptop-header">
-            <div className="menu-icon" onClick={() => setMenuOpen(true)} style={{cursor: 'pointer'}}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                 <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-            </div>
-            <div className="brand-section">
-              <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>
+          <header className="laptop-header" style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              padding: '10px 30px', 
+              width: '100%', 
+              boxSizing: 'border-box', 
+              position: 'relative', 
+              zIndex: 100,
+              minHeight: '80px',
+              background: '#ececec'
+          }}>
+            
+            {/* LEFT: Menu Icon & Brand Name */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: '0 0 250px' }}>
+                <div className="menu-icon" onClick={() => setMenuOpen(true)} style={{cursor: 'pointer'}}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+                <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer', margin: 0, fontSize: '24px', whiteSpace: 'nowrap'}}>
                          S N E <span className="brand-highlight">V I O</span>
-              </h1>
-              
-              <div className="laptop-search-wrapper" style={{ flexDirection: 'column', gap: '8px' }}>
-                  
-                  {/* ✅ MISSING SEARCH BAR WAPAS AA GAYA */}
-                 {searchStep === 0 && (
-                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                        <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} autoFocus />
-                        <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'...':'Search'}</button>
-                    </div>
-                 )}
-                 
-                 {searchStep === 1 && (
-                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                        {/* ✅ ADDED ENTER KEY SUPPORT */}
-                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{flex:1}} autoFocus />
-                        <button className="search-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'...':'Verify'}</button>
-                    </div>
-                 )}
-                 
-                 {searchStep === 2 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                        {isFirstTimeUser ? (
-                            <>
-                                <input type="email" placeholder="Link your Email (Required)" className="search-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%'}} autoFocus />
-                                
-                                <div style={{ position: 'relative', width: '100%' }}>
-                                    <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} style={{width: '100%', paddingRight: '40px'}} />
-                                    <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showPass ? '🙈' : '👁️'}</span>
-                                </div>
+                </h1>
+            </div>
 
-                                <div style={{ position: 'relative', width: '100%' }}>
-                                    {/* ✅ ADDED ENTER KEY SUPPORT */}
-                                    <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="search-input" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', paddingRight: '40px'}} />
-                                    <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
-                                </div>
-                                
-                                <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading} style={{width: '100%', marginTop: '5px'}}>
-                                    {loading ? 'Processing...' : 'Setup Account'}
-                                </button>
-                            </>
-                        ) : (
-                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                                <div style={{ position: 'relative', flex: 1 }}>
-                                    {/* ✅ ADDED ENTER KEY SUPPORT */}
-                                    <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', paddingRight: '40px'}} autoFocus />
-                                    <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', color: '#888' }}>{showPass ? '🙈' : '👁️'}</span>
-                                </div>
-                                <button className="search-btn" onClick={handleLoginOrSetup} disabled={loading}>
-                                    {loading ? '...' : 'Login'}
-                                </button>
-                            </div>
-                        )}
+            {/* CENTER: CAPSULE SEARCH BAR (Absolute Centered) */}
+            <div style={{ 
+                position: 'absolute', 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                zIndex: 101 
+            }}>
+              <div className="laptop-search-wrapper" style={{ margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {searchStep > 0 && searchStep < 3 && (
+                    <button onClick={() => { setSearchStep(prev => prev - 1); window.history.back(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#333', textAlign: 'left', padding: '0 0 5px 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      ⬅️ Back
+                    </button>
+                 )}
+                 {searchStep === 0 && (
+                    <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        background: '#f1f3f4', 
+                        borderRadius: '30px', 
+                        padding: '4px 4px 4px 20px', 
+                        border: '1px solid #000000',
+                        width: '400px',
+                        height: '40px'
+                    }}>
+                        <input 
+                            type="text" 
+                            placeholder="Search registered mobile number" 
+                            value={mobile} 
+                            onChange={e=>setMobile(e.target.value)} 
+                            onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} 
+                            style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', color: '#555' }} 
+                            autoFocus 
+                        />
+                        <button 
+                            onClick={handleSearchClick} 
+                            disabled={loading} 
+                            style={{ 
+                                background: 'linear-gradient(to right, #5d78b4, #b486d5)', 
+                                color: 'white', 
+                                border: 'none', 
+                                borderRadius: '25px', 
+                                padding: '8px 25px', 
+                                cursor: 'pointer', 
+                                fontWeight: 'bold',
+                                fontSize: '14px'
+                            }}
+                        >
+                            {loading ? '...' : 'Search'}
+                        </button>
+                    </div>
+                 )}
+
+                 {searchStep === 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f3f4', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid #ccc', width: '300px' }}>
+                        <input type="text" placeholder="Enter OTP" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none' }} autoFocus />
+                        <button onClick={handleVerifyOTP} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Verify</button>
+                    </div>
+                 )}
+
+                 {searchStep === 2 && (
+                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f3f4', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid #ccc', width: '300px' }}>
+                        <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none' }} autoFocus />
+                        <button onClick={handleLoginOrSetup} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Login</button>
                     </div>
                  )}
               </div>
             </div>
-            <div className="logo-circle" onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', fontSize: '12px', textAlign: 'center', lineHeight: '1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                🤝<br/>Collab
+
+            {/* RIGHT: Buttons Group */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '0 0 auto' }}>
+                <button onClick={() => handleManualSwipe('left')} style={{padding:'8px 14px', background:'#fff', color: '#333', border:'1px solid #ddd', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'}}>🔥 Trending</button>
+                <button onClick={() => handleManualSwipe('right')} style={{padding:'8px 14px', background:'#fff', color: '#333', border:'1px solid #ddd', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'}}>🚀 Viral</button>
+                <button onClick={() => setViewState('BOOKING')} style={{padding: '8px 18px', background: 'linear-gradient(45deg, #FF512F, #DD2476)', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(221, 36, 118, 0.3)'}}>Book Now</button>
+                <div onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', background: '#111', color: '#FFD700', borderRadius: '50%', border: '2px solid #FFD700', width: '38px', height: '38px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'}} title="Partnership & Collab">
+                    <span style={{fontSize:'16px'}}>🤝</span>
+                </div>
             </div>
           </header>
       )}
 
-      {!userData && (
-        <>
-            <div style={{position:'absolute', left:'20px', top:'50%', zIndex:10}}>
-                <button onClick={() => handleManualSwipe('left')} style={{padding:'10px', background:'rgba(255,255,255,0.5)', borderRadius:'50%', border:'none', cursor:'pointer', fontWeight:'bold'}}>🔥 Trending</button>
-            </div>
-            <div style={{position:'absolute', right:'20px', top:'50%', zIndex:10}}>
-                <button onClick={() => handleManualSwipe('right')} style={{padding:'10px', background:'rgba(255,255,255,0.5)', borderRadius:'50%', border:'none', cursor:'pointer', fontWeight:'bold'}}>🚀 Viral</button>
-            </div>
-        </>
-      )}
-
+      {/* MAIN CONTENT AREA */}
       <div className="laptop-main-content">
         {searchStep === 3 ? (
             <div style={{width: '100%', padding: '20px'}}>
@@ -327,11 +311,6 @@ const LaptopView = ({
                   <video className="magnet-video" autoPlay loop muted playsInline>
                     <source src={magnetVideo} type="video/mp4" />
                   </video>
-                </div>
-                <div className="footer-section">
-                  <div className="line"></div>
-                  <button className="book-btn" onClick={() => setViewState('BOOKING')}>Book <br/> Now</button>
-                  <div className="line"></div>
                 </div>
             </>
         )}
