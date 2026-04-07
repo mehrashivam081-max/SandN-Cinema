@@ -52,7 +52,7 @@ const PORT = process.env.PORT || 5000;
 // NOTE: Database name vahi rehne do taaki purana data na khoye, bas Website URL update karo
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
 // ✅ URL wahi purana rakhenge taaki links na tootein
-const WEBSITE_URL = "https://snevio.com/";
+const WEBSITE_URL = "https://snevio.com/"; // Google search wali link hata do
 
 app.use(cors({
     origin: [
