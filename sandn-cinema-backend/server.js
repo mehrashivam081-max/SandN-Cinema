@@ -55,16 +55,17 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinem
 const WEBSITE_URL = "https://snevio.com/";
 
 app.use(cors({
-   origin: [
-    "http://localhost:5173",                   // Local Vite Frontend
-    "http://localhost:3000",                   // Local Backend/React
-    "https://mehrashivam081-max.github.io",    // Old GitHub Pages link (Backup)
-    "https://snevio.com",                      // New Main Domain
-    "https://www.snevio.com"                   // New Domain with WWW
-],
+    origin: [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://mehrashivam081-max.github.io",
+        "https://snevio.com",       // <--- Ye zaruri hai
+        "https://www.snevio.com"   // <--- Ye bhi zaruri hai
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
+
 app.use(express.json());
 // ✅ Make 'uploads' folder publicly accessible
 app.use('/uploads', express.static('uploads')); 
