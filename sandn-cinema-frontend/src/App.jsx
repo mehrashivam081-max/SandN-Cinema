@@ -1,15 +1,22 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; // ✅ Navigate import kar liya
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios'; 
+
+// Purane Imports
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
+import Footer from './components/Footer'; // ✅ FOOTER IMPORT ADD KIYA (Path check kar lena)
 
-// Note: Agar tumne backend (Render) ka naam bhi change kiya hai, toh ye URL bhi update kar lena.
-// Abhi ke liye ye purane backend se connect rahega jo theek chalega.
+// ✅ NAYE LEGAL PAGES IMPORTS
+import Terms from './pages/legal/Terms';
+import Refund from './pages/legal/Refund';
+import Shipping from './pages/legal/Shipping';
+import ContactUs from './pages/legal/ContactUs';
+
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-// 🔒 GLOBAL AXIOS INTERCEPTOR (The Auto-Attacher)
+// 🔒 GLOBAL AXIOS INTERCEPTOR
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
@@ -18,43 +25,35 @@ axios.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 function App() {
 
-  // ✅ SUPER SECURITY: Auto-Logout & Digital Lock Verification
+  // ✅ SECURITY & SESSION VERIFICATION
   useEffect(() => {
     const handleOffline = () => {
-      alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
-      localStorage.removeItem('user'); 
-      localStorage.removeItem('authToken'); 
-      sessionStorage.removeItem('user'); 
-      window.location.href = "/"; // ✅ Ab snevio.com/ par redirect karega
+      alert("⚠️ Internet connection lost! Session locked for security.");
+      localStorage.clear(); 
+      sessionStorage.clear(); 
+      window.location.href = "/";
     };
 
     window.addEventListener('offline', handleOffline);
 
-    // 🔒 THE DIGITAL LOCK CHECK (JWT Verification)
     const verifyDigitalLock = async () => {
       const token = localStorage.getItem('authToken');
       const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
       
-      // Hacker check: Agar user ka data pada hai par Token nahi hai!
       if (userStr && !token) {
-        console.warn("Security Alert: No token found. Kicking out.");
         localStorage.clear();
         sessionStorage.clear();
-        window.location.href = "/"; // ✅ CHANGED
+        window.location.href = "/";
         return;
       }
 
-      // Agar dono hain, toh backend se verify karo ki token valid hai
       if (token && userStr) {
         const userObj = JSON.parse(userStr);
-        // Owner/Admin hardcode bypass for now
         if (token === 'super_admin_bypass_token_999') return; 
 
         try {
@@ -64,10 +63,9 @@ function App() {
           });
           
           if (!res.data.success) {
-            alert("Your session has expired or is invalid! Please log in again.");
             localStorage.clear();
             sessionStorage.clear();
-            window.location.href = "/"; // ✅ CHANGED
+            window.location.href = "/";
           }
         } catch (e) {
           console.error("Session verification failed", e);
@@ -75,23 +73,37 @@ function App() {
       }
     };
 
-    verifyDigitalLock(); // Run verification instantly on load
-
+    verifyDigitalLock();
     return () => window.removeEventListener('offline', handleOffline);
   }, []);
 
   return (
-    // ✅ CHANGED: basename hata diya. Ab ye naye domain snevio.com ke liye ekdum ready hai!
     <BrowserRouter>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<MainLanding />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          
-          {/* ✅ THE FIX: Black screen hatane ke liye. Koi bhi galat link Home page par bhej dega */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+      {/* ✅ FOOTER KO NICHE RAKHNE KE LIYE FLEXBOX LAGA DIYA */}
+      <div className="App" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        
+        {/* ✅ FLEX-1 Isse content upar rahega aur footer hamesha niche */}
+        <div style={{ flex: 1 }}>
+          <Routes>
+            {/* Main Pages */}
+            <Route path="/" element={<MainLanding />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+
+            {/* ✅ LEGAL PAGES (Instamojo KYC ke liye zaruri) */}
+            <Route path="/contact" element={<ContactUs />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/refund" element={<Refund />} />
+            <Route path="/shipping" element={<Shipping />} />
+
+            {/* ⚠️ WILDCARD ROUTE (Hamesha last mein hona chahiye) */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+
+        {/* ✅ GLOBAL FOOTER: Ye ab har page par dikhega */}
+        <Footer />
+        
       </div>
     </BrowserRouter>
   );

@@ -1,52 +1,77 @@
 // src/view/MainLanding.jsx
-import React, { useState, useEffect } from 'react';
-import useViewport from '../hooks/useViewport'; // Hook import kiya
-import LaptopView from './laptopview/LaptopView'; // Laptop component
-import MobileView from './mobileview/MobileView'; // Mobile component
+import React, { useState, useEffect, useCallback } from 'react';
+import useViewport from '../hooks/useViewport'; 
+import LaptopView from './laptopview/LaptopView'; 
+import MobileView from './mobileview/MobileView';
+import axios from 'axios';
 
-// Mobile breakpoint (e.g., iPad ya usse chote devices ke liye 768px theek hai)
 const MOBILE_BREAKPOINT = 768;
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth'; // ✅ Update if backend URL changes
 
 const MainLanding = () => {
-  const width = useViewport(); // Current screen width pata ki
+  const width = useViewport();
 
-  // ✅ PERSISTENT STATE LOGIC (For Refresh & Screen Switch)
-  const [viewState, setViewState] = useState(() => sessionStorage.getItem('sn_viewState') || 'HOME');
-  const [searchStep, setSearchStep] = useState(() => parseInt(sessionStorage.getItem('sn_searchStep')) || 0);
+  // ✅ BRANDING UPDATED: Using 'snevio_' prefix for storage
+  const [viewState, setViewState] = useState(() => sessionStorage.getItem('snevio_viewState') || 'HOME');
+  const [searchStep, setSearchStep] = useState(() => parseInt(sessionStorage.getItem('snevio_searchStep')) || 0);
   const [userData, setUserData] = useState(() => {
-      const saved = sessionStorage.getItem('sn_userData');
+      const saved = sessionStorage.getItem('snevio_userData');
       return saved && saved !== "undefined" ? JSON.parse(saved) : null;
   });
 
-  // ✅ PERSISTENT INPUT LOGIC (Inputs bhi refresh par safe rahenge)
-  const [feedType, setFeedType] = useState(() => sessionStorage.getItem('sn_feedType') || null);
-  const [mobile, setMobile] = useState(() => sessionStorage.getItem('sn_mobile') || '');
-  const [otp, setOtp] = useState(() => sessionStorage.getItem('sn_otp') || '');
-  const [password, setPassword] = useState(() => sessionStorage.getItem('sn_password') || '');
+  const [feedType, setFeedType] = useState(() => sessionStorage.getItem('snevio_feedType') || null);
+  const [mobile, setMobile] = useState(() => sessionStorage.getItem('snevio_mobile') || '');
+  const [otp, setOtp] = useState(() => sessionStorage.getItem('snevio_otp') || '');
+  const [password, setPassword] = useState(() => sessionStorage.getItem('snevio_password') || '');
   
   const [isNotRegistered, setIsNotRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Sync state changes to LocalStorage
-  useEffect(() => { sessionStorage.setItem('sn_viewState', viewState); }, [viewState]);
-  useEffect(() => { sessionStorage.setItem('sn_searchStep', searchStep.toString()); }, [searchStep]);
+  // Sync states to Storage
+  useEffect(() => { sessionStorage.setItem('snevio_viewState', viewState); }, [viewState]);
+  useEffect(() => { sessionStorage.setItem('snevio_searchStep', searchStep.toString()); }, [searchStep]);
   useEffect(() => { 
-      if(userData) sessionStorage.setItem('sn_userData', JSON.stringify(userData)); 
-      else sessionStorage.removeItem('sn_userData');
+      if(userData) sessionStorage.setItem('snevio_userData', JSON.stringify(userData)); 
+      else sessionStorage.removeItem('snevio_userData');
   }, [userData]);
 
-  // Sync inputs to SessionStorage 
-  useEffect(() => { if(feedType) sessionStorage.setItem('sn_feedType', feedType); else sessionStorage.removeItem('sn_feedType'); }, [feedType]);
-  useEffect(() => { sessionStorage.setItem('sn_mobile', mobile); }, [mobile]);
-  useEffect(() => { sessionStorage.setItem('sn_otp', otp); }, [otp]);
-  useEffect(() => { sessionStorage.setItem('sn_password', password); }, [password]);
+  useEffect(() => { 
+    if(feedType) sessionStorage.setItem('snevio_feedType', feedType); 
+    else sessionStorage.removeItem('snevio_feedType'); 
+  }, [feedType]);
 
-  // ✅ HARDWARE BACK BUTTON LOGIC (1 Step Back)
+  // 🔄 AUTO-REFRESH LOGIC (Real-time Status Polling)
+  useEffect(() => {
+    if (!userData || viewState === 'HOME') return;
+
+    // Har 10 second mein status check karega
+    const pollInterval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const res = await axios.get(`${API_BASE}/get-user-status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        // Agar backend se data badal gaya hai (e.g. Subscription active ho gayi)
+        if (res.data.success && JSON.stringify(res.data.user) !== JSON.stringify(userData)) {
+          console.log("🔄 Snevio: Data auto-refreshed!");
+          setUserData(res.data.user);
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [userData, viewState]);
+
+  // 🧭 STEP-BY-STEP (Cloudflare Style) BACK BUTTON
   useEffect(() => {
       window.history.pushState(null, null, window.location.href);
       
       const handleBackButton = (e) => {
-          e.preventDefault();
           if (searchStep > 0) {
               setSearchStep(prev => prev - 1); 
               window.history.pushState(null, null, window.location.href);
@@ -57,7 +82,7 @@ const MainLanding = () => {
               setViewState('HOME'); 
               window.history.pushState(null, null, window.location.href);
           } else {
-              window.history.back(); // App exit
+              // Actual exit
           }
       };
 
@@ -65,7 +90,7 @@ const MainLanding = () => {
       return () => window.removeEventListener('popstate', handleBackButton);
   }, [searchStep, feedType, viewState]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
       setSearchStep(0);
       setUserData(null);
       setMobile('');
@@ -73,11 +98,11 @@ const MainLanding = () => {
       setPassword('');
       setViewState('HOME');
       setFeedType(null);
-      localStorage.removeItem('sn_userData');
+      localStorage.clear();
       sessionStorage.clear(); 
-  };
+      window.location.href = "/";
+  }, []);
 
-  // Bundling all states to pass as props
   const sharedProps = {
       viewState, setViewState,
       searchStep, setSearchStep,
@@ -91,7 +116,6 @@ const MainLanding = () => {
       handleLogout
   };
 
-  // Agar width 768 se kam hai to MobileView, nahi to LaptopView
   return width < MOBILE_BREAKPOINT ? <MobileView {...sharedProps} /> : <LaptopView {...sharedProps} />;
 };
 

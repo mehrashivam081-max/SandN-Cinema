@@ -10,6 +10,7 @@ import ForgotPassword from '../../components/ForgotPassword';
 import BookingForm from '../../components/BookingForm';
 import TrendingFeed from '../../components/TrendingFeed';
 import NotRegisteredPage from '../../components/NotRegisteredPage';
+import Footer from '../../components/Footer';
 
 import UserDashboard from '../../components/UserDashboard'; 
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
@@ -241,15 +242,14 @@ const LaptopView = ({
               </h1>
               
               <div className="laptop-search-wrapper" style={{ flexDirection: 'column', gap: '8px' }}>
-                 {searchStep === 0 && (
-                    <>
-                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                            {/* ✅ ADDED ENTER KEY SUPPORT */}
-                            <input type="text" placeholder="Search registered mobile number" className="search-input" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} autoFocus />
-                            <button className="search-btn" onClick={handleSearchClick} disabled={loading}>{loading?'...':'Search'}</button>
-                        </div>
-                    </>
-                 )}
+                {searchStep > 0 && searchStep < 3 && (
+  <button 
+    onClick={() => setSearchStep(prev => prev - 1)}
+    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#fff', marginBottom: '10px', textAlign: 'left' }}
+  >
+    ⬅️ Back
+  </button>
+)}
                  {searchStep === 1 && (
                     <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                         {/* ✅ ADDED ENTER KEY SUPPORT */}

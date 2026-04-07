@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom'; // ✅ Link import kiya navigation ke liye
 import './Footer.css';
 
 const Footer = () => {
@@ -20,15 +21,18 @@ const Footer = () => {
                 <div className="footer-links">
                     <div className="link-group">
                         <h3>Explore</h3>
-                        <a href="#">Home</a>
-                        <a href="#">Portfolio</a>
-                        <a href="#">Book a Slot</a>
+                        <Link to="/">Home</Link>
+                        <Link to="#">Portfolio</Link>
+                        <Link to="#">Book a Slot</Link>
                     </div>
+                    
+                    {/* ✅ Instamojo KYC ke liye ye section sabse zaruri hai */}
                     <div className="link-group">
-                        <h3>Legal</h3>
-                        <a href="#">Privacy Policy</a>
-                        <a href="#">Terms of Service</a>
-                        <a href="#">Contact Us</a>
+                        <h3>Legal & Support</h3>
+                        <Link to="/terms">Terms & Conditions</Link>
+                        <Link to="/refund">Refund & Cancellation</Link>
+                        <Link to="/shipping">Shipping & Delivery</Link>
+                        <Link to="/contact">Contact Us</Link>
                     </div>
                 </div>
             </div>

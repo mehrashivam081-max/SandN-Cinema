@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './ProfilePage.css';
-import profileImg from '../assets/sandn-logo.jpg'; 
+import profileImg from '../assets/snevio-logo.png'; 
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
@@ -26,17 +26,17 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
     // --- COMPANY DATA ---
     const companyDetails = {
-        name: "SandN Cinema",
-        tagline: "Capturing Moments, Creating Magic",
-        desc: "SandN Cinema is a professional photography and media production house. We specialize in cinematic weddings, fashion shoots, brand ad-films, and creative content creation.",
+        name: "Snevio Cloud",
+        tagline: "Premium Photography & Studios Cloud Platform",
+        desc: "Snevio is a professional platform for photographers and studios to securely store, share, and deliver high-quality media to their clients instantly.",
         founded: "Since 2024"
     };
 
     const contactInfo = {
-        phone: "+91 98765 43210",
-        email: "bookings@sandncinema.com",
-        hours: "Studio Open: 10 AM - 8 PM",
-        address: "Vijay Nagar, Indore, India"
+        phone: "+91 98765 43210", // Asli number daal dena
+        email: "support@snevio.com",
+        hours: "Support: 10 AM - 8 PM",
+        address: "Shankar Bag Silari, Pipariya, MP - 461775" 
     };
 
     // ✅ DYNAMIC DATA STATES (Fetched from DB)
@@ -138,7 +138,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: "Advertisement", label: "Business & Ads", icon: "📢" },
         { id: "Career & Vacancy", label: "Career & Vacancy", icon: "💼" },
         { id: "Security & Privacy Policy", label: "Security & Privacy Policy", icon: "🔒" },
-        { id: "How do we best for you", label: "How do we best for you", icon: "🤝" }
+        { id: "How do we best for you", label: "Why choose Snevio?", icon: "🤝" }
     ];
 
     const profileActions = [
@@ -191,7 +191,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             case "Customer Care":
                 return (
                     <div className="popup-inner-box contact-box">
-                        <h3>Studio Support</h3>
+                        <h3>Snevio Support</h3>
                         <p className="contact-sub">Need help with a booking or shoot?</p>
                         
                         <div className="contact-list">
@@ -215,7 +215,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             case "How do we best for you":
                 return (
                     <div className="popup-inner-box best-box">
-                        <h3>Why Choose SandN?</h3>
+                        <h3>Why Choose Snevio?</h3>
                         <div style={{marginTop: '15px', background:'#f9f9f9', padding:'15px', borderRadius:'8px', whiteSpace:'pre-line', fontSize:'14px', lineHeight:'1.6', color:'#444'}}>
                             {policyData.bestForYou}
                         </div>
@@ -225,7 +225,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             case "Rate us":
                 return (
                     <div className="popup-inner-box rate-box center-content">
-                        <h3>Rate Our Service</h3>
+                        <h3>Rate Snevio Platform</h3>
                         
                         <div className="rating-score-circle">
                             <span className="rating-num">4.9</span>
@@ -255,7 +255,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             case "More way to connect us...":
                 return (
                     <div className="popup-inner-box connect-box">
-                        <h3>Follow Our Work</h3>
+                        <h3>Follow Snevio</h3>
                         <p className="connect-desc">Check out our latest shoots & BTS on social media.</p>
                         
                         <div className="social-grid">
@@ -297,7 +297,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
             case "Career & Vacancy":
                 return (
                     <div className="popup-inner-box career-box">
-                        <div className="career-header"><span className="career-icon">🚀</span><h3>SandN Opportunities</h3></div>
+                        <div className="career-header"><span className="career-icon">🚀</span><h3>Snevio Careers</h3></div>
                         <div className="popup-tabs career-tabs">
                             <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Career Path</button>
                             <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Open Vacancy</button>
@@ -394,7 +394,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                         </div>
                     </div>
                     
-                    <div className="profile-header-text">SandN Cinema</div>
+                    <div className="profile-header-text">Snevio Cloud</div>
 
                     <div className="profile-actions-row">
                         {profileActions.map(action => (
