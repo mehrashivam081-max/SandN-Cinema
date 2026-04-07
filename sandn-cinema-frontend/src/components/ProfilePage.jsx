@@ -440,6 +440,16 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                             </li>
                         ))}
                     </ul>
+                    {/* ✅ SNEVIO LEGAL LINKS (For Instamojo Approval) */}
+                    <div className="legal-links-sidebar" style={{marginTop: '30px', padding: '20px 10px', borderTop: '1px solid #eee', textAlign: 'center'}}>
+                        <p style={{fontSize: '12px', color: '#888', marginBottom: '10px', fontWeight: 'bold', letterSpacing: '1px'}}>LEGAL & SUPPORT</p>
+                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'center', fontSize: '13px'}}>
+                            <a href="/terms" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Terms</a>
+                            <a href="/refund" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Refunds</a>
+                            <a href="/shipping" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Shipping</a>
+                            <a href="/contact" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Contact</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </>

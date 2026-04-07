@@ -6,7 +6,7 @@ import axios from 'axios';
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
-import Footer from './components/Footer'; // ✅ FOOTER IMPORT ADD KIYA (Path check kar lena)
+// ❌ Footer import hata diya taaki UI na bigde
 
 // ✅ NAYE LEGAL PAGES IMPORTS
 import Terms from './pages/legal/Terms';
@@ -79,31 +79,23 @@ function App() {
 
   return (
     <BrowserRouter>
-      {/* ✅ FOOTER KO NICHE RAKHNE KE LIYE FLEXBOX LAGA DIYA */}
-      <div className="App" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        
-        {/* ✅ FLEX-1 Isse content upar rahega aur footer hamesha niche */}
-        <div style={{ flex: 1 }}>
-          <Routes>
-            {/* Main Pages */}
-            <Route path="/" element={<MainLanding />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
+      {/* ✅ FLEXBOX HATA DIYA - Wapas pehle jaisa simple UI */}
+      <div className="App">
+        <Routes>
+          {/* Main Pages */}
+          <Route path="/" element={<MainLanding />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
 
-            {/* ✅ LEGAL PAGES (Instamojo KYC ke liye zaruri) */}
-            <Route path="/contact" element={<ContactUs />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/refund" element={<Refund />} />
-            <Route path="/shipping" element={<Shipping />} />
+          {/* ✅ LEGAL PAGES */}
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/refund" element={<Refund />} />
+          <Route path="/shipping" element={<Shipping />} />
 
-            {/* ⚠️ WILDCARD ROUTE (Hamesha last mein hona chahiye) */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-
-        {/* ✅ GLOBAL FOOTER: Ye ab har page par dikhega */}
-        <Footer />
-        
+          {/* ⚠️ WILDCARD ROUTE (Hamesha last mein hona chahiye) */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </BrowserRouter>
   );
