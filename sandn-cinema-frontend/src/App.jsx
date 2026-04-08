@@ -1,12 +1,11 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios'; 
 
 // Purane Imports
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
-// ❌ Footer import hata diya taaki UI na bigde
 
 // ✅ NAYE LEGAL PAGES IMPORTS
 import Terms from './pages/legal/Terms';
@@ -19,7 +18,8 @@ const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 // 🔒 GLOBAL AXIOS INTERCEPTOR
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
+    // Session aur Local dono check karega ab
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
@@ -30,7 +30,7 @@ axios.interceptors.request.use(
 
 function App() {
 
-  // ✅ SECURITY & SESSION VERIFICATION
+  // ✅ SECURITY & SESSION VERIFICATION (BUG FIXED)
   useEffect(() => {
     const handleOffline = () => {
       alert("⚠️ Internet connection lost! Session locked for security.");
@@ -42,10 +42,12 @@ function App() {
     window.addEventListener('offline', handleOffline);
 
     const verifyDigitalLock = async () => {
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
       
-      if (userStr && !token) {
+      // 🔥 FIX: Ye wala block refresh par session uda raha tha kyunki login par token save nahi ho raha tha. 
+      // Ab ye sirf tab bahar nikalega jab na user ho aur na token.
+      if (!userStr && token) {
         localStorage.clear();
         sessionStorage.clear();
         window.location.href = "/";
@@ -78,8 +80,7 @@ function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      {/* ✅ FLEXBOX HATA DIYA - Wapas pehle jaisa simple UI */}
+    <Router>
       <div className="App">
         <Routes>
           {/* Main Pages */}
@@ -93,11 +94,11 @@ function App() {
           <Route path="/refund" element={<Refund />} />
           <Route path="/shipping" element={<Shipping />} />
 
-          {/* ⚠️ WILDCARD ROUTE (Hamesha last mein hona chahiye) */}
+          {/* ⚠️ WILDCARD ROUTE */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-    </BrowserRouter>
+    </Router>
   );
 }
 

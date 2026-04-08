@@ -223,11 +223,7 @@ const LaptopView = ({
                 zIndex: 101 
             }}>
               <div className="laptop-search-wrapper" style={{ margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  {searchStep > 0 && searchStep < 3 && (
-                    <button onClick={() => { setSearchStep(prev => prev - 1); window.history.back(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#333', textAlign: 'left', padding: '0 0 5px 0', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      ⬅️ Back
-                    </button>
-                 )}
+                  
                  {searchStep === 0 && (
                     <div style={{ 
                         display: 'flex', 
@@ -268,15 +264,33 @@ const LaptopView = ({
                  )}
 
                  {searchStep === 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f3f4', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid #ccc', width: '300px' }}>
-                        <input type="text" placeholder="Enter OTP" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none' }} autoFocus />
+                     <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        background: '#f1f3f4', 
+                        borderRadius: '30px', 
+                        padding: '4px 4px 4px 20px', 
+                        border: '1px solid #000000',
+                        width: '400px',
+                        height: '40px'
+                    }}>
+                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#333', fontSize: '15px', fontWeight: '500' }} autoFocus />
                         <button onClick={handleVerifyOTP} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Verify</button>
                     </div>
                  )}
 
                  {searchStep === 2 && (
-                    <div style={{ display: 'flex', alignItems: 'center', background: '#f1f3f4', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid #ccc', width: '300px' }}>
-                        <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none' }} autoFocus />
+                     <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        background: '#f1f3f4', 
+                        borderRadius: '30px', 
+                        padding: '4px 4px 4px 20px', 
+                        border: '1px solid #000000',
+                        width: '400px',
+                        height: '40px'
+                    }}>
+                        <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#333', fontSize: '15px', fontWeight: '500' }} autoFocus />
                         <button onClick={handleLoginOrSetup} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Login</button>
                     </div>
                  )}
@@ -296,7 +310,7 @@ const LaptopView = ({
       )}
 
       {/* MAIN CONTENT AREA */}
-      <div className="laptop-main-content">
+      <div className="laptop-main-content" style={{ minHeight: 'calc(100vh - 80px)', paddingBottom: '50px' }}>
         {searchStep === 3 ? (
             <div style={{width: '100%', padding: '20px'}}>
                 {renderDashboard()}

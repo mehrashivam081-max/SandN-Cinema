@@ -14,9 +14,15 @@ const MainLanding = () => {
   // ✅ BRANDING UPDATED: Using 'snevio_' prefix for storage
   const [viewState, setViewState] = useState(() => sessionStorage.getItem('snevio_viewState') || 'HOME');
   const [searchStep, setSearchStep] = useState(() => parseInt(sessionStorage.getItem('snevio_searchStep')) || 0);
+  // 🔥 FIX: User data ko directly global 'user' key se bhi uthayega refresh par
   const [userData, setUserData] = useState(() => {
-      const saved = sessionStorage.getItem('snevio_userData');
-      return saved && saved !== "undefined" ? JSON.parse(saved) : null;
+      const specificSaved = sessionStorage.getItem('snevio_userData');
+      const globalSaved = sessionStorage.getItem('user'); // Fallback for refresh
+      
+      if (specificSaved && specificSaved !== "undefined") return JSON.parse(specificSaved);
+      if (globalSaved && globalSaved !== "undefined") return JSON.parse(globalSaved);
+      
+      return null;
   });
 
   const [feedType, setFeedType] = useState(() => sessionStorage.getItem('snevio_feedType') || null);
@@ -31,8 +37,12 @@ const MainLanding = () => {
   useEffect(() => { sessionStorage.setItem('snevio_viewState', viewState); }, [viewState]);
   useEffect(() => { sessionStorage.setItem('snevio_searchStep', searchStep.toString()); }, [searchStep]);
   useEffect(() => { 
-      if(userData) sessionStorage.setItem('snevio_userData', JSON.stringify(userData)); 
-      else sessionStorage.removeItem('snevio_userData');
+      if(userData) {
+          sessionStorage.setItem('snevio_userData', JSON.stringify(userData));
+          sessionStorage.setItem('user', JSON.stringify(userData)); // Keeps global sync
+      } else {
+          sessionStorage.removeItem('snevio_userData');
+      }
   }, [userData]);
 
   useEffect(() => { 
@@ -67,28 +77,7 @@ const MainLanding = () => {
     return () => clearInterval(pollInterval);
   }, [userData, viewState]);
 
-  // 🧭 STEP-BY-STEP (Cloudflare Style) BACK BUTTON
-  useEffect(() => {
-      window.history.pushState(null, null, window.location.href);
-      
-      const handleBackButton = (e) => {
-          if (searchStep > 0) {
-              setSearchStep(prev => prev - 1); 
-              window.history.pushState(null, null, window.location.href);
-          } else if (feedType !== null) {
-              setFeedType(null); 
-              window.history.pushState(null, null, window.location.href);
-          } else if (viewState !== 'HOME') {
-              setViewState('HOME'); 
-              window.history.pushState(null, null, window.location.href);
-          } else {
-              // Actual exit
-          }
-      };
-
-      window.addEventListener('popstate', handleBackButton);
-      return () => window.removeEventListener('popstate', handleBackButton);
-  }, [searchStep, feedType, viewState]);
+  
 
   const handleLogout = useCallback(() => {
       setSearchStep(0);
