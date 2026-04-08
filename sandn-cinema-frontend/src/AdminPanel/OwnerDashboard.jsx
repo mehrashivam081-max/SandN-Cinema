@@ -74,8 +74,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [policyData, setPolicyData] = useState({
         terms: "",
         privacy: "",
+        shipping: "",
+        contact: "",
         bestForYou: ""
     });
+
+    // ✅ CAREER STATES
+    const [vacancies, setVacancies] = useState([]);
+    const [newJob, setNewJob] = useState({ role: '', type: 'Long Term', time: '', salary: '', urgent: false, description: '' });
 
     // --- DATABASE LIST STATES ---
     const [collabRequests, setCollabRequests] = useState([]);
@@ -159,6 +165,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchCollabs();
         fetchServices(); 
         fetchAds(); // Fetch active Ads
+        fetchVacancies();
 
         const syncAdminData = async () => {
             try {
@@ -246,6 +253,43 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch(e) { console.error("Failed to fetch ads"); }
         setFetchingAds(false);
     };
+
+    
+
+    const fetchVacancies = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/get-vacancies`);
+            if (res.data.success) setVacancies(res.data.data);
+        } catch(e) { console.log("Failed to fetch jobs"); }
+    };
+
+    // ✅ POST NEW JOB
+    const handleAddJob = async (e) => {
+        if(e) e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/add-vacancy`, newJob);
+            if (res.data.success) {
+                alert("✅ Job Vacancy Posted!");
+                setNewJob({ role: '', type: 'Long Term', time: '', salary: '', urgent: false, description: '' });
+                fetchVacancies();
+            }
+        } catch (e) { alert("Error posting job."); }
+        finally { setLoading(false); }
+    };
+
+    // ✅ DELETE JOB
+    const handleDeleteJob = async (id) => {
+        if (!window.confirm("Are you sure you want to remove this job post?")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/delete-vacancy`, { id });
+            if (res.data.success) { 
+                alert("🗑️ Job Deleted."); 
+                fetchVacancies(); 
+            }
+        } catch (e) { alert("Error."); }
+    };
+
 
     // ==========================================
     // 🚀 HELPERS
@@ -1126,6 +1170,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => { setActiveTab('SOCIAL'); setOpenDropdown(null); }}>🌐 Social Links</li>
                                 <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => { setActiveTab('SECURITY'); setOpenDropdown(null); }}>🔒 Security Policy</li>
                                 <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => { setActiveTab('SUB_ADMIN'); setOpenDropdown(null); }}>🧑‍💼 Sub-Admins</li> 
+                                <li className={activeTab === 'CAREERS' ? 'active' : ''} onClick={() => { setActiveTab('CAREERS'); setOpenDropdown(null); }}>💼 Job Vacancies</li>
                                 <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => { setActiveTab('SETTINGS'); setOpenDropdown(null); }}>⚙️ Settings</li>
                             </div>
                         )}
@@ -1920,23 +1965,95 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'SECURITY' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🔒 Security & App Policies</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto' }}>
+                        <div className="section-header"><h2>⚖️ App Policies & Legal Content</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '850px', margin: '0 auto' }}>
                             <form onSubmit={handlePolicySave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                <div>
-                                    <label style={{fontWeight:'bold'}}>Terms & Conditions</label>
-                                    <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="4" style={{resize:'vertical'}}></textarea>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                    <div>
+                                        <label style={{fontWeight:'bold', color: '#2b5876'}}>📄 Terms & Conditions</label>
+                                        <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Enter T&C here..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label style={{fontWeight:'bold', color: '#2b5876'}}>🔒 Privacy Policy</label>
+                                        <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Enter Privacy Policy..."></textarea>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                    <div>
+                                        <label style={{fontWeight:'bold', color: '#e67e22'}}>🚚 Shipping & Delivery</label>
+                                        <textarea value={policyData.shipping} onChange={e => setPolicyData({...policyData, shipping: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="How do you deliver media?"></textarea>
+                                    </div>
+                                    <div>
+                                        <label style={{fontWeight:'bold', color: '#e67e22'}}>📞 Contact Page Details</label>
+                                        <textarea value={policyData.contact} onChange={e => setPolicyData({...policyData, contact: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Address, Email, Phone..."></textarea>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label style={{fontWeight:'bold'}}>Privacy Policy</label>
-                                    <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="4"></textarea>
+                                    <label style={{fontWeight:'bold', color: '#2ecc71'}}>🤝 Why choose Snevio? (USP Section)</label>
+                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="3" style={{marginTop: '5px'}} placeholder="What makes Snevio best?"></textarea>
                                 </div>
-                                <div>
-                                    <label style={{fontWeight:'bold'}}>How do we best for you? (USP Section)</label>
-                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="4"></textarea>
-                                </div>
-                                <button type="submit" className="global-update-btn" style={{background:'#e74c3c'}}>💾 Save Policies to App</button>
+                                <button type="submit" className="global-update-btn" style={{background:'#e74c3c', padding: '15px', fontSize: '16px'}}>💾 UPDATE ALL POLICIES</button>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'CAREERS' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2>💼 Manage Job Vacancies</h2></div>
+                        <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+                            <h3 style={{marginTop: 0, color: '#27ae60'}}>Post a New Opening</h3>
+                            <form onSubmit={handleAddJob} style={{display:'flex', flexDirection:'column', gap:'15px'}}>
+                                <div style={{display:'flex', gap:'10px'}}>
+                                    <div style={{flex: 2}}>
+                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Role Title</label>
+                                        <input type="text" placeholder="e.g. Senior Video Editor" required value={newJob.role} onChange={e=>setNewJob({...newJob, role:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Job Type</label>
+                                        <select value={newJob.type} onChange={e=>setNewJob({...newJob, type:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}>
+                                            <option value="Long Term">Long Term</option>
+                                            <option value="Short Term">Short Term (Gig)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style={{display:'flex', gap:'10px'}}>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Time/Shift</label>
+                                        <input type="text" placeholder="e.g. 10AM - 7PM" value={newJob.time} onChange={e=>setNewJob({...newJob, time:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Salary/Budget</label>
+                                        <input type="text" placeholder="e.g. ₹25k - ₹40k" value={newJob.salary} onChange={e=>setNewJob({...newJob, salary:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                    </div>
+                                </div>
+                                <div style={{display:'flex', alignItems:'center', gap:'10px', background: '#fff9c4', padding: '10px', borderRadius: '8px'}}>
+                                    <input type="checkbox" id="urgentCheck" checked={newJob.urgent} onChange={e=>setNewJob({...newJob, urgent:e.target.checked})} style={{width:'18px', height:'18px'}} /> 
+                                    <label htmlFor="urgentCheck" style={{fontWeight:'bold', cursor:'pointer'}}>Mark as URGENT Hiring 🔥</label>
+                                </div>
+                                <div>
+    <label style={{fontSize: '12px', fontWeight:'bold'}}>Job Description (Optional)</label>
+    <textarea placeholder="Write job requirements..." value={newJob.description} onChange={e=>setNewJob({...newJob, description:e.target.value})} className="custom-admin-input" rows="3" style={{marginTop:'5px'}}></textarea>
+</div>
+                                <button type="submit" disabled={loading} className="global-update-btn" style={{background:'#27ae60', padding:'15px'}}>{loading ? 'Posting...' : '🚀 PUBLISH VACANCY'}</button>
+                            </form>
+                        </div>
+
+                        <div className="data-table-container">
+                            <h3 style={{padding: '15px'}}>📋 Current Job Openings</h3>
+                            <table className="admin-table">
+                                <thead><tr><th>Role</th><th>Type</th><th>Salary</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    {vacancies.length > 0 ? vacancies.map(v => (
+                                        <tr key={v._id}>
+                                            <td><strong>{v.role}</strong> {v.urgent && <span style={{color:'red', fontSize:'10px', fontWeight:'bold'}}>URGENT</span>}</td>
+                                            <td>{v.type}</td>
+                                            <td>{v.salary || 'Not Mentioned'}</td>
+                                            <td><button onClick={()=>handleDeleteJob(v._id)} className="pdf-btn" style={{background:'#e74c3c', padding:'5px 10px'}}>Remove</button></td>
+                                        </tr>
+                                    )) : <tr><td colSpan="4" style={{textAlign:'center', padding:'20px', color:'#999'}}>No jobs posted yet.</td></tr>}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}

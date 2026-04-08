@@ -137,7 +137,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         { id: "Traffic", label: "Traffic Status", icon: "📊" },
         { id: "Advertisement", label: "Business & Ads", icon: "📢" },
         { id: "Career & Vacancy", label: "Career & Vacancy", icon: "💼" },
-        { id: "Security & Privacy Policy", label: "Security & Privacy Policy", icon: "🔒" },
         { id: "How do we best for you", label: "Why choose Snevio?", icon: "🤝" }
     ];
 
@@ -273,26 +272,6 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     </div>
                 );
 
-            case "Security & Privacy Policy":
-                return (
-                    <>
-                        <div className="popup-tabs">
-                            <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Terms & Conditions</button>
-                            <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Privacy Policy</button>
-                        </div>
-                        <div className="popup-inner-box security-box">
-                            {popupTab === 'tab1' ? (
-                                <div className="policy-content" style={{whiteSpace:'pre-line', fontSize:'13px', lineHeight:'1.6', color:'#555'}}>
-                                    {policyData.terms}
-                                </div>
-                            ) : (
-                                <div className="policy-content" style={{whiteSpace:'pre-line', fontSize:'13px', lineHeight:'1.6', color:'#555'}}>
-                                    {policyData.privacy}
-                                </div>
-                            )}
-                        </div>
-                    </>
-                );
 
             case "Career & Vacancy":
                 return (

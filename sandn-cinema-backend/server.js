@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'sandn_cinema_super_secret_key_2024';
 
 // ✅ Added New Models Here
-const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting } = require('./models');
+const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy } = require('./models');
 
 // ✅ NEW: Service Model for App Services
 const serviceSchema = new mongoose.Schema({
@@ -1022,12 +1022,22 @@ app.get('/api/auth/get-platform-settings', async (req, res) => {
 app.post('/api/auth/update-policies', async (req, res) => {
     try {
         const { policies } = req.body;
+        // Policies mein ab hum terms, privacy, shipping aur contact charo bhejenge
         await PlatformSetting.updateOne(
             { settingId: 'GLOBAL' }, 
-            { $set: { policies: policies, lastUpdated: Date.now() } }, 
+            { 
+                $set: { 
+                    "policies.terms": policies.terms,
+                    "policies.privacy": policies.privacy,
+                    "policies.shipping": policies.shipping,
+                    "policies.contact": policies.contact,
+                    "policies.bestForYou": policies.bestForYou,
+                    lastUpdated: Date.now() 
+                } 
+            }, 
             { upsert: true }
         );
-        res.json({ success: true, message: "Policies updated successfully!" });
+        res.json({ success: true, message: "All Legal Policies updated successfully!" });
     } catch (e) {
         console.error(e);
         res.status(500).json({ success: false, message: "Failed to save policies." });
@@ -2180,6 +2190,40 @@ app.post('/api/auth/revoke-media-access', authenticateToken, async (req, res) =>
     }
 });
 
+// ==========================================
+// 💼 28. CAREER & VACANCY MANAGEMENT (ADMIN)
+// ==========================================
+
+// 1. Post Nayi Job (Admin)
+app.post('/api/auth/add-vacancy', async (req, res) => {
+    try {
+        const newJob = await Vacancy.create(req.body);
+        res.json({ success: true, message: "Job Vacancy posted successfully!", data: newJob });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to post job." });
+    }
+});
+
+// 2. Sari Jobs Fetch karna (Public / Profile Page)
+app.get('/api/auth/get-vacancies', async (req, res) => {
+    try {
+        // Sirf wahi jobs dikhayega jo Active hain
+        const jobs = await Vacancy.find({ isActive: true }).sort({ createdAt: -1 });
+        res.json({ success: true, data: jobs });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch vacancies." });
+    }
+});
+
+// 3. Job Delete karna (Admin)
+app.post('/api/auth/delete-vacancy', async (req, res) => {
+    try {
+        await Vacancy.findByIdAndDelete(req.body.id);
+        res.json({ success: true, message: "Job Vacancy removed!" });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to delete vacancy." });
+    }
+});
 
 // --- START SERVER ---
 app.listen(PORT, async () => {

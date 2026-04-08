@@ -174,11 +174,15 @@ const platformSettingSchema = new mongoose.Schema({
         platform: String,
         url: String
     }],
+
     policies: {
-        terms: { type: String, default: "User content will be safely managed..." },
-        privacy: { type: String, default: "We do not sell data to 3rd parties..." },
-        bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
-    },
+        terms: { type: String, default: "User content will be safely managed..." },
+        privacy: { type: String, default: "We do not sell data to 3rd parties..." },
+        shipping: { type: String, default: "No physical products shipped..." },
+        contact: { type: String, default: "Business Name: Snevio Cloud..." },
+        bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
+    },
+
     // GLOBAL DEFAULT PRICING
     defaultPricing: {
         imageCost: { type: Number, default: 5 },
@@ -213,6 +217,18 @@ const serviceSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// --- 10. VACANCY SCHEMA (For Admin Controlled Jobs) ---
+const vacancySchema = new mongoose.Schema({
+    role: { type: String, required: true },       // e.g. Video Editor
+    type: { type: String, required: true },       // e.g. Long Term / Short Term
+    time: { type: String },                       // e.g. Full Time (10-7)
+    salary: { type: String },                     // e.g. ₹20k - ₹35k
+    urgent: { type: Boolean, default: false },
+    description: { type: String },                // Optional extra details
+    isActive: { type: Boolean, default: true },   // Admin can hide/show
+    createdAt: { type: Date, default: Date.now }
+});
+
 module.exports = {
     User: mongoose.model('User', userSchema),
     Studio: mongoose.model('Studio', studioSchema),
@@ -222,5 +238,6 @@ module.exports = {
     Booking: mongoose.model('Booking', bookingSchema),
     CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
     PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
-    Service: mongoose.model('Service', serviceSchema) 
+    Service: mongoose.model('Service', serviceSchema),
+    Vacancy: mongoose.model('Vacancy', vacancySchema) 
 };

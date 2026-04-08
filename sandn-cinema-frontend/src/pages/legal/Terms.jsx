@@ -1,12 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
 const Terms = () => {
+    const [termsContent, setTermsContent] = useState("");
+    const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     // Jab page khule toh scroll ekdum top par aa jaye
     useEffect(() => {
         window.scrollTo(0, 0);
+        const fetchData = async () => {
+            try {
+                const res = await axios.get(`${API_BASE}/get-platform-settings`);
+                if (res.data.success && res.data.data?.policies?.terms) {
+                    setTermsContent(res.data.data.policies.terms);
+                }
+            } catch (e) {
+                console.log("Error fetching terms");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
     }, []);
 
     return (
@@ -37,36 +55,13 @@ const Terms = () => {
                     Last Updated: April 2026 | Snevio Cloud
                 </p>
 
-                <div style={{ lineHeight: '1.8', fontSize: '15px', color: '#444' }}>
-                    
-                    <h3 style={{ color: '#2b5876', marginTop: '30px', marginBottom: '12px', fontSize: '18px' }}>1. Introduction</h3>
-                    <p style={{ marginBottom: '15px' }}>
-                        Welcome to <strong>Snevio</strong>. By using our platform, you agree that Snevio is a premium digital media delivery and cloud service. If you disagree with any part of these terms, you may not access the service.
-                    </p>
-
-                    <h3 style={{ color: '#2b5876', marginTop: '30px', marginBottom: '12px', fontSize: '18px' }}>2. Media Delivery & Privacy</h3>
-                    <p style={{ marginBottom: '15px' }}>
-                        All images and videos hosted on Snevio are for the intended recipient only. Unauthorized sharing, downloading, or distribution of media without the creator's explicit consent is strictly prohibited.
-                    </p>
-
-                    <h3 style={{ color: '#2b5876', marginTop: '30px', marginBottom: '12px', fontSize: '18px' }}>3. Security Protocols</h3>
-                    <p style={{ marginBottom: '15px' }}>
-                        We prioritize the security of your media. We reserve the right to immediately suspend or terminate accounts that violate our security protocols, attempt unauthorized access, or misuse the data-sharing features.
-                    </p>
-
-                    <h3 style={{ color: '#2b5876', marginTop: '30px', marginBottom: '12px', fontSize: '18px' }}>4. Bookings & Payments</h3>
-                    <p style={{ marginBottom: '15px' }}>
-                        All studio and freelance bookings made through Snevio are subject to availability. Payments processed via our platform are secured. Cancellations and refunds are strictly governed by our dedicated Refund Policy.
-                    </p>
-
-                    <div style={{ marginTop: '40px', padding: '20px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #2b5876' }}>
-                        <h4 style={{ color: '#111', marginBottom: '8px', fontSize: '16px' }}>Questions about these Terms?</h4>
-                        <p style={{ fontSize: '14px', color: '#555', margin: 0 }}>
-                            Please contact our support team at <strong>support@snevio.com</strong> or via the Contact Us page.
-                        </p>
-                    </div>
-
-                </div>
+                <div style={{ lineHeight: '1.8', fontSize: '15px', color: '#444', whiteSpace: 'pre-line' }}>
+    {loading ? (
+        <p style={{textAlign: 'center', color: '#888'}}>Fetching latest terms...</p>
+    ) : (
+        termsContent || "No terms and conditions found. Please update from Admin Panel."
+    )}
+</div>
             </div>
             
             {/* Footer space */}
