@@ -455,13 +455,23 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
- // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
+// 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
     const handleUpload = async (isFeed = false) => {
-        if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
-        const currentFiles = isFeed ? feedFiles : files;
+        
+        // 🛠️ BUG FIX: Naye formData state variables ka use karna hai
+        const activeMobile = formData.mobile;
+        const activeFiles = formData.files;
+        const activeFolderName = formData.folderName;
+        const activeName = formData.name;
+        const activeEmail = formData.email;
+
+        if (!isFeed && (!activeMobile || activeMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
+        
+        const currentFiles = isFeed ? feedFiles : activeFiles;
+        
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
-        let baseFolder = folderName.trim() || 'Stranger Photography';
+        let baseFolder = activeFolderName.trim() || 'Stranger Photography';
         let targetSubFolder = '';
         if (useDateFolder && !isFeed) {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
@@ -576,18 +586,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 return; 
             }
 
-            // Normal Client Data Payload
+            // 🛠️ BUG FIX: Normal Client Data Payload using new active variables
             const payload = {
-                mobile: clientMobile,
-                name: clientName || 'Client',
-                type: 'USER',
+                mobile: activeMobile,
+                name: activeName || 'Client',
+                type: formData.type || 'USER',
                 folderName: baseFolder,
                 subFolderName: targetSubFolder, 
-                email: clientEmail,
-                expiryDays: expiryDays,
-                downloadLimit: downloadLimit,
-                addedBy: user.mobile,
-                fileUrls: uploadedUrls 
+                email: activeEmail,
+                expiryDays: formData.expiryDays,
+                downloadLimit: formData.downloadLimit,
+                addedBy: user?.mobile || 'ADMIN',
+                fileUrls: uploadedUrls,
+                imageCost: formData.imageCost || '5',
+                videoCost: formData.videoCost || '10',
+                unlockValidity: formData.unlockValidity || '24 Hours'
             };
 
             const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
@@ -601,14 +614,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setUploadSpeed('');
                     setUploadETA('');
 
-                    setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
-                    setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
-                    setFiles([]);
-                    document.getElementById('file-input-field').value = '';
-                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    // 🛠️ BUG FIX: Clear form correctly after upload
+                    setFormData({ 
+                        type: 'USER', name: '', mobile: '', email: '', folderName: '', 
+                        files: [], expiryDays: '30', downloadLimit: '0', 
+                        imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' 
+                    });
                     
-                    fetchClients();
-                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
+                    setUseDateFolder(false);
+                    document.getElementById('admin-file-input').value = '';
+                    setFileStats({ photos: 0, videos: 0 });
+                    setPreviews([]);
+                    
+                    fetchAccounts();
+                    if(globalRemoveUserObj && globalRemoveUserObj.mobile === activeMobile) searchUserForRemoval(activeMobile);
                     setLoading(false);
                 }, 500);
             } else { 
