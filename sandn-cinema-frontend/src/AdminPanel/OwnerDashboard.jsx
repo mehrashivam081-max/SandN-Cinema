@@ -337,7 +337,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
             fd.append('file', adFile);
             fd.append('upload_preset', 'xgujeuol'); 
             
-            const cloudRes = await axios.create().post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+            // ✅ FIX: Use a clean axios instance and remove common authorization headers
+            const cleanAxios = axios.create();
+            delete cleanAxios.defaults.headers.common['Authorization'];
+            
+            const cloudRes = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     setUploadProgress(Math.min(percentCompleted, 99));
@@ -503,7 +507,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     fd.append('file', file);
                     fd.append('upload_preset', 'xgujeuol'); 
 
-                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                   // ✅ FIX: Use a clean axios instance to avoid CORS issue with Authorization header
+                    const cleanAxios = axios.create();
+                    delete cleanAxios.defaults.headers.common['Authorization'];
+
+                    const res = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                         onUploadProgress: (progressEvent) => {
                             const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
@@ -854,7 +862,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 const fd = new FormData();
                 fd.append('file', serviceImage);
                 fd.append('upload_preset', 'xgujeuol'); 
-                const cloudRes = await axios.create().post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd);
+                // ✅ FIX: Clear headers for Service Image Upload too
+                const cleanAxios = axios.create();
+                delete cleanAxios.defaults.headers.common['Authorization'];
+                const cloudRes = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd);
                 uploadedImageUrl = cloudRes.data.secure_url;
             }
 
