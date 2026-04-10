@@ -6,6 +6,11 @@ import useBackButton from '../hooks/useBackButton';
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
+// ✅ SUPER TOKEN GRABBER (Security ke liye)
+const getValidToken = () => {
+    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+};
+
 const OwnerDashboard = ({ user, onLogout }) => {
     // --- UI STATES ---
     const [activeTab, setActiveTab] = useState('DASHBOARD');
@@ -337,11 +342,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
             fd.append('file', adFile);
             fd.append('upload_preset', 'xgujeuol'); 
             
-            // ✅ FIX: Use a clean axios instance and remove common authorization headers
-            const cleanAxios = axios.create();
-            delete cleanAxios.defaults.headers.common['Authorization'];
-            
-            const cloudRes = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+            const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                transformRequest: [(data, headers) => {
+                    if (headers && headers.common) delete headers.common['Authorization'];
+                    if (headers) delete headers['Authorization'];
+                    return data;
+                }],
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     setUploadProgress(Math.min(percentCompleted, 99));
@@ -508,10 +514,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     fd.append('upload_preset', 'xgujeuol'); 
 
                    // ✅ FIX: Use a clean axios instance to avoid CORS issue with Authorization header
-                    const cleanAxios = axios.create();
-                    delete cleanAxios.defaults.headers.common['Authorization'];
-
-                    const res = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                        transformRequest: [(data, headers) => {
+                    if (headers && headers.common) delete headers.common['Authorization'];
+                    if (headers) delete headers['Authorization'];
+                    return data;
+                }],
                         onUploadProgress: (progressEvent) => {
                             const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
@@ -611,7 +619,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 unlockValidity: formData.unlockValidity || '24 Hours'
             };
 
-            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
+            // ✅ SECURE UPLOAD FIX: Explicitly send valid token
+            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
 
             if (backendRes.data.success) {
                 setUploadETA('Complete!');
@@ -630,7 +641,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     });
                     
                     setUseDateFolder(false);
-                    document.getElementById('admin-file-input').value = '';
+                    // ✅ BUG FIX: Check if input exists before clearing to prevent crash
+                    const fileInput = document.getElementById('admin-file-input');
+                    if (fileInput) fileInput.value = '';
                     setFileStats({ photos: 0, videos: 0 });
                     setPreviews([]);
                     
@@ -656,7 +669,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleDeleteAccount = async (mobile, role) => {
         if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete this ${role}?`)) return;
         try {
-            const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role });
+            // ✅ SECURE DELETE ACCOUNT FIX
+            const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role }, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
             if (res.data.success) { alert("🗑️ Account deleted!"); fetchAccounts(); }
         } catch (error) { alert("Error deleting account."); }
     };
@@ -685,7 +701,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (!window.confirm(`⚠️ WARNING: ${msg}\nThis action cannot be undone!`)) return;
 
         try {
-            const res = await axios.post(`${API_BASE}/delete-specific-data`, { mobile, folderName, subFolderName, fileUrl });
+            // ✅ SECURE DATA DELETE FIX
+            const res = await axios.post(`${API_BASE}/delete-specific-data`, { mobile, folderName, subFolderName, fileUrl }, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
             if (res.data.success) {
                 alert("🗑️ Deleted successfully!");
                 setGlobalRemoveUserObj(prev => ({ ...prev, uploadedData: res.data.updatedData }));
@@ -789,7 +808,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleCollabAction = async (id, action) => {
         if (!window.confirm(`Are you sure you want to ${action} this request?`)) return;
         try {
-            const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action });
+            // ✅ SECURE COLLAB UPDATE FIX
+            const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action }, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
             if(res.data.success) { alert(`✅ Request ${action}!`); fetchCollabs(); }
         } catch(e) { alert("Failed to update collab status"); }
     };
@@ -863,9 +885,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 fd.append('file', serviceImage);
                 fd.append('upload_preset', 'xgujeuol'); 
                 // ✅ FIX: Clear headers for Service Image Upload too
-                const cleanAxios = axios.create();
-                delete cleanAxios.defaults.headers.common['Authorization'];
-                const cloudRes = await cleanAxios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd);
+                const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
+                    transformRequest: [(data, headers) => {
+                    if (headers && headers.common) delete headers.common['Authorization'];
+                    if (headers) delete headers['Authorization'];
+                    return data;
+                }],
+                });
                 uploadedImageUrl = cloudRes.data.secure_url;
             }
 

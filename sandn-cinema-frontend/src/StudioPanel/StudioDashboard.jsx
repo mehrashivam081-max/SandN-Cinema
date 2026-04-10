@@ -7,6 +7,11 @@ import SyncPlayer from '../components/SyncPlayer'; // Path apne hisaab se set ka
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
+// ✅ SUPER TOKEN GRABBER: Ye 'token' aur 'authToken' dono ko check karega, kabhi Khali (null) nahi bhejega!
+const getValidToken = () => {
+    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+};
+
 const StudioDashboard = ({ user, onLogout }) => {
     // --- UI TABS STATES ---
     const [activeTab, setActiveTab] = useState('DASHBOARD');
@@ -444,19 +449,25 @@ const StudioDashboard = ({ user, onLogout }) => {
 
             // Normal Client Data Payload
             const payload = {
-                mobile: clientMobile,
-                name: clientName || 'Client',
-                type: 'USER',
+                mobile: activeMobile,
+                name: activeName || 'Client',
+                type: formData.type || 'USER',
                 folderName: baseFolder,
                 subFolderName: targetSubFolder, 
-                email: clientEmail,
-                expiryDays: expiryDays,
-                downloadLimit: downloadLimit,
-                addedBy: user.mobile,
-                fileUrls: uploadedUrls 
+                email: activeEmail,
+                expiryDays: formData.expiryDays,
+                downloadLimit: formData.downloadLimit,
+                addedBy: user?.mobile || 'ADMIN',
+                fileUrls: uploadedUrls,
+                imageCost: formData.imageCost || '5',
+                videoCost: formData.videoCost || '10',
+                unlockValidity: formData.unlockValidity || '24 Hours'
             };
 
-            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload);
+            // ✅ SAFE DB CALL WITH VALID TOKEN
+            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
 
             if (backendRes.data.success) {
                 setUploadETA('Complete!');
@@ -1429,11 +1440,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         try {
                                             const fd = new FormData();
                                             fd.append('videoFile', longMediaFile);
-                                            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-                                            
-                                            // 2. Upload to Cloudinary (Audio Extraction)
+                                            // 2. Upload to Server (Audio Extraction)
                                             const extractRes = await axios.post(`${API_BASE}/upload-split-video`, fd, {
-                                                headers: { 'Authorization': `Bearer ${token}` },
+                                                headers: { 'Authorization': `Bearer ${getValidToken()}` },
                                                 onUploadProgress: (progressEvent) => {
                                                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                                                     setUploadProgress(percentCompleted);
@@ -1466,7 +1475,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 };
 
                                                 const dbRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
-                                                    headers: { 'Authorization': `Bearer ${token}` }
+                                                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
                                                 });
 
                                                 if(dbRes.data.success) {
