@@ -581,7 +581,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     fileUrls: uploadedUrls 
                 };
                 
-                const backendRes = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload);
+                const backendRes = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
                 
                 if (backendRes.data.success) {
                     setUploadETA('Complete!');
@@ -619,7 +621,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 unlockValidity: formData.unlockValidity || '24 Hours'
             };
 
-            // ✅ SECURE UPLOAD FIX: Explicitly send valid token
             const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
             });
@@ -633,7 +634,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setUploadSpeed('');
                     setUploadETA('');
 
-                    // 🛠️ BUG FIX: Clear form correctly after upload
                     setFormData({ 
                         type: 'USER', name: '', mobile: '', email: '', folderName: '', 
                         files: [], expiryDays: '30', downloadLimit: '0', 
@@ -641,7 +641,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     });
                     
                     setUseDateFolder(false);
-                    // ✅ BUG FIX: Check if input exists before clearing to prevent crash
                     const fileInput = document.getElementById('admin-file-input');
                     if (fileInput) fileInput.value = '';
                     setFileStats({ photos: 0, videos: 0 });
@@ -653,11 +652,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 }, 500);
             } else { 
                 alert(`❌ Error from Database: ${backendRes.data.message}`); 
+                setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
                 setLoading(false);
             }
         } catch (error) { 
             alert("Upload Failed. Check internet connection."); 
             console.error(error);
+            setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
             setLoading(false);
         } 
     };
@@ -669,12 +670,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleDeleteAccount = async (mobile, role) => {
         if (!window.confirm(`⚠️ WARNING: Are you sure you want to permanently delete this ${role}?`)) return;
         try {
-            // ✅ SECURE DELETE ACCOUNT FIX
             const res = await axios.post(`${API_BASE}/delete-account`, { targetMobile: mobile, targetRole: role }, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
             });
-            if (res.data.success) { alert("🗑️ Account deleted!"); fetchAccounts(); }
-        } catch (error) { alert("Error deleting account."); }
+            if (res.data.success) { alert("🗑️ Account deleted!"); fetchAccounts(); } else { alert(`❌ Failed: ${res.data.message}`); }
+        } catch (error) { alert("Error deleting account."); console.error(error); }
     };
 
     // ==========================================
@@ -701,7 +701,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (!window.confirm(`⚠️ WARNING: ${msg}\nThis action cannot be undone!`)) return;
 
         try {
-            // ✅ SECURE DATA DELETE FIX
             const res = await axios.post(`${API_BASE}/delete-specific-data`, { mobile, folderName, subFolderName, fileUrl }, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
             });
@@ -808,12 +807,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const handleCollabAction = async (id, action) => {
         if (!window.confirm(`Are you sure you want to ${action} this request?`)) return;
         try {
-            // ✅ SECURE COLLAB UPDATE FIX
             const res = await axios.post(`${API_BASE}/update-collab-status`, { collabId: id, status: action }, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
             });
             if(res.data.success) { alert(`✅ Request ${action}!`); fetchCollabs(); }
-        } catch(e) { alert("Failed to update collab status"); }
+        } catch(e) { alert("Failed to update collab status"); console.error(e); }
     };
 
     const handleBookingStatus = async (id, newStatus) => {
