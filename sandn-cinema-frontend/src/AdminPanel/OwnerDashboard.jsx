@@ -1264,7 +1264,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>Overview Statistics</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>Overview Statistics</h2></div>
 
                         {/* ✅ UNIQUE ALERT ON DASHBOARD */}
                         {emergencyPendingCountVal > 0 && (
@@ -1305,7 +1305,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 📣 NEW: SMART AD MANAGER TAB */}
                 {activeTab === 'ADS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📣 Smart Ad Manager (Pro)</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📣 Smart Ad Manager (Pro)</h2></div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Create targeted ads or promotions that automatically inject into user feeds.</p>
 
                         <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px', borderTop: editingAdId ? '4px solid #f1c40f' : 'none' }}>
@@ -1314,19 +1314,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <form onSubmit={handleAdSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Ad Campaign Title</label>
-                                        <input type="text" placeholder="e.g. Diwali Mega Sale" value={adForm.title} onChange={e => setAdForm({...adForm, title: e.target.value})} className="custom-admin-input" required/>
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#333'}}>Ad Campaign Title</label>
+                                        <input type="text" placeholder="e.g. Diwali Mega Sale" value={adForm.title} onChange={e => setAdForm({...adForm, title: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} required/>
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Upload Media {editingAdId && <span style={{fontSize: '10px'}}>(Leave blank to keep old)</span>}</label>
-                                        <input type="file" accept="image/*,video/*" onChange={e => setAdFile(e.target.files[0])} className="custom-admin-input" id="ad-file-input" style={{padding: '9px'}} />
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#333'}}>Upload Media {editingAdId && <span style={{fontSize: '10px', color: '#666'}}>(Leave blank to keep old)</span>}</label>
+                                        <input type="file" accept="image/*,video/*" onChange={e => setAdFile(e.target.files[0])} className="custom-admin-input" id="ad-file-input" style={{padding: '9px', color: '#000', fontWeight: '500'}} />
                                     </div>
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '15px', background: '#f4f6f9', padding: '15px', borderRadius: '8px', border: '1px dashed #3498db' }}>
                                     <div style={{flex: 1}}>
                                         <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Location</label>
-                                        <select value={adForm.location} onChange={e => setAdForm({...adForm, location: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}>
+                                        <select value={adForm.location} onChange={e => setAdForm({...adForm, location: e.target.value})} className="custom-admin-input" style={{marginBottom: 0, color: '#000', fontWeight: 'bold'}}>
                                             <option value="ALL">🌍 ALL Locations (Global)</option>
                                             {Object.keys(locationStats).filter(k => k !== 'Unknown').map((loc, idx) => (
                                                 <option key={idx} value={loc}>📍 {loc} ({locationStats[loc]} Users)</option>
@@ -1335,7 +1335,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </div>
                                     <div style={{flex: 1}}>
                                         <label style={{fontSize: '13px', fontWeight: 'bold', color: '#2980b9'}}>Target Feed Category</label>
-                                        <select value={adForm.interest} onChange={e => setAdForm({...adForm, interest: e.target.value})} className="custom-admin-input" style={{marginBottom: 0}}>
+                                        <select value={adForm.interest} onChange={e => setAdForm({...adForm, interest: e.target.value})} className="custom-admin-input" style={{marginBottom: 0, color: '#000', fontWeight: 'bold'}}>
                                             <option value="ALL">🌍 Both Feeds (Global)</option>
                                             <option value="trending">🔥 Trending Feed Only</option>
                                             <option value="viral">🚀 Viral Feed Only</option>
@@ -1345,12 +1345,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                                 <div style={{ display: 'flex', gap: '15px' }}>
                                     <div style={{flex: 2}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Action Link (On Click)</label>
-                                        <input type="url" placeholder="https://..." value={adForm.link} onChange={e => setAdForm({...adForm, link: e.target.value})} className="custom-admin-input" />
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#333'}}>Action Link (On Click)</label>
+                                        <input type="url" placeholder="https://..." value={adForm.link} onChange={e => setAdForm({...adForm, link: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} />
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '13px', fontWeight: 'bold'}}>Max Views Limit</label>
-                                        <input type="number" placeholder="0 = Unlimited" value={adForm.maxViews} onChange={e => setAdForm({...adForm, maxViews: e.target.value})} className="custom-admin-input" />
+                                        <label style={{fontSize: '13px', fontWeight: 'bold', color: '#333'}}>Max Views Limit</label>
+                                        <input type="number" placeholder="0 = Unlimited" value={adForm.maxViews} onChange={e => setAdForm({...adForm, maxViews: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} />
                                     </div>
                                 </div>
 
@@ -1374,10 +1374,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             </form>
                         </div>
 
-                        <h3 style={{ padding: '15px' }}>📊 Live Advertisement Campaigns</h3>
+                        <h3 style={{ padding: '15px', color: '#2c3e50', fontWeight: 'bold', margin: 0 }}>📊 Live Advertisement Campaigns</h3>
                         <div className="data-table-container">
-                            <table className="admin-table">
-                                <thead><tr><th>Preview Image</th><th>Ad Title</th><th>Targeting</th><th>Views Status</th><th>Actions</th></tr></thead>
+                            <table className="admin-table" style={{color: '#333'}}>
+                                <thead><tr><th style={{color: '#2c3e50'}}>Preview Image</th><th style={{color: '#2c3e50'}}>Ad Title</th><th style={{color: '#2c3e50'}}>Targeting</th><th style={{color: '#2c3e50'}}>Views Status</th><th style={{color: '#2c3e50'}}>Actions</th></tr></thead>
                                 <tbody>
                                     {fetchingAds ? <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>Loading Ads...</td></tr> : 
                                     adList.length > 0 ? adList.map((ad, idx) => (
@@ -1438,7 +1438,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 🔴 MANAGE SERVICES (UNDER USER PLATFORM) */}
                 {activeTab === 'MANAGE_SERVICES' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🛠️ Manage App Services</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🛠️ Manage App Services</h2></div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Add or Edit premium services that users can view and book directly from their app.</p>
 
                         <div id="service-form-section" className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px', borderTop: editingServiceId ? '4px solid #f1c40f' : 'none' }}>
@@ -1514,7 +1514,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 🔴 NEW TAB: GLOBAL REMOVE (GRANULAR FILE/FOLDER DELETION) WITH PREVIEWS */}
                 {activeTab === 'GLOBAL_REMOVE' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🗑️ Global Data Remove (Pro)</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🗑️ Global Data Remove (Pro)</h2></div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Search for any client and selectively delete their Main Folder, Sub-Folder, or Specific Media Files.</p>
 
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto 30px' }}>
@@ -1531,16 +1531,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         onKeyDown={(e) => handleKeyDown(e, () => searchUserForRemoval(globalRemoveMobile))}
                                         onBlur={() => setTimeout(() => setGlobalRemoveSearchSuggestions(false), 200)}
                                         className="custom-admin-input" 
-                                        style={{margin: 0}}
+                                        style={{margin: 0, color: '#333', fontWeight: 'bold'}}
                                     />
                                     {globalRemoveSearchSuggestions && globalRemoveMobile && globalRemoveFilteredSuggestions.length > 0 && (
-                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.15)', borderRadius: '5px' }}>
                                             {globalRemoveFilteredSuggestions.map((acc, idx) => (
                                                 <li key={idx} onMouseDown={() => {
                                                     setGlobalRemoveMobile(acc.mobile);
                                                     searchUserForRemoval(acc.mobile);
-                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>
-                                                    {acc.mobile} - {acc.name || acc.studioName}
+                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#000', fontWeight: 'bold' }}>
+                                                    📞 {acc.mobile} - <span style={{color: '#2980b9'}}>{acc.name || acc.studioName}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -1644,7 +1644,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB: UPLOAD DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📤 Manual Registration & Upload</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📤 Manual Registration & Upload</h2></div>
                         
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             
@@ -1883,7 +1883,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {activeTab === 'GLOBAL_CHARGES' && (
                     <div className="view-section">
                         <div className="section-header">
-                            <h2>💰 Global Charges & Events Configuration</h2>
+                            <h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>💰 Global Charges & Events Configuration</h2>
                             <button onClick={handleSaveGlobalCharges} className="global-update-btn" style={{ background: '#2ecc71', width: 'auto', padding: '8px 20px' }}>💾 Save Configs</button>
                         </div>
 
@@ -1942,7 +1942,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB: ACCOUNTS */}
                 {activeTab === 'ACCOUNTS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📋 Manage Users & Studios</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📋 Manage Users & Studios</h2></div>
                         <div className="admin-filter-tabs">
                             <button className={filterRole === 'ALL' ? 'active' : ''} onClick={() => setFilterRole('ALL')}>All Accounts</button>
                             <button className={filterRole === 'USER' ? 'active' : ''} onClick={() => setFilterRole('USER')}>Users Only</button>
@@ -1977,7 +1977,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB: BOOKINGS */}
                 {activeTab === 'BOOKINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📅 Direct Bookings & Emergencies</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📅 Direct Bookings & Emergencies</h2></div>
                         <div className="data-table-container">
                             <table className="admin-table">
                                 <thead>
@@ -2021,44 +2021,46 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'CRITERIA' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📈 Platform Criteria & Traffic</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📈 Platform Criteria & Traffic</h2></div>
                         
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-                            <div className="setting-card" style={{background: '#f8f9f9'}}>
-                                <h3 style={{color:'#2980b9'}}>📊 Traffic Status</h3>
-                                <p>Real-time analytics of platform visitors.</p>
+                            <div className="setting-card" style={{background: '#f8f9f9', padding: '20px', borderRadius: '10px', color: '#333', border: '1px solid #e1e8ed'}}>
+                                <h3 style={{color:'#2980b9', marginTop: 0}}>📊 Traffic Status</h3>
+                                <p style={{color: '#7f8c8d', fontSize: '13px', margin: '5px 0 15px 0'}}>Real-time analytics of platform visitors.</p>
                                 <div style={{ marginTop: '15px' }}>
-                                    <p><strong>Total Accounts:</strong> {accounts.length}</p>
-                                    <p><strong>Today's Visitors:</strong> 1,240 (Simulated)</p>
+                                    <p style={{margin: '5px 0', fontSize: '14px', color: '#2c3e50'}}><strong>Total Accounts:</strong> {accounts.length}</p>
+                                    <p style={{margin: '5px 0', fontSize: '14px', color: '#2c3e50'}}><strong>Today's Visitors:</strong> 1,240 (Simulated)</p>
                                 </div>
                             </div>
-                            <div className="setting-card" style={{background: '#fcf3cf'}}>
-                                <h3 style={{color:'#d4ac0d'}}>📢 Business & Ads</h3>
-                                <p>Manage homepage banners and promotions.</p>
-                                <button onClick={() => setActiveTab('ADS')} className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px' }}>Manage Ad Banners</button>
+                            <div className="setting-card" style={{background: '#fcf3cf', padding: '20px', borderRadius: '10px', color: '#333', border: '1px solid #f9e79f'}}>
+                                <h3 style={{color:'#d35400', marginTop: 0}}>📢 Business & Ads</h3>
+                                <p style={{color: '#7f8c8d', fontSize: '13px', margin: '5px 0 15px 0'}}>Manage homepage banners and promotions.</p>
+                                <button onClick={() => setActiveTab('ADS')} className="global-update-btn" style={{ background: '#f1c40f', color: '#000', marginTop: '10px', border: 'none', padding: '10px 15px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>Manage Ad Banners</button>
                             </div>
                         </div>
 
                         <div className="data-table-container">
-                            <h3 style={{ padding: '15px' }}>🤝 Collaboration Requests</h3>
-                            <table className="admin-table">
-                                <thead><tr><th>Name</th><th>Brand</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
+                            <h3 style={{ padding: '15px', color: '#2c3e50', fontWeight: 'bold', margin: 0 }}>🤝 Collaboration Requests</h3>
+                            <table className="admin-table" style={{color: '#333'}}>
+                                <thead><tr><th style={{color: '#2c3e50'}}>Name</th><th style={{color: '#2c3e50'}}>Brand</th><th style={{color: '#2c3e50'}}>Email</th><th style={{color: '#2c3e50'}}>Status</th><th style={{color: '#2c3e50'}}>Actions</th></tr></thead>
                                 <tbody>
                                     {collabRequests.map(req => (
                                         <tr key={req._id}>
-                                            <td>{req.name}</td><td>{req.brand}</td><td>{req.email}</td>
+                                            <td style={{fontWeight: '500'}}>{req.name}</td>
+                                            <td>{req.brand}</td>
+                                            <td style={{color: '#2980b9'}}>{req.email}</td>
                                             <td><span className={`status-badge ${req.status === 'Accepted' ? 'active' : req.status === 'Declined' ? 'inactive' : 'normal'}`}>{req.status}</span></td>
                                             <td>
                                                 {req.status === 'Pending' && (
                                                     <>
-                                                        <button onClick={() => handleCollabAction(req._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', marginRight:'5px', cursor:'pointer'}}>Accept</button>
-                                                        <button onClick={() => handleCollabAction(req._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px', borderRadius:'3px', cursor:'pointer'}}>Decline</button>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Accepted')} style={{background:'#2ecc71', color:'#fff', border:'none', padding:'5px 10px', borderRadius:'3px', marginRight:'5px', cursor:'pointer', fontWeight: 'bold'}}>Accept</button>
+                                                        <button onClick={() => handleCollabAction(req._id, 'Declined')} style={{background:'#e74c3c', color:'#fff', border:'none', padding:'5px 10px', borderRadius:'3px', cursor:'pointer', fontWeight: 'bold'}}>Decline</button>
                                                     </>
                                                 )}
                                             </td>
                                         </tr>
                                     ))}
-                                    {collabRequests.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px'}}>No new collab requests.</td></tr>}
+                                    {collabRequests.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'20px', color: '#7f8c8d'}}>No new collab requests.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -2067,25 +2069,28 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'SOCIAL' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🌐 Manage Social Links</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🌐 Manage Social Links</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
                                 <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Platform</label>
-                                    <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input">
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Platform</label>
+                                    <select value={newLink.platform} onChange={(e) => setNewLink({...newLink, platform: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}>
                                         <option value="Instagram">Instagram</option><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="WhatsApp">WhatsApp</option><option value="Twitter">Twitter</option>
                                     </select>
                                 </div>
-                                <div><label style={{ fontSize: '13px', fontWeight: 'bold' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleAddLink)} className="custom-admin-input" /></div>
+                                <div><label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Profile URL</label><input type="text" placeholder="e.g. https://instagram.com/sandncinema" value={newLink.url} onChange={(e) => setNewLink({...newLink, url: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleAddLink)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
                                 <button onClick={handleAddLink} className="global-update-btn">➕ Add to List</button>
                             </div>
                             
                             <button onClick={saveLinksToServer} className="global-update-btn" style={{background: '#27ae60', marginBottom: '30px', width: '100%'}}>💾 SAVE ALL TO DATABASE</button>
 
-                            <h4>Current Links Saved</h4>
+                            <h4 style={{color: '#2c3e50', fontWeight: 'bold', borderBottom: '2px solid #eee', paddingBottom: '10px'}}>Current Links Saved</h4>
                             <ul style={{ listStyle: 'none', padding: 0 }}>
                                 {socialLinks.filter(l => l.url !== '').map((link, i) => (
-                                    <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'5px', display:'flex', justifyContent:'space-between' }}><strong>{link.platform}</strong><a href={link.url} target="_blank" rel="noreferrer">{link.url.substring(0, 20)}...</a></li>
+                                    <li key={i} style={{ background:'#f9f9f9', padding:'10px', marginBottom:'5px', display:'flex', justifyContent:'space-between', border: '1px solid #ddd', borderRadius: '4px' }}>
+                                        <strong style={{color: '#000'}}>{link.platform}</strong>
+                                        <a href={link.url} target="_blank" rel="noreferrer" style={{color: '#2980b9', fontWeight: 'bold'}}>{link.url.substring(0, 20)}...</a>
+                                    </li>
                                 ))}
                             </ul>
                         </div>
@@ -2094,32 +2099,32 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'SECURITY' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚖️ App Policies & Legal Content</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>⚖️ App Policies & Legal Content</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '850px', margin: '0 auto' }}>
                             <form onSubmit={handlePolicySave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                     <div>
                                         <label style={{fontWeight:'bold', color: '#2b5876'}}>📄 Terms & Conditions</label>
-                                        <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Enter T&C here..."></textarea>
+                                        <textarea value={policyData.terms} onChange={e => setPolicyData({...policyData, terms: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px', color: '#000', fontWeight: '500'}} placeholder="Enter T&C here..."></textarea>
                                     </div>
                                     <div>
                                         <label style={{fontWeight:'bold', color: '#2b5876'}}>🔒 Privacy Policy</label>
-                                        <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Enter Privacy Policy..."></textarea>
+                                        <textarea value={policyData.privacy} onChange={e => setPolicyData({...policyData, privacy: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px', color: '#000', fontWeight: '500'}} placeholder="Enter Privacy Policy..."></textarea>
                                     </div>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                     <div>
                                         <label style={{fontWeight:'bold', color: '#e67e22'}}>🚚 Shipping & Delivery</label>
-                                        <textarea value={policyData.shipping} onChange={e => setPolicyData({...policyData, shipping: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="How do you deliver media?"></textarea>
+                                        <textarea value={policyData.shipping} onChange={e => setPolicyData({...policyData, shipping: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px', color: '#000', fontWeight: '500'}} placeholder="How do you deliver media?"></textarea>
                                     </div>
                                     <div>
                                         <label style={{fontWeight:'bold', color: '#e67e22'}}>📞 Contact Page Details</label>
-                                        <textarea value={policyData.contact} onChange={e => setPolicyData({...policyData, contact: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px'}} placeholder="Address, Email, Phone..."></textarea>
+                                        <textarea value={policyData.contact} onChange={e => setPolicyData({...policyData, contact: e.target.value})} className="custom-admin-input" rows="6" style={{resize:'vertical', marginTop: '5px', color: '#000', fontWeight: '500'}} placeholder="Address, Email, Phone..."></textarea>
                                     </div>
                                 </div>
                                 <div>
                                     <label style={{fontWeight:'bold', color: '#2ecc71'}}>🤝 Why choose Snevio? (USP Section)</label>
-                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="3" style={{marginTop: '5px'}} placeholder="What makes Snevio best?"></textarea>
+                                    <textarea value={policyData.bestForYou} onChange={e => setPolicyData({...policyData, bestForYou: e.target.value})} className="custom-admin-input" rows="3" style={{marginTop: '5px', color: '#000', fontWeight: '500'}} placeholder="What makes Snevio best?"></textarea>
                                 </div>
                                 <button type="submit" className="global-update-btn" style={{background:'#e74c3c', padding: '15px', fontSize: '16px'}}>💾 UPDATE ALL POLICIES</button>
                             </form>
@@ -2129,18 +2134,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'CAREERS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>💼 Manage Job Vacancies</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>💼 Manage Job Vacancies</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
                             <h3 style={{marginTop: 0, color: '#27ae60'}}>Post a New Opening</h3>
                             <form onSubmit={handleAddJob} style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <div style={{flex: 2}}>
-                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Role Title</label>
-                                        <input type="text" placeholder="e.g. Senior Video Editor" required value={newJob.role} onChange={e=>setNewJob({...newJob, role:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                        <label style={{fontSize: '12px', fontWeight:'bold', color: '#333'}}>Role Title</label>
+                                        <input type="text" placeholder="e.g. Senior Video Editor" required value={newJob.role} onChange={e=>setNewJob({...newJob, role:e.target.value})} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}}/>
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Job Type</label>
-                                        <select value={newJob.type} onChange={e=>setNewJob({...newJob, type:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}>
+                                        <label style={{fontSize: '12px', fontWeight:'bold', color: '#333'}}>Job Type</label>
+                                        <select value={newJob.type} onChange={e=>setNewJob({...newJob, type:e.target.value})} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}}>
                                             <option value="Long Term">Long Term</option>
                                             <option value="Short Term">Short Term (Gig)</option>
                                         </select>
@@ -2148,30 +2153,30 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 </div>
                                 <div style={{display:'flex', gap:'10px'}}>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Time/Shift</label>
-                                        <input type="text" placeholder="e.g. 10AM - 7PM" value={newJob.time} onChange={e=>setNewJob({...newJob, time:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                        <label style={{fontSize: '12px', fontWeight:'bold', color: '#333'}}>Time/Shift</label>
+                                        <input type="text" placeholder="e.g. 10AM - 7PM" value={newJob.time} onChange={e=>setNewJob({...newJob, time:e.target.value})} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}}/>
                                     </div>
                                     <div style={{flex: 1}}>
-                                        <label style={{fontSize: '12px', fontWeight:'bold'}}>Salary/Budget</label>
-                                        <input type="text" placeholder="e.g. ₹25k - ₹40k" value={newJob.salary} onChange={e=>setNewJob({...newJob, salary:e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}}/>
+                                        <label style={{fontSize: '12px', fontWeight:'bold', color: '#333'}}>Salary/Budget</label>
+                                        <input type="text" placeholder="e.g. ₹25k - ₹40k" value={newJob.salary} onChange={e=>setNewJob({...newJob, salary:e.target.value})} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}}/>
                                     </div>
                                 </div>
                                 <div style={{display:'flex', alignItems:'center', gap:'10px', background: '#fff9c4', padding: '10px', borderRadius: '8px'}}>
                                     <input type="checkbox" id="urgentCheck" checked={newJob.urgent} onChange={e=>setNewJob({...newJob, urgent:e.target.checked})} style={{width:'18px', height:'18px'}} /> 
-                                    <label htmlFor="urgentCheck" style={{fontWeight:'bold', cursor:'pointer'}}>Mark as URGENT Hiring 🔥</label>
+                                    <label htmlFor="urgentCheck" style={{fontWeight:'bold', cursor:'pointer', color: '#e67e22'}}>Mark as URGENT Hiring 🔥</label>
                                 </div>
                                 <div>
-    <label style={{fontSize: '12px', fontWeight:'bold'}}>Job Description (Optional)</label>
-    <textarea placeholder="Write job requirements..." value={newJob.description} onChange={e=>setNewJob({...newJob, description:e.target.value})} className="custom-admin-input" rows="3" style={{marginTop:'5px'}}></textarea>
-</div>
+                                    <label style={{fontSize: '12px', fontWeight:'bold', color: '#333'}}>Job Description (Optional)</label>
+                                    <textarea placeholder="Write job requirements..." value={newJob.description} onChange={e=>setNewJob({...newJob, description:e.target.value})} className="custom-admin-input" rows="3" style={{marginTop:'5px', color: '#000', fontWeight: '500'}}></textarea>
+                                </div>
                                 <button type="submit" disabled={loading} className="global-update-btn" style={{background:'#27ae60', padding:'15px'}}>{loading ? 'Posting...' : '🚀 PUBLISH VACANCY'}</button>
                             </form>
                         </div>
 
                         <div className="data-table-container">
-                            <h3 style={{padding: '15px'}}>📋 Current Job Openings</h3>
-                            <table className="admin-table">
-                                <thead><tr><th>Role</th><th>Type</th><th>Salary</th><th>Action</th></tr></thead>
+                            <h3 style={{padding: '15px', color: '#2c3e50', fontWeight: 'bold'}}>📋 Current Job Openings</h3>
+                            <table className="admin-table" style={{color: '#333'}}>
+                                <thead><tr><th style={{color: '#2c3e50'}}>Role</th><th style={{color: '#2c3e50'}}>Type</th><th style={{color: '#2c3e50'}}>Salary</th><th style={{color: '#2c3e50'}}>Action</th></tr></thead>
                                 <tbody>
                                     {vacancies.length > 0 ? vacancies.map(v => (
                                         <tr key={v._id}>
@@ -2189,7 +2194,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'INCOME' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>💰 Financial Overview</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>💰 Financial Overview</h2></div>
                         <div className="stat-card green" style={{ padding: '30px', maxWidth: '400px' }}>
                             <p style={{ color: '#555', fontWeight: 'bold' }}>Real-time Platform Earnings</p>
                             <h3 style={{ fontSize: '45px', color: '#27ae60' }}>₹ {incomeData.total.toLocaleString()}</h3>
@@ -2200,14 +2205,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'SUB_ADMIN' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🧑‍💼 Manage Sub-Admins</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🧑‍💼 Manage Sub-Admins</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>Sub-admins have limited access to manage user data.</p>
                             <form onSubmit={handleCreateSubAdmin} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
-                                <div><label style={{fontWeight:'bold', fontSize:'13px'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Name</label><input type="text" required placeholder="Enter Sub-Admin Name" value={subAdmin.name} onChange={e => setSubAdmin({...subAdmin, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} /></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Mobile Number</label><input type="number" required placeholder="Enter 10-digit number" value={subAdmin.mobile} onChange={e => setSubAdmin({...subAdmin, mobile: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Email (Optional)</label><input type="email" placeholder="example@email.com" value={subAdmin.email} onChange={e => setSubAdmin({...subAdmin, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
+                                <div><label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Password</label><input type="text" required placeholder="Set a secure password" value={subAdmin.password} onChange={e => setSubAdmin({...subAdmin, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleCreateSubAdmin)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
                                 <button type="submit" className="global-update-btn" style={{ background: '#27ae60', padding: '15px', marginTop:'10px' }}>+ Add Sub-Admin</button>
                             </form>
                         </div>
@@ -2216,12 +2221,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 {activeTab === 'SETTINGS' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚙️ Admin Profile Settings</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>⚙️ Admin Profile Settings</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '500px', margin: '0 auto' }}>
                             <form onSubmit={handleUpdateAdminProfile} style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                                <div><label>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input"/></div>
-                                <div><label>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" /></div>
-                                <div><label>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" /></div>
+                                <div><label style={{color: '#333', fontWeight: 'bold'}}>Admin Name</label><input type="text" placeholder="Update your name" value={adminProfile.name} onChange={e => setAdminProfile({...adminProfile, name: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
+                                <div><label style={{color: '#333', fontWeight: 'bold'}}>Email Address</label><input type="email" placeholder="Update email" value={adminProfile.email} onChange={e => setAdminProfile({...adminProfile, email: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
+                                <div><label style={{color: '#333', fontWeight: 'bold'}}>New Password</label><input type="password" placeholder="Leave blank to keep current password" value={adminProfile.password} onChange={e => setAdminProfile({...adminProfile, password: e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleUpdateAdminProfile)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}/></div>
                                 <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
                             </form>
                         </div>
