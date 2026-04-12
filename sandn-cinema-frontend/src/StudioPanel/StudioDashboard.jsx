@@ -724,7 +724,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {activeTab === 'DASHBOARD' && (
                     <div className="view-section">
                         <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'}}>
-                            <h2 style={{margin: 0}}>👥 My Recent Clients</h2>
+                            <h2 style={{margin: 0, color: '#2c3e50', fontWeight: 'bold'}}>👥 My Recent Clients</h2>
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                                 <input 
                                     type="number" 
@@ -732,7 +732,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     value={clientSearchQuery}
                                     onChange={(e) => setClientSearchQuery(e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, fetchClients)}
-                                    style={{ padding: '8px 15px', borderRadius: '5px', border: '1px solid #ccc', outline: 'none', width: '180px' }}
+                                    style={{ padding: '8px 15px', borderRadius: '5px', border: '1px solid #ccc', outline: 'none', width: '180px', color: '#000', fontWeight: '500' }}
                                 />
                                 <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', whiteSpace: 'nowrap'}} onClick={fetchClients} disabled={fetching}>
                                     {fetching ? '...' : '🔄 Refresh List'}
@@ -741,14 +741,14 @@ const StudioDashboard = ({ user, onLogout }) => {
                         </div>
                         
                         <div className="data-table-container" style={{ marginTop: '20px' }}>
-                            <table className="admin-table">
+                            <table className="admin-table" style={{color: '#333'}}>
                                 <thead>
                                     <tr>
-                                        <th>Client Name</th>
-                                        <th>Mobile Number</th>
-                                        <th>Uploaded Folders</th>
-                                        <th>Joined Date</th>
-                                        <th>Actions</th> 
+                                        <th style={{color: '#2c3e50'}}>Client Name</th>
+                                        <th style={{color: '#2c3e50'}}>Mobile Number</th>
+                                        <th style={{color: '#2c3e50'}}>Uploaded Folders</th>
+                                        <th style={{color: '#2c3e50'}}>Joined Date</th>
+                                        <th style={{color: '#2c3e50'}}>Actions</th> 
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -868,7 +868,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {activeTab === 'LEADS' && (
                     <div className="view-section">
                         <div className="section-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                            <h2 style={{margin: 0}}>📅 Incoming Booking Leads</h2>
+                            <h2 style={{margin: 0, color: '#2c3e50', fontWeight: 'bold'}}>📅 Incoming Booking Leads</h2>
                             <button className="refresh-btn" style={{padding: '8px 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer'}} onClick={fetchStudioBookings} disabled={fetchingBookings}>
                                 {fetchingBookings ? '...' : '🔄 Refresh'}
                             </button>
@@ -951,12 +951,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 2: UPLOAD CLIENT DATA */}
                 {activeTab === 'UPLOAD' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>📤 Upload Data for Client</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📤 Upload Data for Client</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
                                 <div style={{ position: 'relative' }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Mobile</label>
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Client Mobile</label>
                                     <input 
                                         type="number" 
                                         placeholder="10-Digit Number" 
@@ -964,18 +964,18 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onChange={handleMobileChange}
                                         onFocus={() => setShowMobileSuggestions(true)} 
                                         onBlur={() => setTimeout(() => setShowMobileSuggestions(false), 200)}
-                                        className="custom-admin-input" 
+                                        className="custom-admin-input" style={{color: '#000', fontWeight: 'bold'}}
                                     />
                                     {showMobileSuggestions && clientMobile && filteredMobileSuggestions.length > 0 && (
-                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.15)' }}>
                                             {filteredMobileSuggestions.map((c, idx) => (
                                                 <li key={idx} onMouseDown={() => {
                                                     setClientMobile(c.mobile);
                                                     setClientName(c.name || 'Client');
                                                     setClientEmail(c.email || '');
                                                     setShowMobileSuggestions(false);
-                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
-                                                    📞 <strong>{c.mobile}</strong> - {c.name}
+                                                }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#000', fontWeight: '500' }}>
+                                                    📞 <strong>{c.mobile}</strong> - <span style={{color: '#2980b9'}}>{c.name}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -983,13 +983,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 </div>
                                 
                                 <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Name {selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
-                                    <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Client Name {selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
+                                    <input type="text" placeholder="Full Name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                 </div>
 
                                 <div>
-                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#444' }}>Client Email (For Notification) {clientEmail && selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
-                                    <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
+                                    <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Client Email (For Notification) {clientEmail && selectedClient && <span style={{color: '#2ecc71', fontSize: '11px'}}>(Auto-filled)</span>}</label>
+                                    <input type="email" placeholder="example@email.com (Optional)" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     <p style={{fontSize:'11px', color:'#777', margin:'3px 0 0 0'}}>We will send a notification to this email once data is uploaded.</p>
                                 </div>
                                 
@@ -1003,7 +1003,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         onChange={(e) => { setFolderName(e.target.value); setShowFolderSuggestions(true); }} 
                                         onFocus={() => setShowFolderSuggestions(true)} 
                                         onBlur={() => setTimeout(() => setShowFolderSuggestions(false), 200)} 
-                                        className="custom-admin-input" 
+                                        className="custom-admin-input" style={{color: '#000', fontWeight: '500'}}
                                         onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))}
                                     />
                                     {(!folderName || folderName.trim() === '') && (
@@ -1013,9 +1013,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
 
                                     {showFolderSuggestions && existingFolders.length > 0 && (
-                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px' }}>
+                                        <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', borderRadius: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                                             {filteredFolderSuggestions.map((folder, idx) => (
-                                                <li key={idx} onMouseDown={() => { setFolderName(folder); setShowFolderSuggestions(false); }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#333' }}>
+                                                <li key={idx} onMouseDown={() => { setFolderName(folder); setShowFolderSuggestions(false); }} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#000', fontWeight: 'bold' }}>
                                                     📁 <strong>{folder}</strong>
                                                 </li>
                                             ))}
@@ -1031,11 +1031,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <div style={{ display: 'flex', gap: '15px', background: '#fffdf5', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>⏳ Expiry (Days)</label>
-                                        <input type="number" placeholder="e.g. 30 (0 = Never)" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
+                                        <input type="number" placeholder="e.g. 30 (0 = Never)" value={expiryDays} onChange={(e) => setExpiryDays(e.target.value)} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4ac0d' }}>📥 Max Downloads</label>
-                                        <input type="number" placeholder="e.g. 3 (0 = Unlimited)" value={downloadLimit} onChange={(e) => setDownloadLimit(e.target.value)} className="custom-admin-input" style={{marginTop:'5px'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
+                                        <input type="number" placeholder="e.g. 3 (0 = Unlimited)" value={downloadLimit} onChange={(e) => setDownloadLimit(e.target.value)} className="custom-admin-input" style={{marginTop:'5px', color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, () => handleUpload(false))} />
                                     </div>
                                 </div>
 
@@ -1094,7 +1094,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 3: FEED MANAGEMENT */}
                 {activeTab === 'FEED' && studioProfile.isFeedApproved && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🌟 Feed Management</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🌟 Feed Management</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto', textAlign:'center' }}>
                             <div style={{background: '#fffdf5', border: '1px solid #f1c40f', padding: '20px', borderRadius: '10px', marginBottom: '25px'}}>
                                 <h3 style={{color: '#d4ac0d', marginTop: 0}}>Grow Your Audience</h3>
@@ -1138,20 +1138,20 @@ const StudioDashboard = ({ user, onLogout }) => {
                             {/* ✅ NEW: FEED DETAILS FORM WITH CUSTOM EXPIRY LOGIC */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px', textAlign: 'left', background: '#fff', padding: '20px', borderRadius: '15px', border: '1px solid #eee' }}>
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>📝 Post Description / Caption</label>
-                                    <textarea rows="2" value={feedDescription} onChange={(e) => setFeedDescription(e.target.value)} className="custom-admin-input" placeholder="Write a catchy caption detailing the shot..." style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}}></textarea>
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>📝 Post Description / Caption</label>
+                                    <textarea rows="2" value={feedDescription} onChange={(e) => setFeedDescription(e.target.value)} className="custom-admin-input" placeholder="Write a catchy caption detailing the shot..." style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', color: '#000', fontWeight: '500'}}></textarea>
                                 </div>
                                 <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                                     <div style={{ flex: 1, minWidth: '150px' }}>
-                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>🗂️ Select Feed Category</label>
-                                        <select value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)} className="custom-admin-input" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', background: '#fff'}}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>🗂️ Select Feed Category</label>
+                                        <select value={feedCategory} onChange={(e) => setFeedCategory(e.target.value)} className="custom-admin-input" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', background: '#fff', color: '#000', fontWeight: 'bold'}}>
                                             <option value="trending">🔥 Trending Now</option>
                                             <option value="viral">🚀 Viral Content</option>
                                         </select>
                                     </div>
                                     <div style={{ flex: 1, minWidth: '150px' }}>
-                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>💰 Booking Price (₹)</label>
-                                        <input type="number" value={feedPrice} onChange={(e) => setFeedPrice(e.target.value)} className="custom-admin-input" placeholder="e.g. 15000" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}} />
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>💰 Booking Price (₹)</label>
+                                        <input type="number" value={feedPrice} onChange={(e) => setFeedPrice(e.target.value)} className="custom-admin-input" placeholder="e.g. 15000" style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', color: '#000', fontWeight: '500'}} />
                                     </div>
 
                                     {/* ✅ FOMO Expiry Logic Input */}
@@ -1162,7 +1162,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                             value={feedExpiryType} 
                                             onChange={(e) => setFeedExpiryType(e.target.value)} 
                                             className="custom-admin-input" 
-                                            style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px dashed #f1c40f', background: '#fffdf5', cursor: 'pointer'}}
+                                            style={{marginTop: '5px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px dashed #f1c40f', background: '#fffdf5', cursor: 'pointer', color: '#000', fontWeight: 'bold'}}
                                         >
                                             <option value="permanent">♾️ Permanent (No Expiry)</option>
                                             <option value="12">⏳ 12 Hours</option>
@@ -1179,7 +1179,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 onChange={(e) => setCustomExpiryHours(e.target.value)} 
                                                 className="custom-admin-input" 
                                                 placeholder="Enter exact hours (e.g., 48)" 
-                                                style={{marginTop: '10px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc'}} 
+                                                style={{marginTop: '10px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', color: '#000', fontWeight: '500'}} 
                                             />
                                         )}
                                     </div>
@@ -1298,7 +1298,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 6: LONG MEDIA / CINEMATIC UPLOAD */}
                 {activeTab === 'LONG_UPLOAD' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>🎬 Cinematic & Long Video Upload</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🎬 Cinematic & Long Video Upload</h2></div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upload large videos directly to client's account. System will extract audio, link YouTube, and send SMS/Email notifications automatically.</p>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
@@ -1511,7 +1511,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 4: REVENUE (LIVE MONETIZATION UPDATE) */}
                 {activeTab === 'REVENUE' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>💰 Business Revenue & Wallet</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>💰 Business Revenue & Wallet</h2></div>
                         <div className="dashboard-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
                             <div className="stat-card green" style={{ padding: '30px', textAlign:'center' }}>
                                 <p style={{ color: '#555', fontWeight: 'bold', marginBottom: '10px' }}>Total Cash Revenue</p>
@@ -1556,36 +1556,36 @@ const StudioDashboard = ({ user, onLogout }) => {
                 {/* 🔴 TAB 5: PROFILE SETTINGS */}
                 {activeTab === 'PROFILE' && (
                     <div className="view-section">
-                        <div className="section-header"><h2>⚙️ Studio Profile Details</h2></div>
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>⚙️ Studio Profile Details</h2></div>
                         <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
                             <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Studio Name</label>
-                                    <input type="text" value={profileEdit.studioName} onChange={e => setProfileEdit({...profileEdit, studioName: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Studio Name</label>
+                                    <input type="text" value={profileEdit.studioName} onChange={e => setProfileEdit({...profileEdit, studioName: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Owner Name</label>
-                                    <input type="text" value={profileEdit.ownerName} onChange={e => setProfileEdit({...profileEdit, ownerName: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Owner Name</label>
+                                    <input type="text" value={profileEdit.ownerName} onChange={e => setProfileEdit({...profileEdit, ownerName: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Email Address</label>
-                                    <input type="email" value={profileEdit.email} onChange={e => setProfileEdit({...profileEdit, email: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Email Address</label>
+                                    <input type="email" value={profileEdit.email} onChange={e => setProfileEdit({...profileEdit, email: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>Location</label>
-                                    <input type="text" value={profileEdit.location} onChange={e => setProfileEdit({...profileEdit, location: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Location</label>
+                                    <input type="text" value={profileEdit.location} onChange={e => setProfileEdit({...profileEdit, location: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 
                                 {/* ✅ PORTFOLIO LINK INPUT */}
                                 <div style={{ background: '#f4f6f7', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #3498db' }}>
                                     <label style={{fontWeight:'bold', fontSize:'13px', color: '#2980b9'}}>🌐 Portfolio / Website Link</label>
                                     <p style={{ margin: '3px 0 8px 0', fontSize: '11px', color: '#7f8c8d' }}>This link will be shown to users when they view your studio details.</p>
-                                    <input type="url" placeholder="https://instagram.com/your_page" value={profileEdit.portfolioUrl} onChange={e => setProfileEdit({...profileEdit, portfolioUrl: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <input type="url" placeholder="https://instagram.com/your_page" value={profileEdit.portfolioUrl} onChange={e => setProfileEdit({...profileEdit, portfolioUrl: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
 
                                 <div>
-                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#444'}}>New Password</label>
-                                    <input type="password" placeholder="Leave blank to keep current password" value={profileEdit.password} onChange={e => setProfileEdit({...profileEdit, password: e.target.value})} className="custom-admin-input" onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>New Password</label>
+                                    <input type="password" placeholder="Leave blank to keep current password" value={profileEdit.password} onChange={e => setProfileEdit({...profileEdit, password: e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: '500'}} onKeyDown={(e) => handleKeyDown(e, handleProfileUpdate)} />
                                 </div>
                                 
                                 <button type="submit" className="global-update-btn" style={{ width: '100%', padding: '15px', background: '#2ecc71', fontSize: '16px', marginTop: '10px' }}>
