@@ -8,7 +8,8 @@ const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
 // ✅ SUPER TOKEN GRABBER (Security ke liye)
 const getValidToken = () => {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+    // 🛠️ FIX: Naye 'authToken' ko pehle uthayega, purane 'token' ke kachre ko ignore karega
+    return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 };
 
 const OwnerDashboard = ({ user, onLogout }) => {
@@ -68,6 +69,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [uploadSpeed, setUploadSpeed] = useState('');
     const [uploadETA, setUploadETA] = useState('');
     const [fileStats, setFileStats] = useState({ photos: 0, videos: 0 }); 
+    
+    // ✅ NEW: BACKGROUND UPLOAD QUEUE
+    const [uploadJobs, setUploadJobs] = useState([]); 
 
     // --- ADMIN SETTINGS STATES ---
     const [adminProfile, setAdminProfile] = useState({ name: user?.name || 'Owner', email: user?.email || '', password: user?.password || '' });
@@ -465,10 +469,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setShowFolderSuggestions(false);
     };
 
-// 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
+// 🚀 ENTERPRISE BACKGROUND UPLOAD QUEUE (MULTI-TASKING)
     const handleUpload = async (isFeed = false) => {
         
-        // 🛠️ BUG FIX: Naye formData state variables ka use karna hai
         const activeMobile = formData.mobile;
         const activeFiles = formData.files;
         const activeFolderName = formData.folderName;
@@ -486,11 +489,37 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (useDateFolder && !isFeed) {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
         }
-        
-        setLoading(true);
-        setUploadProgress(0);
-        setUploadSpeed('Preparing 5x Speed Upload...');
-        setUploadETA('Calculating...');
+
+        // --- BACKGROUND QUEUE UI PREP (For Client Uploads Only) ---
+        let jobId = null;
+        const payloadData = {
+            mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
+            folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
+            expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
+            addedBy: user?.mobile || 'ADMIN', imageCost: formData.imageCost || '5',
+            videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours'
+        };
+
+        if (!isFeed) {
+            jobId = Date.now().toString();
+            const newJob = {
+                id: jobId, mobile: activeMobile, name: activeName || 'Client', folderName: baseFolder,
+                progress: 0, status: 'Preparing...', speed: '', eta: ''
+            };
+            setUploadJobs(prev => [newJob, ...prev]);
+            
+            // 🧹 Clear form immediately for next user!
+            setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' });
+            setUseDateFolder(false);
+            const fileInput = document.getElementById('admin-file-input'); if (fileInput) fileInput.value = '';
+            setFileStats({ photos: 0, videos: 0 });
+            setPreviews([]);
+            setUploadSubTab('BASIC'); 
+            alert("✅ Upload Queued in Background! You can prepare the next client data.");
+        } else {
+            setLoading(true);
+            setUploadProgress(0); setUploadSpeed('Preparing Feed Upload...'); setUploadETA('Calculating...');
+        }
 
         const totalBytes = currentFiles.reduce((acc, file) => acc + file.size, 0);
         const loadedBytesArray = new Array(currentFiles.length).fill(0);
@@ -516,17 +545,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
                    // ✅ FIX: Use a clean axios instance to avoid CORS issue with Authorization header
                     const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
                         transformRequest: [(data, headers) => {
-                    if (headers && headers.common) delete headers.common['Authorization'];
-                    if (headers) delete headers['Authorization'];
-                    return data;
-                }],
+                            if (headers && headers.common) delete headers.common['Authorization'];
+                            if (headers) delete headers['Authorization'];
+                            return data;
+                        }],
                         onUploadProgress: (progressEvent) => {
                             const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
 
                             const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
                             const percentCompleted = Math.round((totalLoaded * 100) / totalBytes);
-                            setUploadProgress(Math.min(percentCompleted, 99)); 
 
                             const currentTime = Date.now();
                             const timeElapsedLimit = (currentTime - lastTime) / 1000; 
@@ -535,15 +563,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 const bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
                                 const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
                                 const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
-
-                                setUploadSpeed(`${speedMbps} MB/s (Turbo Mode 🚀)`);
-
                                 const bytesRemaining = totalBytes - totalLoaded;
                                 const etaSeconds = bytesRemaining / speedBps;
 
-                                if (etaSeconds > 60) setUploadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                                else if (etaSeconds > 0) setUploadETA(`${Math.floor(etaSeconds)}s left`);
-                                else setUploadETA(`Almost done...`);
+                                let etaStr = etaSeconds > 60 ? `${Math.floor(etaSeconds / 60)}m left` : `${Math.floor(etaSeconds)}s left`;
+                                if(etaSeconds <= 0) etaStr = "Almost done...";
+
+                                if (!isFeed) {
+                                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: Math.min(percentCompleted, 99), speed: `${speedMbps} MB/s`, status: `Cloud Upload... ${Math.min(percentCompleted, 99)}%`, eta: etaStr } : job));
+                                } else {
+                                    setUploadProgress(Math.min(percentCompleted, 99)); 
+                                    setUploadSpeed(`${speedMbps} MB/s (Turbo Mode 🚀)`);
+                                    setUploadETA(etaStr);
+                                }
 
                                 lastTotalLoaded = totalLoaded;
                                 lastTime = currentTime;
@@ -558,9 +590,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 uploadedUrls.push(...chunkResults);
             }
 
-            setUploadProgress(100);
-            setUploadSpeed('Finalizing...');
-            setUploadETA('Saving Data to Server...');
+            if (!isFeed) {
+                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: 'Saving to Database...', speed: '', eta: '' } : job));
+            } else {
+                setUploadProgress(100); setUploadSpeed('Finalizing...'); setUploadETA('Saving Data to Server...');
+            }
 
             // ✅ IF UPLOADING TO PUBLIC FEED
             if (isFeed) {
@@ -604,62 +638,28 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 return; 
             }
 
-            // 🛠️ BUG FIX: Normal Client Data Payload using new active variables
-            const payload = {
-                mobile: activeMobile,
-                name: activeName || 'Client',
-                type: formData.type || 'USER',
-                folderName: baseFolder,
-                subFolderName: targetSubFolder, 
-                email: activeEmail,
-                expiryDays: formData.expiryDays,
-                downloadLimit: formData.downloadLimit,
-                addedBy: user?.mobile || 'ADMIN',
-                fileUrls: uploadedUrls,
-                imageCost: formData.imageCost || '5',
-                videoCost: formData.videoCost || '10',
-                unlockValidity: formData.unlockValidity || '24 Hours'
-            };
+            // ✅ IF UPLOADING TO CLIENT FOLDER
+            payloadData.fileUrls = uploadedUrls;
 
-            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
+            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
             });
 
             if (backendRes.data.success) {
-                setUploadETA('Complete!');
-                setTimeout(() => {
-                    alert(`✅ Success: ${backendRes.data.message}\n📩 Notification sent!`);
-                    
-                    setUploadProgress(0);
-                    setUploadSpeed('');
-                    setUploadETA('');
-
-                    setFormData({ 
-                        type: 'USER', name: '', mobile: '', email: '', folderName: '', 
-                        files: [], expiryDays: '30', downloadLimit: '0', 
-                        imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' 
-                    });
-                    
-                    setUseDateFolder(false);
-                    const fileInput = document.getElementById('admin-file-input');
-                    if (fileInput) fileInput.value = '';
-                    setFileStats({ photos: 0, videos: 0 });
-                    setPreviews([]);
-                    
-                    fetchAccounts();
-                    if(globalRemoveUserObj && globalRemoveUserObj.mobile === activeMobile) searchUserForRemoval(activeMobile);
-                    setLoading(false);
-                }, 500);
+                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
+                fetchAccounts();
             } else { 
-                alert(`❌ Error from Database: ${backendRes.data.message}`); 
+                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${backendRes.data.message}` } : job));
+            }
+        } catch (error) { 
+            console.error(error);
+            if (!isFeed) {
+                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
+            } else {
+                alert("Upload Failed. Check internet connection."); 
                 setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
                 setLoading(false);
             }
-        } catch (error) { 
-            alert("Upload Failed. Check internet connection."); 
-            console.error(error);
-            setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
-            setLoading(false);
         } 
     };
 
@@ -1328,7 +1328,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     </div>
                                 </div>
 
-                                {loading && (
+                                    {loading && (
                                     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
                                             <span>{uploadSpeed} {uploadProgress}%</span>
@@ -1644,7 +1644,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             {showSuggestions && formData.mobile && filteredSuggestions.length > 0 && (
                                                 <ul style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: '#fff', border: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', zIndex: 10, padding: 0, listStyle: 'none', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', borderRadius: '5px' }}>
                                                     {filteredSuggestions.map((acc, idx) => (
-                                                        <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>{acc.mobile} - {acc.name || acc.studioName}</li>
+                                                        <li key={idx} onMouseDown={() => handleSuggestionClick(acc)} style={{ padding: '10px', borderBottom: '1px solid #eee', cursor: 'pointer', color: '#000', fontWeight: '500' }}>
+                                                            📞 {acc.mobile} - {acc.name || acc.studioName}
+                                                        </li>
                                                     ))}
                                                 </ul>
                                             )}
@@ -1776,31 +1778,78 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </div>
                                         </div>
 
-                                        {loading && (
-                                            <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '15px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
-                                                    <span>{uploadProgress === 100 ? 'Saving to Database...' : `Cloud Upload... ${uploadProgress}%`}</span>
-                                                    <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
-                                                </div>
-                                                <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
-                                                </div>
-                                                <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold' }}>⏳ {uploadETA}</div>
-                                            </div>
-                                        )}
-
-                                        <button type="submit" disabled={loading} className="global-update-btn" style={{ padding: '15px', width: '100%', background: loading ? '#95a5a6' : '#27ae60', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                            {loading ? 'Uploading & Setting Rules...' : '🚀 Final Upload Data'}
+                                        <button type="submit" className="global-update-btn" style={{ padding: '15px', width: '100%', background: '#27ae60', cursor: 'pointer' }}>
+                                            🚀 Put in Upload Queue
                                         </button>
                                         
-                                        <button type="button" onClick={() => setUploadSubTab('LIMITS')} style={{ width: '100%', padding: '10px', marginTop: '5px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
-                                            ⬅️ Back to Limits
-                                        </button>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                                            <button type="button" onClick={() => setUploadSubTab('LIMITS')} style={{ padding: '10px', background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', textDecoration: 'underline' }}>
+                                                ⬅️ Back to Limits
+                                            </button>
+                                            <button type="button" onClick={() => {
+                                                if(window.confirm("Clear all filled data in this form?")) {
+                                                    setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' });
+                                                    setUploadSubTab('BASIC');
+                                                }
+                                            }} style={{ padding: '10px', background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                🗑️ Clear Form
+                                            </button>
+                                        </div>
                                     </>
                                 )}
-
                             </form>
                         </div>
+
+                        {/* ✅ BACKGROUND UPLOAD QUEUE DASHBOARD */}
+                        {uploadJobs.length > 0 && (
+                            <div className="update-creation-container" style={{ maxWidth: '600px', margin: '30px auto 0', background: '#fdfefe', border: '2px solid #3498db' }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>📡 Queue & History</span>
+                                    <span style={{background: '#3498db', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '10px'}}>{uploadJobs.filter(j => j.progress < 100 && !j.status.includes('❌')).length} Running</span>
+                                </h3>
+                                
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '400px', overflowY: 'auto', paddingRight: '5px' }}>
+                                    {uploadJobs.map((job, idx) => (
+                                        <div key={job.id} style={{ background: '#fff', border: '1px solid #eee', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', position: 'relative' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                                <div>
+                                                    <strong style={{ fontSize: '14px', color: '#2c3e50' }}>{job.name} <span style={{color: '#7f8c8d', fontSize: '12px'}}>({job.mobile})</span></strong>
+                                                    <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#3498db', fontWeight: 'bold' }}>📁 {job.folderName}</p>
+                                                </div>
+                                                
+                                                {/* Manage Button for completed uploads */}
+                                                {job.status.includes('Completed') && (
+                                                    <button onClick={() => {
+                                                        setGlobalRemoveMobile(job.mobile);
+                                                        searchUserForRemoval(job.mobile);
+                                                        setActiveTab('GLOBAL_REMOVE');
+                                                    }} style={{ background: '#f39c12', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', height: 'fit-content' }}>
+                                                        ⚙️ Manage Upload
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Progress Bar Display */}
+                                            {job.progress < 100 && !job.status.includes('❌') && (
+                                                <>
+                                                    <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '8px', overflow: 'hidden', marginBottom: '5px' }}>
+                                                        <div style={{ width: `${job.progress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d', fontWeight: 'bold' }}>
+                                                        <span>⚡ {job.speed}</span>
+                                                        <span>⏳ {job.eta}</span>
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 'bold', color: job.status.includes('Completed') ? '#27ae60' : job.status.includes('❌') ? '#e74c3c' : '#e67e22' }}>
+                                                {job.status}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
