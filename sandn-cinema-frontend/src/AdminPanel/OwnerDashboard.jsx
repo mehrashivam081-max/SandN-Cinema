@@ -147,17 +147,43 @@ const OwnerDashboard = ({ user, onLogout }) => {
         return () => window.removeEventListener('offline', handleOffline);
     }, [onLogout]);
 
-    // ✅ SMART BACK BUTTON FOR OWNER DASHBOARD
-    useBackButton(() => {
-        if (showDenyModal) setShowDenyModal(false);
-        else if (showProposalModal) setShowProposalModal(false);
-        else if (showLogoutPopup) setShowLogoutPopup(false);
-        else if (globalRemoveUserObj) setGlobalRemoveUserObj(null);
-        else if (activeTab === 'UPLOAD' && uploadSubTab === 'CHARGES') setUploadSubTab('LIMITS');
-        else if (activeTab === 'UPLOAD' && uploadSubTab === 'LIMITS') setUploadSubTab('BASIC');
-        else if (activeTab !== 'DASHBOARD') setActiveTab('DASHBOARD');
-        else setShowExitPopup(true); 
-    });
+    // ✅ REFS FOR BACK BUTTON STATE (To avoid history loop)
+    const backStateRef = useRef({ activeTab, uploadSubTab, showDenyModal, showProposalModal, showLogoutPopup, globalRemoveUserObj });
+    useEffect(() => {
+        backStateRef.current = { activeTab, uploadSubTab, showDenyModal, showProposalModal, showLogoutPopup, globalRemoveUserObj };
+    }, [activeTab, uploadSubTab, showDenyModal, showProposalModal, showLogoutPopup, globalRemoveUserObj]);
+
+    // ✅ NATIVE BROWSER BACK BUTTON TRAP (Fixes direct logout bug)
+    useEffect(() => {
+        // Push initial state to trap the back button
+        window.history.pushState(null, null, window.location.href);
+
+        const handlePopState = (event) => {
+            // Force the browser to stay on this page
+            window.history.pushState(null, null, window.location.href); 
+            
+            const state = backStateRef.current;
+
+            // Execute logic safely
+            if (state.showDenyModal) { setShowDenyModal(false); return; }
+            if (state.showProposalModal) { setShowProposalModal(false); return; }
+            if (state.showLogoutPopup) { setShowLogoutPopup(false); return; }
+            if (state.globalRemoveUserObj) { setGlobalRemoveUserObj(null); return; }
+            
+            if (state.activeTab === 'UPLOAD') {
+                if (state.uploadSubTab === 'CHARGES') { setUploadSubTab('LIMITS'); return; }
+                if (state.uploadSubTab === 'LIMITS') { setUploadSubTab('BASIC'); return; }
+            }
+            
+            if (state.activeTab !== 'DASHBOARD') { setActiveTab('DASHBOARD'); return; }
+            
+            // If on Dashboard Basic, show Exit Alert!
+            setShowExitPopup(true);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
 
     const handleKeyDown = (e, action) => {
         if (e.key === 'Enter') {
