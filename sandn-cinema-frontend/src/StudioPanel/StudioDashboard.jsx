@@ -364,12 +364,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                 const uploadPromises = chunk.map(async (file, index) => {
                     const globalIndex = i + index;
                     const fd = new FormData();
-                    fd.append('file', file);
-                    fd.append('upload_preset', 'xgujeuol'); 
+                    fd.append('file', file);
 
-                    const res = await axios.create().post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                        onUploadProgress: (progressEvent) => {
-                            const { loaded } = progressEvent;
+                    // 🛡️ SECURE PROXY UPLOAD
+                    const res = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                        headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                        onUploadProgress: (progressEvent) => {
+                            const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
 
                             const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
@@ -398,7 +399,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                             }
                         }
                     });
-                    return res.data.secure_url;
+                    return res.data.url;
                 });
 
                 // Wait for the chunk of 5 to finish before starting the next 5
