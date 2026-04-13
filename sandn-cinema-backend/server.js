@@ -744,7 +744,123 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 
 
 // ==============================================================
-// 🚀 CLOUDINARY FAST UPLOAD ROUTE
+// 🧠 SMART STORAGE AUTO-ROUTER LOGIC
+// ==============================================================
+const getOrUpdateActiveStorage = async (fileSizeGB = 0.05) => {
+    try {
+        let activeStorage = await StorageConfig.findOne({ isActive: true });
+
+        // Backup: If no active storage, make the oldest one active
+        if (!activeStorage) {
+            activeStorage = await StorageConfig.findOneAndUpdate(
+                { $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } }, 
+                { isActive: true },
+                { new: true, sort: { createdAt: 1 } }
+            );
+            if (!activeStorage) throw new Error("CRITICAL: No storage accounts have free space!");
+            return activeStorage;
+        }
+
+        // 95% THRESHOLD AUTO-SWITCH LOGIC
+        const threshold = activeStorage.maxLimitGB * 0.95; 
+        if ((activeStorage.usedStorageGB + fileSizeGB) >= threshold) {
+            console.log(`⚠️ Storage [${activeStorage.nickname}] is almost full! Auto-switching...`);
+            
+            activeStorage.isActive = false;
+            await activeStorage.save();
+
+            const nextStorage = await StorageConfig.findOneAndUpdate(
+                { _id: { $ne: activeStorage._id }, $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } },
+                { isActive: true },
+                { new: true, sort: { createdAt: 1 } }
+            );
+
+            if (!nextStorage) {
+                console.error("🚨 ALERT: ALL STORAGE ACCOUNTS ARE FULL!");
+                activeStorage.isActive = true; 
+                await activeStorage.save();
+                return activeStorage;
+            }
+
+            console.log(`✅ Auto-switched active storage to: [${nextStorage.nickname}]`);
+            return nextStorage;
+        }
+
+        return activeStorage;
+    } catch (error) {
+        console.error("Auto-Router Error:", error);
+        throw error;
+    }
+};
+
+// ==============================================================
+// 🛡️ THE SECURE PROXY UPLOADER (Handles AWS, R2, Cloudinary)
+// ==============================================================
+const AWS = require('aws-sdk');
+
+app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
+        
+        const filePath = req.file.path;
+        // Convert Bytes to GB
+        const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
+
+        // 1. Get the currently active cloud account
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB);
+        let uploadedUrl = '';
+
+        console.log(`☁️ Secure Proxy: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
+
+        // 2. Route to specific cloud provider
+        if (activeCloud.provider === 'CLOUDINARY') {
+            cloudinary.config({
+                cloud_name: activeCloud.credentials.cloudName,
+                api_key: activeCloud.credentials.apiKey,
+                api_secret: activeCloud.credentials.apiSecret
+            });
+            const result = await cloudinary.uploader.upload(filePath, { resource_type: 'auto' });
+            uploadedUrl = result.secure_url;
+            
+        } else if (activeCloud.provider === 'AWS_S3' || activeCloud.provider === 'CLOUDFLARE_R2') {
+            const s3 = new AWS.S3({
+                accessKeyId: activeCloud.credentials.apiKey,
+                secretAccessKey: activeCloud.credentials.apiSecret,
+                region: activeCloud.credentials.region,
+                // R2 requires a custom endpoint, AWS doesn't
+                endpoint: activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined
+            });
+            
+            const fileStream = fs.createReadStream(filePath);
+            const uploadParams = {
+                Bucket: activeCloud.credentials.bucketName,
+                Key: `snevio_vault/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`,
+                Body: fileStream,
+                ACL: 'public-read' 
+            };
+            
+            const result = await s3.upload(uploadParams).promise();
+            uploadedUrl = result.Location;
+        }
+
+        // 3. Update the storage counter safely
+        activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
+        await activeCloud.save();
+
+        // 4. Clean up local temp file to save server space
+        fs.unlinkSync(filePath);
+
+        res.json({ success: true, url: uploadedUrl, provider: activeCloud.provider });
+
+    } catch (error) {
+        console.error("Proxy Upload Error:", error);
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ success: false, message: "Secure upload failed." });
+    }
+});
+
+// ==============================================================
+// 🚀 DYNAMIC MULTI-CLOUD UPLOAD ROUTE (USER DATA)
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
@@ -758,8 +874,21 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
     const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
 
     try {
-        const existingAccount = await findAccount(mobile); 
         const filePaths = Array.isArray(fileUrls) ? fileUrls : [];
+        
+        // 1. SMART ROUTER: Estimate size and update Active Storage
+        // Default estimate: Assume each file is around 5MB (0.005 GB) if calculating directly from URLs
+        const estimatedSizeGB = filePaths.length * 0.005; 
+        const activeCloud = await getOrUpdateActiveStorage(estimatedSizeGB);
+        
+        // Update the usage counter dynamically
+        activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + estimatedSizeGB).toFixed(4));
+        await activeCloud.save();
+        
+        // Log the routing path for debugging
+        console.log(`☁️ Route Active: Saving data to [${activeCloud.nickname}] via ${activeCloud.provider}`);
+
+        const existingAccount = await findAccount(mobile); 
 
         let expiryDate = null;
         if (expiryDays && parseInt(expiryDays) > 0) {
@@ -1905,6 +2034,12 @@ const FeedPost = mongoose.models.FeedPost || mongoose.model('FeedPost', feedPost
 app.post('/api/auth/upload-feed-post', authenticateToken, async (req, res) => {
     try {
         const { mobile, studioName, fileUrls, description, feedCategory, price, expiryHours } = req.body;
+        
+        // 1. SMART ROUTER UPDATE: Assume feed media is approx 10MB (0.01GB)
+        const estimatedFeedSize = 0.01 * (fileUrls ? fileUrls.length : 1);
+        const activeCloud = await getOrUpdateActiveStorage(estimatedFeedSize);
+        activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + estimatedFeedSize).toFixed(4));
+        await activeCloud.save();
         
         let expiryDate = null;
         if (expiryHours && parseInt(expiryHours) > 0) {

@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "aws-sdk": "^2.1693.0",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.9.0",
