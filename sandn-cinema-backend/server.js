@@ -30,6 +30,18 @@ const serviceSchema = new mongoose.Schema({
 });
 const Service = mongoose.models.Service || mongoose.model('Service', serviceSchema);
 
+// ✅ NEW: Storage Configuration Model for Multiple Clouds
+const storageConfigSchema = new mongoose.Schema({
+    nickname: { type: String, required: true },
+    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM'], required: true },
+    isActive: { type: Boolean, default: false },
+    maxLimitGB: { type: Number, default: 5 },
+    usedStorageGB: { type: Number, default: 0 },
+    credentials: { cloudName: String, apiKey: String, apiSecret: String, region: String, bucketName: String },
+    createdAt: { type: Date, default: Date.now }
+});
+const StorageConfig = mongoose.models.StorageConfig || mongoose.model('StorageConfig', storageConfigSchema);
+
 // ✅ Setup Multer for MULTIPLE File Uploads
 const multer = require('multer');
 const uploadDir = path.join(__dirname, 'uploads');
@@ -2228,6 +2240,71 @@ app.post('/api/auth/delete-vacancy', async (req, res) => {
         res.json({ success: true, message: "Job Vacancy removed!" });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to delete vacancy." });
+    }
+});
+
+// ==========================================
+// ☁️ 29. STORAGE MANAGEMENT LOGIC (MULTIPLE CLOUDS)
+// ==========================================
+
+app.post('/api/auth/add-storage', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+
+        const { nickname, provider, maxLimitGB, credentials, setAsActive } = req.body;
+        
+        if (setAsActive) {
+            await StorageConfig.updateMany({}, { isActive: false });
+        }
+
+        const newStorage = await StorageConfig.create({
+            nickname, provider, maxLimitGB: maxLimitGB || 5, credentials, isActive: setAsActive || false
+        });
+
+        res.json({ success: true, message: 'Storage Account Added Successfully!', data: newStorage });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to add storage account." });
+    }
+});
+
+app.get('/api/auth/list-storage', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        const accounts = await StorageConfig.find().sort({ isActive: -1, createdAt: -1 });
+        res.json({ success: true, data: accounts });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to fetch storage configs." });
+    }
+});
+
+app.post('/api/auth/set-active-storage', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        const { accountId } = req.body;
+        
+        await StorageConfig.updateMany({}, { isActive: false });
+        await StorageConfig.findByIdAndUpdate(accountId, { isActive: true });
+        
+        res.json({ success: true, message: 'Active Storage Updated!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to update active storage." });
+    }
+});
+
+app.post('/api/auth/delete-storage', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        const { accountId } = req.body;
+        
+        const account = await StorageConfig.findById(accountId);
+        if(account && account.isActive) {
+            return res.json({ success: false, message: 'Cannot delete the currently Active storage. Switch active first.' });
+        }
+
+        await StorageConfig.findByIdAndDelete(accountId);
+        res.json({ success: true, message: 'Storage Configuration Removed!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to delete storage." });
     }
 });
 
