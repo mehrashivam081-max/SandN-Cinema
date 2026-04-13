@@ -428,18 +428,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
         
         try {
             // 1. Upload Media Securely via Backend Proxy
-            const fd = new FormData();
-            fd.append('file', adFile);
-            
-            const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                onUploadProgress: (progressEvent) => {
-                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                    setUploadProgress(Math.min(percentCompleted, 99));
-                }
-            });
-            
-            const fileUrl = cloudRes.data.url;
+            const fd = new FormData();
+            fd.append('file', adFile);
+            
+            const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(Math.min(percentCompleted, 99));
+                }
+            });
+            
+            const fileUrl = cloudRes.data.url;
             const fileType = fileUrl.match(/\.(mp4|mov|avi|wmv|webm)$/i) ? 'video' : 'image';
 
             setUploadProgress(100);
@@ -955,14 +955,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
             let uploadedImageUrl = '';
 
             if (serviceImage) {
-                const fd = new FormData();
-                fd.append('file', serviceImage);
-                
-                const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
-                });
-                uploadedImageUrl = cloudRes.data.url;
-            }
+                const fd = new FormData();
+                fd.append('file', serviceImage);
+                
+                const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+                uploadedImageUrl = cloudRes.data.url;
+            }
 
             const payloadData = {
                 title: newService.title,
