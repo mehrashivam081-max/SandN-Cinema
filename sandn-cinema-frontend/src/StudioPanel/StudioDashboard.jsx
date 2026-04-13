@@ -123,25 +123,32 @@ const StudioDashboard = ({ user, onLogout }) => {
         portfolioUrl: user.portfolioUrl || '' 
     });
 
-    // --- 1. FETCH LOGIC ---
+    // --- 1. FETCH LOGIC & 🔥 GLOBAL AUTO-REFRESH ---
     useEffect(() => {
         if (user && user.mobile) {
+            // Initial Fetch
             fetchMyProfile();
             fetchClients();
-        }
-    }, [user]);
-
-    useEffect(() => {
-        if (activeTab === 'LEADS') {
             fetchStudioBookings();
-        }
-    }, [activeTab]);
+            if (studioProfile.isFeedApproved) fetchMyFeedPosts();
 
-    useEffect(() => {
-        if (activeTab === 'FEED' && studioProfile.isFeedApproved) {
-            fetchMyFeedPosts();
+            // Background Auto-Refresh (Every 30 Seconds)
+            const refreshInterval = setInterval(() => {
+                console.log("🔄 Studio Auto-Refresh: Syncing data...");
+                fetchClients();
+                fetchStudioBookings();
+            }, 30000);
+
+            return () => clearInterval(refreshInterval);
         }
-    }, [activeTab, studioProfile.isFeedApproved]);
+    }, [user, studioProfile.isFeedApproved]);
+
+    // Update specific tabs instantly when clicked (Bonus responsiveness)
+    useEffect(() => {
+        if (activeTab === 'LEADS') fetchStudioBookings();
+        if (activeTab === 'FEED' && studioProfile.isFeedApproved) fetchMyFeedPosts();
+        if (activeTab === 'DASHBOARD') fetchClients();
+    }, [activeTab]);
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
@@ -449,19 +456,19 @@ const StudioDashboard = ({ user, onLogout }) => {
 
             // Normal Client Data Payload
             const payload = {
-                mobile: activeMobile,
-                name: activeName || 'Client',
-                type: formData.type || 'USER',
+                mobile: clientMobile,
+                name: clientName || 'Client',
+                type: 'USER',
                 folderName: baseFolder,
                 subFolderName: targetSubFolder, 
-                email: activeEmail,
-                expiryDays: formData.expiryDays,
-                downloadLimit: formData.downloadLimit,
+                email: clientEmail,
+                expiryDays: expiryDays || '30',
+                downloadLimit: downloadLimit || '0',
                 addedBy: user?.mobile || 'ADMIN',
                 fileUrls: uploadedUrls,
-                imageCost: formData.imageCost || '5',
-                videoCost: formData.videoCost || '10',
-                unlockValidity: formData.unlockValidity || '24 Hours'
+                imageCost: '5',
+                videoCost: '10',
+                unlockValidity: '24 Hours'
             };
 
             // ✅ SAFE DB CALL WITH VALID TOKEN

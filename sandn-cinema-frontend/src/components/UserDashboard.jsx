@@ -146,26 +146,30 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     });
 
-    // 🟢 FETCH LOGIC 
+    // 🟢 FETCH LOGIC & 🔥 GLOBAL AUTO-REFRESH
     useEffect(() => {
-        const fetchRealTimeData = async () => {
+        const fetchRealTimeData = async (isInitialLoad = true) => {
             let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
             if (!activeUser || !activeUser.mobile) {
-                setFolders([DEFAULT_FOLDER]);
-                setLoading(false);
+                if (isInitialLoad) {
+                    setFolders([DEFAULT_FOLDER]);
+                    setLoading(false);
+                }
                 return; 
             }
 
-            setLoading(true);
+            if (isInitialLoad) setLoading(true);
             try {
-                // Fetch user data
+                // Fetch user data (Silent update if not initial load)
                 const res = await axios.post(`${API_BASE}/search-account`, { mobile: activeUser.mobile });
                 
                 if (res.data.success) {
                     const dbData = res.data.data;
                     setSyncUser(dbData);
-                    setEditName(dbData.name || '');
-                    setProfileData({ email: dbData.email || '', location: dbData.location || '' });
+                    // Update name only if it's the initial load to prevent overwriting user typing
+                    if(isInitialLoad) setEditName(dbData.name || '');
+                    if(isInitialLoad) setProfileData({ email: dbData.email || '', location: dbData.location || '' });
+                    
                     if(dbData.wallet) {
                         setWallet({ ...dbData.wallet, unlockedFiles: dbData.wallet.unlockedFiles || [] });
                     }
@@ -181,7 +185,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             ...folder,
                             files: Array.isArray(folder.files) ? folder.files : (typeof folder.files === 'string' ? [folder.files] : []),
                             subFolders: Array.isArray(folder.subFolders) ? folder.subFolders : [],
-                            unlockValidity: folder.unlockValidity || '24 Hours' // Validity fetched from admin settings
+                            unlockValidity: folder.unlockValidity || '24 Hours' 
                         };
                     }).filter(Boolean);
 
@@ -193,33 +197,42 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
-                    sessionStorage.setItem('user', JSON.stringify({ ...activeUser, name: dbData.name })); // Sync session
-                } else {
+                    sessionStorage.setItem('user', JSON.stringify({ ...activeUser, name: dbData.name })); 
+                } else if(isInitialLoad) {
                     setFolders([DEFAULT_FOLDER]); 
                 }
 
-                // ✅ FETCH GLOBAL PACKAGES & EVENTS
-                const platformRes = await axios.get(`${API_BASE}/get-platform-settings`);
-                if (platformRes.data.success && platformRes.data.data) {
-                    setCoinPackages(platformRes.data.data.coinPackages || []);
-                    setMiniEvents(platformRes.data.data.miniEvents || []);
+                // Only fetch heavy global settings on initial load
+                if (isInitialLoad) {
+                    const platformRes = await axios.get(`${API_BASE}/get-platform-settings`);
+                    if (platformRes.data.success && platformRes.data.data) {
+                        setCoinPackages(platformRes.data.data.coinPackages || []);
+                        setMiniEvents(platformRes.data.data.miniEvents || []);
+                    }
                 }
 
-                // ✅ FETCH SERVICES & BOOKINGS
+                // 🔥 Auto-refresh Bookings and Shared Media silently
                 fetchServicesAndBookings(activeUser.mobile);
                 fetchSharedMedia(activeUser.mobile);
 
             } catch (error) {
                 console.error("Fetch error:", error);
-                setFolders([DEFAULT_FOLDER]); 
+                if(isInitialLoad) setFolders([DEFAULT_FOLDER]); 
             } finally {
-                setLoading(false);
+                if (isInitialLoad) setLoading(false);
             }
         };
 
-
-        fetchRealTimeData();
+        // 1. Run immediately on mount
+        fetchRealTimeData(true);
         
+        // 2. Setup Background Polling (Every 30 seconds)
+        const refreshInterval = setInterval(() => {
+            console.log("🔄 User Auto-Refresh: Syncing latest data...");
+            fetchRealTimeData(false); // false means silent load (no loader screen)
+        }, 30000); // 30 seconds
+        
+        // 3. Daily Reward Logic (Only runs once on mount)
         const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
         const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         
@@ -232,7 +245,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             setWallet(rewardResult);
             setTimeout(() => setRewardPopup({ show: false }), 4000);
         }
-    }, [user?.mobile]); 
+
+        // Cleanup interval on unmount
+        return () => clearInterval(refreshInterval);
+    }, [user?.mobile]);
 
 
     const fetchSharedMedia = async (userMobile) => {

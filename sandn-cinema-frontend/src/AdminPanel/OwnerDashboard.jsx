@@ -192,14 +192,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // 🟢 INITIAL FETCH & ADMIN SYNC
+    // 🟢 INITIAL FETCH, ADMIN SYNC & 🔥 GLOBAL AUTO-REFRESH
     useEffect(() => {
+        // 1. Initial Load (Pehli baar page khulte hi data laao)
         fetchAccounts();
         fetchPlatformSettings(); 
         fetchBookings();         
         fetchCollabs();
         fetchServices(); 
-        fetchAds(); // Fetch active Ads
+        fetchAds(); 
         fetchVacancies();
 
         const syncAdminData = async () => {
@@ -223,6 +224,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
             } catch (e) { console.log("Sync failed", e); }
         };
         syncAdminData();
+
+        // 2. 🔥 GLOBAL AUTO-REFRESH LOGIC (Background Polling)
+        const refreshInterval = setInterval(() => {
+            console.log("🔄 Global Auto-Refresh: Syncing data...");
+            // Hum sirf un cheezon ko auto-refresh karenge jo frequently change hoti hain (API load bachane ke liye)
+            fetchAccounts(); // Naye users aane par update hoga
+            fetchBookings(); // Nayi booking aane par emergency alert update hoga
+            fetchCollabs();  // Naye requests aane par update hoga
+        }, 30000); // 30,000 milliseconds = 30 seconds
+
+        // 3. Cleanup: Jab tab close ho ya logout ho toh background process band kar do
+        return () => clearInterval(refreshInterval);
     }, [user]);
 
     useEffect(() => {
