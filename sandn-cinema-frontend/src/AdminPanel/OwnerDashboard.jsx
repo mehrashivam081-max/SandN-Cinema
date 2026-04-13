@@ -123,9 +123,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [adList, setAdList] = useState([]);
     const [fetchingAds, setFetchingAds] = useState(false);
     const [previewAd, setPreviewAd] = useState(null); // ✅ NEW: Preview State
-    const [editingAdId, setEditingAdId] = useState(null); // ✅ NEW: Edit State
+    const [editingAdId, setEditingAdId] = useState(null); // ✅ NEW: Edit State
 
-    // ✅ Dynamic Location Counter
+    // ☁️ NEW: CLOUD STORAGE MANAGER STATES
+    const [storageAccounts, setStorageAccounts] = useState([]);
+    const [storageForm, setStorageForm] = useState({
+        nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
+        credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
+    });
+
+    // ✅ Dynamic Location Counter
+
     // ✅ Dynamic Location Counter (BUG FIXED - Safe Check Added)
     const locationStats = accounts.reduce((acc, userObj) => {
         // Checking if location exists AND is actually a string before trimming
@@ -199,11 +207,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchPlatformSettings(); 
         fetchBookings();         
         fetchCollabs();
-        fetchServices(); 
-        fetchAds(); 
-        fetchVacancies();
+        fetchServices(); 
+        fetchAds(); 
+        fetchVacancies();
+        fetchStorageConfigs(); // ☁️ Load Storage configs
 
-        const syncAdminData = async () => {
+        const syncAdminData = async () => {
             try {
                 let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
                 const res = await axios.post(`${API_BASE}/search-account`, { 
@@ -305,13 +314,51 @@ const OwnerDashboard = ({ user, onLogout }) => {
     
 
     const fetchVacancies = async () => {
-        try {
-            const res = await axios.get(`${API_BASE}/get-vacancies`);
-            if (res.data.success) setVacancies(res.data.data);
-        } catch(e) { console.log("Failed to fetch jobs"); }
-    };
+        try {
+            const res = await axios.get(`${API_BASE}/get-vacancies`);
+            if (res.data.success) setVacancies(res.data.data);
+        } catch(e) { console.log("Failed to fetch jobs"); }
+    };
 
-    // ✅ POST NEW JOB
+    // ☁️ STORAGE MANAGEMENT API CALLS
+    const fetchStorageConfigs = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/list-storage`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success) setStorageAccounts(res.data.data);
+        } catch(e) { console.log("Failed to fetch storage accounts"); }
+    };
+
+    const handleAddStorage = async (e) => {
+        if (e) e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/add-storage`, storageForm, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success) {
+                alert("☁️ Storage Account Linked Successfully!");
+                setStorageForm({ nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false, credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' } });
+                fetchStorageConfigs();
+            } else alert("Failed: " + res.data.message);
+        } catch (err) { alert("Error linking storage account."); }
+        setLoading(false);
+    };
+
+    const handleSetActiveStorage = async (accountId) => {
+        if (!window.confirm("Make this the active storage for all new uploads?")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/set-active-storage`, { accountId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success) fetchStorageConfigs();
+        } catch (e) { alert("Failed to switch active storage."); }
+    };
+
+    const handleDeleteStorage = async (accountId) => {
+        if (!window.confirm("Remove this storage configuration? (Data on the cloud will NOT be deleted, only unlinked from platform)")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/delete-storage`, { accountId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success) fetchStorageConfigs(); else alert(res.data.message);
+        } catch (e) { alert("Failed to remove storage config."); }
+    };
+
+    // ✅ POST NEW JOB
     const handleAddJob = async (e) => {
         if(e) e.preventDefault();
         setLoading(true);
@@ -380,24 +427,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setUploadSpeed('Uploading Ad Media...');
         
         try {
-            // 1. Upload Media to Cloudinary
+            // 1. Upload Media Securely via Backend Proxy
             const fd = new FormData();
             fd.append('file', adFile);
-            fd.append('upload_preset', 'xgujeuol'); 
             
-            const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                transformRequest: [(data, headers) => {
-                    if (headers && headers.common) delete headers.common['Authorization'];
-                    if (headers) delete headers['Authorization'];
-                    return data;
-                }],
+            const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` },
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     setUploadProgress(Math.min(percentCompleted, 99));
                 }
             });
             
-            const fileUrl = cloudRes.data.secure_url;
+            const fileUrl = cloudRes.data.url;
             const fileType = fileUrl.match(/\.(mp4|mov|avi|wmv|webm)$/i) ? 'video' : 'image';
 
             setUploadProgress(100);
@@ -579,15 +621,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     const globalIndex = i + index;
                     const fd = new FormData();
                     fd.append('file', file);
-                    fd.append('upload_preset', 'xgujeuol'); 
 
-                   // ✅ FIX: Use a clean axios instance to avoid CORS issue with Authorization header
-                    const res = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                        transformRequest: [(data, headers) => {
-                            if (headers && headers.common) delete headers.common['Authorization'];
-                            if (headers) delete headers['Authorization'];
-                            return data;
-                        }],
+                    // 🛡️ SECURE PROXY UPLOAD
+                    const res = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                        headers: { 'Authorization': `Bearer ${getValidToken()}` },
                         onUploadProgress: (progressEvent) => {
                             const { loaded } = progressEvent;
                             loadedBytesArray[globalIndex] = loaded;
@@ -621,7 +658,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             }
                         }
                     });
-                    return res.data.secure_url;
+                    return res.data.url;
                 });
 
                 // Wait for the chunk of 5 to finish before starting the next 5
@@ -920,16 +957,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
             if (serviceImage) {
                 const fd = new FormData();
                 fd.append('file', serviceImage);
-                fd.append('upload_preset', 'xgujeuol'); 
-                // ✅ FIX: Clear headers for Service Image Upload too
-                const cloudRes = await axios.post('https://api.cloudinary.com/v1_1/dq1wfpqhs/auto/upload', fd, {
-                    transformRequest: [(data, headers) => {
-                    if (headers && headers.common) delete headers.common['Authorization'];
-                    if (headers) delete headers['Authorization'];
-                    return data;
-                }],
+                
+                const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
                 });
-                uploadedImageUrl = cloudRes.data.secure_url;
+                uploadedImageUrl = cloudRes.data.url;
             }
 
             const payloadData = {
@@ -1260,12 +1292,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
                         {openDropdown === 'ADMIN' && (
                             <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                                <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => { setActiveTab('SOCIAL'); setOpenDropdown(null); }}>🌐 Social Links</li>
-                                <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => { setActiveTab('SECURITY'); setOpenDropdown(null); }}>🔒 Security Policy</li>
-                                <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => { setActiveTab('SUB_ADMIN'); setOpenDropdown(null); }}>🧑‍💼 Sub-Admins</li> 
-                                <li className={activeTab === 'CAREERS' ? 'active' : ''} onClick={() => { setActiveTab('CAREERS'); setOpenDropdown(null); }}>💼 Job Vacancies</li>
-                                <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => { setActiveTab('SETTINGS'); setOpenDropdown(null); }}>⚙️ Settings</li>
-                            </div>
+                                <li className={activeTab === 'STORAGE' ? 'active' : ''} onClick={() => { setActiveTab('STORAGE'); setOpenDropdown(null); }} style={{color: '#3498db'}}>☁️ My Storage</li>
+                                <li className={activeTab === 'SOCIAL' ? 'active' : ''} onClick={() => { setActiveTab('SOCIAL'); setOpenDropdown(null); }}>🌐 Social Links</li>
+                                <li className={activeTab === 'SECURITY' ? 'active' : ''} onClick={() => { setActiveTab('SECURITY'); setOpenDropdown(null); }}>🔒 Security Policy</li>
+                                <li className={activeTab === 'SUB_ADMIN' ? 'active' : ''} onClick={() => { setActiveTab('SUB_ADMIN'); setOpenDropdown(null); }}>🧑‍💼 Sub-Admins</li> 
+                                <li className={activeTab === 'CAREERS' ? 'active' : ''} onClick={() => { setActiveTab('CAREERS'); setOpenDropdown(null); }}>💼 Job Vacancies</li>
+                                <li className={activeTab === 'SETTINGS' ? 'active' : ''} onClick={() => { setActiveTab('SETTINGS'); setOpenDropdown(null); }}>⚙️ Settings</li>
+                            </div>
                         )}
                     </div>
 
@@ -2243,11 +2276,108 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 <button type="submit" className="global-update-btn" style={{padding: '15px', marginTop:'10px'}}>💾 Save Profile Details</button>
                             </form>
                         </div>
-                    </div>
-                )}
-            </main>
-        </div>
-    );
+                    </div>
+                )}
+
+                {/* 🔴 TAB: MY STORAGE (CLOUD MANAGER) */}
+                {activeTab === 'STORAGE' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>☁️ Manage Cloud Storage</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Connect multiple cloud providers. Only one account can be ACTIVE for new uploads. Data stays safe across all linked accounts.</p>
+
+                        {/* CONNECTED ACCOUNTS GRID */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+                            {storageAccounts.map(acc => {
+                                const usagePercent = Math.min((acc.usedStorageGB / acc.maxLimitGB) * 100, 100).toFixed(1);
+                                const isCritical = usagePercent > 90;
+                                return (
+                                    <div key={acc._id} style={{ background: '#fff', border: acc.isActive ? '2px solid #2ecc71' : '1px solid #ddd', borderRadius: '10px', padding: '15px', position: 'relative', boxShadow: acc.isActive ? '0 5px 15px rgba(46,204,113,0.2)' : '0 2px 5px rgba(0,0,0,0.05)' }}>
+                                        {acc.isActive && <div style={{ position: 'absolute', top: '-10px', right: '10px', background: '#2ecc71', color: '#fff', padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>ACTIVE ROUTE</div>}
+                                        
+                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '16px' }}>{acc.provider === 'CLOUDINARY' ? '☁️' : '📦'} {acc.nickname}</h3>
+                                        <p style={{ fontSize: '11px', color: '#7f8c8d', margin: '0 0 15px 0', fontWeight: 'bold' }}>Provider: {acc.provider}</p>
+
+                                        <div style={{ marginBottom: '20px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: isCritical ? '#e74c3c' : '#34495e', marginBottom: '5px' }}>
+                                                <span>Used: {acc.usedStorageGB}GB</span>
+                                                <span>{usagePercent}% of {acc.maxLimitGB}GB</span>
+                                            </div>
+                                            <div style={{ width: '100%', background: '#eee', height: '8px', borderRadius: '5px', overflow: 'hidden' }}>
+                                                <div style={{ width: `${usagePercent}%`, background: isCritical ? '#e74c3c' : (acc.isActive ? '#2ecc71' : '#3498db'), height: '100%' }}></div>
+                                            </div>
+                                            {isCritical && <p style={{ fontSize: '10px', color: '#e74c3c', margin: '5px 0 0 0', fontWeight: 'bold' }}>CRITICAL: Switch account advised!</p>}
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            {!acc.isActive ? (
+                                                <button onClick={() => handleSetActiveStorage(acc._id)} style={{ flex: 1, background: '#3498db', color: '#fff', border: 'none', padding: '8px', borderRadius: '5px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Make Active</button>
+                                            ) : (
+                                                <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: 'rgba(46,204,113,0.1)', color: '#27ae60', borderRadius: '5px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #2ecc71' }}>Receiving Data</div>
+                                            )}
+                                            <button onClick={() => handleDeleteStorage(acc._id)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>🗑️ Unlink</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* ADD NEW ACCOUNT FORM */}
+                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0' }}>
+                            <h3 style={{ marginTop: 0, color: '#27ae60' }}>➕ Link New Cloud Account</h3>
+                            <form onSubmit={handleAddStorage} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div>
+                                    <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Storage Nickname</label>
+                                    <input type="text" placeholder="e.g. My Free Cloudinary 2" required value={storageForm.nickname} onChange={e=>setStorageForm({...storageForm, nickname:e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: 'bold'}}/>
+                                </div>
+                                
+                                <div style={{display:'flex', gap:'15px'}}>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Cloud Provider</label>
+                                        <select value={storageForm.provider} onChange={e=>setStorageForm({...storageForm, provider:e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: 'bold'}}>
+                                            <option value="CLOUDINARY">Cloudinary (Free Tier)</option>
+                                            <option value="AWS_S3">Amazon AWS S3</option>
+                                            <option value="CLOUDFLARE_R2">Cloudflare R2</option>
+                                        </select>
+                                    </div>
+                                    <div style={{flex: 1}}>
+                                        <label style={{fontWeight:'bold', fontSize:'13px', color: '#333'}}>Max Limit (GB)</label>
+                                        <input type="number" placeholder="e.g. 5" required value={storageForm.maxLimitGB} onChange={e=>setStorageForm({...storageForm, maxLimitGB:e.target.value})} className="custom-admin-input" style={{color: '#000', fontWeight: 'bold'}}/>
+                                    </div>
+                                </div>
+
+                                <div style={{ background: '#f4f6f9', padding: '15px', borderRadius: '8px', border: '1px dashed #3498db' }}>
+                                    <h4 style={{ margin: '0 0 10px 0', color: '#2980b9' }}>🔐 Secret API Credentials</h4>
+                                    {storageForm.provider === 'CLOUDINARY' ? (
+                                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>Cloud Name</label><input type="text" required value={storageForm.credentials.cloudName} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, cloudName: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>API Key</label><input type="text" required value={storageForm.credentials.apiKey} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, apiKey: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>API Secret</label><input type="password" required value={storageForm.credentials.apiSecret} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, apiSecret: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                        </div>
+                                    ) : (
+                                        <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>Bucket Name</label><input type="text" required value={storageForm.credentials.bucketName} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, bucketName: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>Region</label><input type="text" required value={storageForm.credentials.region} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, region: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>Access Key ID</label><input type="text" required value={storageForm.credentials.apiKey} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, apiKey: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                            <div><label style={{fontSize:'12px', color: '#555', fontWeight: 'bold'}}>Secret Access Key</label><input type="password" required value={storageForm.credentials.apiSecret} onChange={e=>setStorageForm({...storageForm, credentials:{...storageForm.credentials, apiSecret: e.target.value}})} className="custom-admin-input" style={{padding: '8px', color: '#000'}}/></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fdfefe', padding: '10px', border: '1px solid #ddd', borderRadius: '5px' }}>
+                                    <input type="checkbox" id="setActive" checked={storageForm.setAsActive} onChange={e=>setStorageForm({...storageForm, setAsActive: e.target.checked})} style={{width: '18px', height: '18px', cursor: 'pointer'}}/>
+                                    <label htmlFor="setActive" style={{fontWeight: 'bold', cursor: 'pointer', color: '#27ae60'}}>Make this Active Storage immediately</label>
+                                </div>
+
+                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#2ecc71', padding: '15px', fontSize: '15px' }}>
+                                    {loading ? 'Linking...' : '💾 Link Storage Account'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+            </main>
+        </div>
+    );
 };
 
 export default OwnerDashboard;
