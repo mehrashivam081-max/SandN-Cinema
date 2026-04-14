@@ -56,10 +56,13 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [useDateFolder, setUseDateFolder] = useState(false); 
     
     // --- LIMIT & EXPIRY STATES ---
-    const [expiryDays, setExpiryDays] = useState('');
-    const [downloadLimit, setDownloadLimit] = useState('');
+    const [expiryDays, setExpiryDays] = useState('');
+    const [downloadLimit, setDownloadLimit] = useState('');
 
-    const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
+    // 🏷️ NEW: DYNAMIC SUBSCRIPTION PLANS
+    const [subPlans, setSubPlans] = useState([]);
+
+    const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
     const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
 
@@ -124,15 +127,16 @@ const StudioDashboard = ({ user, onLogout }) => {
     });
 
     // --- 1. FETCH LOGIC & 🔥 GLOBAL AUTO-REFRESH ---
-    useEffect(() => {
-        if (user && user.mobile) {
-            // Initial Fetch
-            fetchMyProfile();
-            fetchClients();
-            fetchStudioBookings();
-            if (studioProfile.isFeedApproved) fetchMyFeedPosts();
+    useEffect(() => {
+        if (user && user.mobile) {
+            // Initial Fetch
+            fetchMyProfile();
+            fetchClients();
+            fetchStudioBookings();
+            fetchSubPlans(); // Fetch dynamic plans
+            if (studioProfile.isFeedApproved) fetchMyFeedPosts();
 
-            // Background Auto-Refresh (Every 30 Seconds)
+            // Background Auto-Refresh (Every 30 Seconds)
             const refreshInterval = setInterval(() => {
                 console.log("🔄 Studio Auto-Refresh: Syncing data...");
                 fetchClients();
@@ -244,12 +248,19 @@ const StudioDashboard = ({ user, onLogout }) => {
             }
         } catch (e) {
             console.error("Failed to fetch feed posts", e);
-        } finally {
-            setFetchingFeed(false);
-        }
-    };
+        } finally {
+            setFetchingFeed(false);
+        }
+    };
 
-    const handleDeleteClient = async (targetMobile) => {
+    const fetchSubPlans = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/get-subscription-plans`);
+            if(res.data.success) setSubPlans(res.data.data);
+        } catch(e) { console.error("Failed to fetch plans"); }
+    };
+
+    const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
         try {
@@ -1646,53 +1657,69 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 })()}
                             </div>
 
-                            {/* Upgrade Plans Grid */}
-                            <h3 style={{ color: '#2c3e50', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '20px' }}>🚀 Upgrade Your Storage</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
-                                
-                                {/* VIP Plan Card */}
-                                <div style={{ border: '2px solid #e67e22', borderRadius: '12px', padding: '20px', textAlign: 'center', background: '#fdf7f2', position: 'relative' }}>
-                                    {studioProfile.storagePlan === 'VIP' && <div style={{position:'absolute', top:'-10px', left:'50%', transform:'translateX(-50%)', background:'#e67e22', color:'#fff', padding:'3px 10px', borderRadius:'10px', fontSize:'10px', fontWeight:'bold'}}>CURRENT PLAN</div>}
-                                    <h2 style={{ color: '#e67e22', margin: '0 0 5px 0' }}>VIP Plan</h2>
-                                    <h1 style={{ margin: '10px 0', color: '#333' }}>50 GB</h1>
-                                    <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Perfect for growing studios and regular wedding uploads.</p>
-                                    <p style={{ fontWeight: 'bold', color: '#d35400', fontSize: '18px', marginBottom: '15px' }}>₹999 / month</p>
-                                    <button 
-                                        disabled={studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM'}
-                                        onClick={() => window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20want%20to%20upgrade%20my%20Snevio%20Storage%20to%20VIP%20(50GB).%20My%20Studio%20Mobile:%20${user.mobile}`, '_blank')}
-                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: (studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM') ? '#bdc3c7' : '#e67e22', color: '#fff', fontWeight: 'bold', cursor: (studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM') ? 'not-allowed' : 'pointer' }}
-                                    >
-                                        {studioProfile.storagePlan === 'VIP' ? 'Active' : (studioProfile.storagePlan === 'PREMIUM' ? 'Included' : 'Request Upgrade')}
-                                    </button>
-                                </div>
+                            {/* Upgrade Plans Grid (DYNAMIC) */}
+                            <h3 style={{ color: '#2c3e50', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '20px' }}>🚀 Upgrade Your Storage</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+                                
+                                {subPlans.length > 0 ? subPlans.map((plan, index) => {
+                                    const isCurrentPlan = studioProfile.storagePlan === plan.planName;
+                                    const colors = ['#e67e22', '#8e44ad', '#2980b9', '#27ae60'];
+                                    const themeColor = colors[index % colors.length];
+                                    
+                                    return (
+                                        <div key={plan._id} style={{ border: `2px solid ${themeColor}`, borderRadius: '12px', padding: '20px', textAlign: 'center', background: '#fdfdfd', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                            
+                                            {isCurrentPlan && <div style={{position:'absolute', top:'-10px', left:'50%', transform:'translateX(-50%)', background:themeColor, color:'#fff', padding:'3px 10px', borderRadius:'10px', fontSize:'10px', fontWeight:'bold'}}>CURRENT PLAN</div>}
+                                            {plan.offerText && !isCurrentPlan && <div style={{position:'absolute', top:'-10px', right:'-10px', background:'#e74c3c', color:'#fff', padding:'5px 10px', borderRadius:'20px', fontSize:'11px', fontWeight:'bold', transform: 'rotate(5deg)'}}>{plan.offerText}</div>}
+                                            
+                                            <div>
+                                                <h2 style={{ color: themeColor, margin: '0 0 5px 0' }}>{plan.planName}</h2>
+                                                <h1 style={{ margin: '10px 0', color: '#333' }}>{plan.storageLimitGB} GB</h1>
+                                                
+                                                {plan.features && plan.features.length > 0 && (
+                                                    <div style={{ margin: '15px 0', background: '#f4f6f7', padding: '10px', borderRadius: '8px', textAlign: 'left', fontSize: '12px', color: '#555' }}>
+                                                        <strong style={{color: '#333', display: 'block', marginBottom: '5px'}}>Features Included:</strong>
+                                                        <ul style={{ margin: 0, paddingLeft: '15px' }}>
+                                                            {plan.features.map((f, i) => <li key={i}>{f}</li>)}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                {/* Premium Plan Card */}
-                                <div style={{ border: '2px solid #8e44ad', borderRadius: '12px', padding: '20px', textAlign: 'center', background: '#f5eef8', position: 'relative' }}>
-                                    {studioProfile.storagePlan === 'PREMIUM' && <div style={{position:'absolute', top:'-10px', left:'50%', transform:'translateX(-50%)', background:'#8e44ad', color:'#fff', padding:'3px 10px', borderRadius:'10px', fontSize:'10px', fontWeight:'bold'}}>CURRENT PLAN</div>}
-                                    <h2 style={{ color: '#8e44ad', margin: '0 0 5px 0' }}>Premium Plan</h2>
-                                    <h1 style={{ margin: '10px 0', color: '#333' }}>200 GB</h1>
-                                    <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>For large cinema teams doing full 4K delivery on cloud.</p>
-                                    <p style={{ fontWeight: 'bold', color: '#6c3483', fontSize: '18px', marginBottom: '15px' }}>₹2,999 / month</p>
-                                    <button 
-                                        disabled={studioProfile.storagePlan === 'PREMIUM'}
-                                        onClick={() => window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20want%20to%20upgrade%20my%20Snevio%20Storage%20to%20PREMIUM%20(200GB).%20My%20Studio%20Mobile:%20${user.mobile}`, '_blank')}
-                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: studioProfile.storagePlan === 'PREMIUM' ? '#bdc3c7' : '#8e44ad', color: '#fff', fontWeight: 'bold', cursor: studioProfile.storagePlan === 'PREMIUM' ? 'not-allowed' : 'pointer' }}
-                                    >
-                                        {studioProfile.storagePlan === 'PREMIUM' ? 'Active Plan' : 'Request Upgrade'}
-                                    </button>
-                                </div>
+                                            <div style={{marginTop: '15px'}}>
+                                                {plan.discountPercentage > 0 ? (
+                                                    <div style={{ marginBottom: '15px' }}>
+                                                        <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '14px', marginRight: '8px' }}>₹{plan.monthlyPrice}</span>
+                                                        <span style={{ fontWeight: 'bold', color: themeColor, fontSize: '20px' }}>₹{(plan.monthlyPrice - (plan.monthlyPrice * plan.discountPercentage / 100)).toFixed(0)} <span style={{fontSize: '12px'}}>/ month</span></span>
+                                                    </div>
+                                                ) : (
+                                                    <p style={{ fontWeight: 'bold', color: themeColor, fontSize: '18px', marginBottom: '15px' }}>₹{plan.monthlyPrice} <span style={{fontSize: '12px'}}>/ month</span></p>
+                                                )}
 
-                            </div>
-                            
-                            <div style={{ marginTop: '25px', background: '#fdfefe', padding: '15px', borderRadius: '10px', border: '1px dashed #ccc', textAlign: 'center' }}>
-                                <p style={{ fontSize: '12px', color: '#7f8c8d', margin: 0 }}>
-                                    Need even more space? <a href="#" onClick={(e) => { e.preventDefault(); window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20need%20a%20CUSTOM%20storage%20plan%20for%20my%20studio.`, '_blank'); }} style={{ color: '#3498db', fontWeight: 'bold', textDecoration: 'none' }}>Contact Support</a> for Custom Plans (500GB+).
-                                </p>
-                            </div>
+                                                <button 
+                                                    disabled={isCurrentPlan}
+                                                    onClick={() => window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20want%20to%20upgrade%20my%20Snevio%20Storage%20to%20the%20${plan.planName}%20(${plan.storageLimitGB}GB)%20Plan.%20My%20Studio%20Mobile:%20${user.mobile}`, '_blank')}
+                                                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: isCurrentPlan ? '#bdc3c7' : themeColor, color: '#fff', fontWeight: 'bold', cursor: isCurrentPlan ? 'not-allowed' : 'pointer' }}
+                                                >
+                                                    {isCurrentPlan ? 'Active Plan' : 'Pay & Upgrade Now'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }) : (
+                                    <p style={{color: '#888', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center'}}>No public plans available right now. Please contact admin.</p>
+                                )}
+                            </div>
+                            
+                            <div style={{ marginTop: '25px', background: '#fdfefe', padding: '15px', borderRadius: '10px', border: '1px dashed #ccc', textAlign: 'center' }}>
+                                <p style={{ fontSize: '12px', color: '#7f8c8d', margin: 0 }}>
+                                    Need even more space? <a href="#" onClick={(e) => { e.preventDefault(); window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20need%20a%20CUSTOM%20storage%20plan%20for%20my%20studio.`, '_blank'); }} style={{ color: '#3498db', fontWeight: 'bold', textDecoration: 'none' }}>Contact Support</a> for Custom Plans (500GB+).
+                                </p>
+                            </div>
 
-                        </div>
-                    </div>
-                )}
+                        </div>
+                    </div>
+                )}
 
             </main>
         </div>
