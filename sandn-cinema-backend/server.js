@@ -799,15 +799,32 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05) => {
 const AWS = require('aws-sdk');
 
 app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
-        
-        const filePath = req.file.path;
-        // Convert Bytes to GB
-        const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
+    try {
+        if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
+        
+        const filePath = req.file.path;
+        // Convert Bytes to GB
+        const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
 
-        // 1. Get the currently active cloud account
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB);
+        // 🛡️ STUDIO STORAGE LIMIT CHECK
+        if (req.user && req.user.role === 'STUDIO') {
+            const studioData = await Studio.findOne({ mobile: req.user.mobile });
+            if (studioData) {
+                const allocated = studioData.allocatedStorageGB || 5; // Default 5GB
+                const used = studioData.usedStorageGB || 0;
+                
+                if (used + fileSizeGB > allocated) {
+                    fs.unlinkSync(filePath); // Remove temp file
+                    return res.status(403).json({ 
+                        success: false, 
+                        message: `Storage Limit Exceeded! You have used ${used.toFixed(2)}GB of your ${allocated}GB plan. Please upgrade your storage plan.` 
+                    });
+                }
+            }
+        }
+
+        // 1. Get the currently active cloud account
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB);
         let uploadedUrl = '';
 
         console.log(`☁️ Secure Proxy: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
@@ -843,15 +860,23 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             uploadedUrl = result.Location;
         }
 
-        // 3. Update the storage counter safely
-        activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
-        await activeCloud.save();
+        // 3. Update Global Cloud Storage Counter safely
+        activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
+        await activeCloud.save();
 
-        // 4. Clean up local temp file to save server space
-        fs.unlinkSync(filePath);
+        // 3.5 Update Individual Studio Usage
+        if (req.user && req.user.role === 'STUDIO') {
+            await Studio.updateOne(
+                { mobile: req.user.mobile }, 
+                { $inc: { usedStorageGB: fileSizeGB } },
+                { strict: false }
+            );
+        }
 
-        res.json({ success: true, url: uploadedUrl, provider: activeCloud.provider });
+        // 4. Clean up local temp file to save server space
+        fs.unlinkSync(filePath);
 
+        res.json({ success: true, url: uploadedUrl, provider: activeCloud.provider });
     } catch (error) {
         console.error("Proxy Upload Error:", error);
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -2427,23 +2452,61 @@ app.post('/api/auth/set-active-storage', authenticateToken, async (req, res) => 
 });
 
 app.post('/api/auth/delete-storage', authenticateToken, async (req, res) => {
-    try {
-        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
-        const { accountId } = req.body;
-        
-        const account = await StorageConfig.findById(accountId);
-        if(account && account.isActive) {
-            return res.json({ success: false, message: 'Cannot delete the currently Active storage. Switch active first.' });
-        }
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        const { accountId } = req.body;
+        
+        const account = await StorageConfig.findById(accountId);
+        if(account && account.isActive) {
+            return res.json({ success: false, message: 'Cannot delete the currently Active storage. Switch active first.' });
+        }
 
-        await StorageConfig.findByIdAndDelete(accountId);
-        res.json({ success: true, message: 'Storage Configuration Removed!' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Failed to delete storage." });
-    }
+        await StorageConfig.findByIdAndDelete(accountId);
+        res.json({ success: true, message: 'Storage Configuration Removed!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Failed to delete storage." });
+    }
+});
+
+// ==========================================
+// 🏢 30. STUDIO PLAN & LIMIT MANAGEMENT
+// ==========================================
+app.post('/api/auth/update-studio-storage-plan', authenticateToken, async (req, res) => {
+    try {
+        // Only Admin/Owner can update plans
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: "Unauthorized Action" });
+        }
+
+        const { targetMobile, newPlan, customLimitGB } = req.body;
+        
+        const studio = await Studio.findOne({ mobile: getCleanMobile(targetMobile) });
+        if(!studio) return res.json({ success: false, message: "Studio not found" });
+
+        let allocated = 5; // Default Free Plan
+        if (newPlan === 'VIP') allocated = 50;
+        if (newPlan === 'PREMIUM') allocated = 200;
+        if (newPlan === 'CUSTOM') allocated = parseFloat(customLimitGB) || 5;
+
+        await Studio.updateOne(
+            { _id: studio._id },
+            { 
+                $set: { 
+                    storagePlan: newPlan, 
+                    allocatedStorageGB: allocated 
+                } 
+            },
+            { strict: false } // Allow fields not strictly enforced in older models
+        );
+
+        res.json({ success: true, message: `Storage upgraded to ${newPlan} (${allocated}GB) successfully!` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Failed to update Studio Plan." });
+    }
 });
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

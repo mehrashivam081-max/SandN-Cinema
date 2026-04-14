@@ -71,14 +71,19 @@ const studioSchema = new mongoose.Schema({
     location: { lat: Number, long: Number }, 
     
     // Business
-    rating: { type: Number, default: 0 },
-    revenue: {
-        current: { type: Number, default: 0 },
-        total: { type: Number, default: 0 },
-        history: [{ amount: Number, date: Date, status: String }]
-    },
-    
-    otp: String,
+    rating: { type: Number, default: 0 },
+    revenue: {
+        current: { type: Number, default: 0 },
+        total: { type: Number, default: 0 },
+        history: [{ amount: Number, date: Date, status: String }]
+    },
+    
+    // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
+    storagePlan: { type: String, enum: ['FREE', 'VIP', 'PREMIUM', 'CUSTOM'], default: 'FREE' },
+    allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
+    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
+
+    otp: String,
     otpExpires: Date,
     joinedDate: { type: Date, default: Date.now }
 });
