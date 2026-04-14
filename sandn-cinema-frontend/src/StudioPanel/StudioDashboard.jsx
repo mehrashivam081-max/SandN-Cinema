@@ -44,12 +44,18 @@ const StudioDashboard = ({ user, onLogout }) => {
     // ✅ NEW: FEED FORM STATES WITH CUSTOM EXPIRY
     const [feedDescription, setFeedDescription] = useState('');
     const [feedCategory, setFeedCategory] = useState('trending');
-    const [feedPrice, setFeedPrice] = useState('');
-    const [feedExpiryType, setFeedExpiryType] = useState('permanent'); // Predefined & Custom Logic
-    const [customExpiryHours, setCustomExpiryHours] = useState('');
+    const [feedPrice, setFeedPrice] = useState('');
+    const [feedExpiryType, setFeedExpiryType] = useState('permanent'); // Predefined & Custom Logic
+    const [customExpiryHours, setCustomExpiryHours] = useState('');
 
-    // ✅ NEW: SEARCH CLIENT STATE
-    const [clientSearchQuery, setClientSearchQuery] = useState('');
+    // ✅ NEW: SMART ALBUM SELECTION STATES
+    const [uploadType, setUploadType] = useState('NORMAL'); // 'NORMAL' or 'SELECTION'
+    const [selectionForm, setSelectionForm] = useState({ sheetLimit: '30', imagesPerSheet: '4', costPerExtraSheet: '150', totalPhases: '3' });
+    const [mySelections, setMySelections] = useState([]); // Projects list
+    const [fetchingSelections, setFetchingSelections] = useState(false);
+
+    // ✅ NEW: SEARCH CLIENT STATE
+    const [clientSearchQuery, setClientSearchQuery] = useState('');
 
     // --- FOLDER & FILE COUNTER STATES ---
     const [folderName, setFolderName] = useState('');
@@ -260,6 +266,15 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch(e) { console.error("Failed to fetch plans"); }
     };
 
+    const fetchStudioSelections = async () => {
+        setFetchingSelections(true);
+        try {
+            const res = await axios.post(`${API_BASE}/get-studio-selections`, {}, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if(res.data.success) setMySelections(res.data.data);
+        } catch(e) { console.error("Failed to fetch selections"); }
+        setFetchingSelections(false);
+    };
+
     const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
@@ -466,27 +481,47 @@ const StudioDashboard = ({ user, onLogout }) => {
                 return; 
             }
 
-            // Normal Client Data Payload
-            const payload = {
-                mobile: clientMobile,
-                name: clientName || 'Client',
-                type: 'USER',
-                folderName: baseFolder,
-                subFolderName: targetSubFolder, 
-                email: clientEmail,
-                expiryDays: expiryDays || '30',
-                downloadLimit: downloadLimit || '0',
-                addedBy: user?.mobile || 'ADMIN',
-                fileUrls: uploadedUrls,
-                imageCost: '5',
-                videoCost: '10',
-                unlockValidity: '24 Hours'
-            };
+            // ✅ DIFFERENTIATE API CALL BASED ON UPLOAD TYPE
+            let backendRes;
+            
+            if (uploadType === 'SELECTION') {
+                // Smart Album Selection Payload
+                const selPayload = {
+                    clientMobile, clientEmail, folderName: baseFolder, 
+                    sheetLimit: selectionForm.sheetLimit,
+                    imagesPerSheet: selectionForm.imagesPerSheet,
+                    costPerExtraSheet: selectionForm.costPerExtraSheet,
+                    totalPhases: selectionForm.totalPhases,
+                    fileUrls: uploadedUrls,
+                    cloudProvider: 'CLOUDINARY'
+                };
+                
+                backendRes = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+            } else {
+                // Normal Client Data Payload
+                const payload = {
+                    mobile: clientMobile,
+                    name: clientName || 'Client',
+                    type: 'USER',
+                    folderName: baseFolder,
+                    subFolderName: targetSubFolder, 
+                    email: clientEmail,
+                    expiryDays: expiryDays || '30',
+                    downloadLimit: downloadLimit || '0',
+                    addedBy: user?.mobile || 'ADMIN',
+                    fileUrls: uploadedUrls,
+                    imageCost: '5',
+                    videoCost: '10',
+                    unlockValidity: '24 Hours'
+                };
 
-            // ✅ SAFE DB CALL WITH VALID TOKEN
-            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
-                headers: { 'Authorization': `Bearer ${getValidToken()}` }
-            });
+                // ✅ SAFE DB CALL WITH VALID TOKEN
+                backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+            }
 
             if (backendRes.data.success) {
                 setUploadETA('Complete!');
@@ -723,6 +758,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <li className={activeTab === 'DASHBOARD' ? 'active' : ''} onClick={() => { setActiveTab('DASHBOARD'); setOpenDropdown(null); }}>👥 My Clients</li>
                                 <li className={activeTab === 'LEADS' ? 'active' : ''} onClick={() => { setActiveTab('LEADS'); setOpenDropdown(null); }}>📅 Booking Leads</li>
                                 <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('UPLOAD'); setOpenDropdown(null); }}>📤 Upload Client Data</li>
+                                <li className={activeTab === 'SELECTION_PROJECTS' ? 'active' : ''} onClick={() => { setActiveTab('SELECTION_PROJECTS'); fetchStudioSelections(); setOpenDropdown(null); }} style={{color: '#f1c40f', fontWeight: 'bold'}}>✨ Smart Album Selections</li>
                                 
                                 {studioProfile.isFeedApproved && (
                                     <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => { setActiveTab('FEED'); setOpenDropdown(null); }}>🌟 Feed Management</li>
@@ -969,11 +1005,55 @@ const StudioDashboard = ({ user, onLogout }) => {
                 )}
 
                 {/* 🔴 TAB 2: UPLOAD CLIENT DATA */}
-                {activeTab === 'UPLOAD' && (
-                    <div className="view-section">
-                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📤 Upload Data for Client</h2></div>
-                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {activeTab === 'UPLOAD' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>📤 File Transfer & Album Selection</h2></div>
+                        
+                        {/* TYPE SWITCHER */}
+                        <div style={{ display: 'flex', gap: '10px', maxWidth: '600px', margin: '0 auto 20px' }}>
+                            <button onClick={() => setUploadType('NORMAL')} style={{ flex: 1, padding: '12px', background: uploadType === 'NORMAL' ? '#2ecc71' : '#ecf0f1', color: uploadType === 'NORMAL' ? '#fff' : '#7f8c8d', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' }}>
+                                📁 Regular Folder Upload
+                            </button>
+                            <button onClick={() => setUploadType('SELECTION')} style={{ flex: 1, padding: '12px', background: uploadType === 'SELECTION' ? '#8e44ad' : '#ecf0f1', color: uploadType === 'SELECTION' ? '#fff' : '#7f8c8d', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' }}>
+                                ✨ Smart Album Selection
+                            </button>
+                        </div>
+
+                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0 auto', borderTop: uploadType === 'SELECTION' ? '4px solid #8e44ad' : 'none' }}>
+                            {uploadType === 'SELECTION' && (
+                                <div style={{ background: '#f5eef8', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+                                    <h4 style={{ margin: '0 0 10px 0', color: '#8e44ad' }}>📸 Smart Album Configuration</h4>
+                                    <p style={{ fontSize: '11px', color: '#555', margin: '0 0 15px 0' }}>The client will receive an email link. They will go through a multi-phase selection process. You can set limits to charge for extra photo selections automatically.</p>
+                                    
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <div style={{ flex: '1 1 120px' }}>
+                                            <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Number of Sheets Allowed</label>
+                                            <input type="number" value={selectionForm.sheetLimit} onChange={e => setSelectionForm({...selectionForm, sheetLimit: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px', padding: '8px' }} />
+                                        </div>
+                                        <div style={{ flex: '1 1 120px' }}>
+                                            <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Images per Sheet</label>
+                                            <input type="number" value={selectionForm.imagesPerSheet} onChange={e => setSelectionForm({...selectionForm, imagesPerSheet: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px', padding: '8px' }} />
+                                        </div>
+                                        <div style={{ flex: '1 1 120px' }}>
+                                            <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#e67e22' }}>Cost per Extra Sheet (₹)</label>
+                                            <input type="number" value={selectionForm.costPerExtraSheet} onChange={e => setSelectionForm({...selectionForm, costPerExtraSheet: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px', padding: '8px', border: '1px solid #f39c12' }} />
+                                        </div>
+                                        <div style={{ flex: '1 1 120px' }}>
+                                            <label style={{ fontSize: '11px', fontWeight: 'bold' }}>Selection Phases</label>
+                                            <select value={selectionForm.totalPhases} onChange={e => setSelectionForm({...selectionForm, totalPhases: e.target.value})} className="custom-admin-input" style={{ marginTop: '5px', padding: '8px' }}>
+                                                <option value="1">1 Phase (Direct Final)</option>
+                                                <option value="2">2 Phases (Shortlist &gt; Final)</option>
+                                                <option value="3">3 Phases (Recommended)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '10px', padding: '8px', background: '#fff', borderRadius: '5px', border: '1px dashed #ccc', fontSize: '11px', color: '#333' }}>
+                                        <strong>Math Check:</strong> Client can select max <strong>{Number(selectionForm.sheetLimit) * Number(selectionForm.imagesPerSheet)}</strong> images for free.
+                                    </div>
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 
                                 <div style={{ position: 'relative' }}>
                                     <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Client Mobile</label>
@@ -1100,18 +1180,74 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
-                                
-                                <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px', background: loading ? '#95a5a6' : '#2ecc71', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                    {loading ? 'Uploading to Cloud...' : '🚀 Upload & Notify Client'}
-                                </button>
-                            </div>
+                                    </div>
+                                )}
+                                
+                                <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px', background: loading ? '#95a5a6' : (uploadType === 'SELECTION' ? '#8e44ad' : '#2ecc71'), cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                    {loading ? 'Uploading to Cloud...' : (uploadType === 'SELECTION' ? '✨ Upload Selection Project & Email Client' : '🚀 Upload Folder & Notify Client')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 TAB: SELECTION PROJECTS */}
+                {activeTab === 'SELECTION_PROJECTS' && (
+                    <div className="view-section">
+                        <div className="section-header" style={{display: 'flex', justifyContent: 'space-between'}}>
+                            <h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>✨ Smart Album Selections</h2>
+                            <button className="refresh-btn" onClick={fetchStudioSelections} disabled={fetchingSelections} style={{background:'#8e44ad', color:'white', border:'none', padding:'8px 15px', borderRadius:'5px', cursor:'pointer'}}>
+                                {fetchingSelections ? 'Refreshing...' : '🔄 Refresh Status'}
+                            </button>
+                        </div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Track which clients have selected photos for their albums. Download final lists or share access.</p>
+
+                        <div className="data-table-container">
+                            <table className="admin-table">
+                                <thead>
+                                    <tr><th>Project Details</th><th>Client</th><th>Selection Progress</th><th>Extra Amount</th><th>Actions</th></tr>
+                                </thead>
+                                <tbody>
+                                    {mySelections.map((sel, i) => {
+                                        const totalImgs = sel.allImages ? sel.allImages.length : 0;
+                                        const selectedImgs = sel.images ? sel.images.filter(img => img.status === 'selected').length : 0;
+                                        return (
+                                            <tr key={i}>
+                                                <td>
+                                                    <strong>{sel.folderName}</strong>
+                                                    <div style={{fontSize:'10px', color:'#777', marginTop:'3px'}}>{new Date(sel.createdAt).toLocaleDateString()}</div>
+                                                </td>
+                                                <td>
+                                                    {sel.clientMobile}
+                                                </td>
+                                                <td>
+                                                    <span style={{background: sel.status === 'Completed' ? '#2ecc71' : (sel.status === 'Pending' ? '#f1c40f' : '#3498db'), color: '#fff', padding: '3px 8px', borderRadius: '15px', fontSize: '11px', fontWeight: 'bold'}}>
+                                                        {sel.status}
+                                                    </span>
+                                                    <div style={{fontSize:'11px', marginTop:'5px'}}>Phase: {sel.currentPhase} / {sel.totalPhases}</div>
+                                                    <div style={{fontSize:'11px', color:'#8e44ad'}}><strong>{selectedImgs}</strong> of {totalImgs} picked</div>
+                                                </td>
+                                                <td>
+                                                    <strong style={{color: sel.extraAmountToPay > 0 ? '#e74c3c' : '#2ecc71'}}>₹{sel.extraAmountToPay || 0}</strong>
+                                                    {sel.extraAmountToPay > 0 && <div style={{fontSize:'10px', color: sel.isPaid ? '#2ecc71' : '#e74c3c'}}>{sel.isPaid ? 'Paid' : 'Unpaid'}</div>}
+                                                </td>
+                                                <td>
+                                                    <button style={{background:'#34495e', color:'white', border:'none', padding:'5px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', marginRight:'5px'}}>View Client UI</button>
+                                                    {sel.status === 'Completed' && <button style={{background:'#2ecc71', color:'white', border:'none', padding:'5px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>Download Zip</button>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {mySelections.length === 0 && !fetchingSelections && (
+                                        <tr><td colSpan="5" style={{textAlign:'center', color:'#888', padding:'20px'}}>No Smart Selections created yet. Start uploading in Selection Mode!</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
 
-                {/* 🔴 TAB 3: FEED MANAGEMENT */}
+                {/* 🔴 TAB 3: FEED MANAGEMENT */}
                 {activeTab === 'FEED' && studioProfile.isFeedApproved && (
                     <div className="view-section">
                         <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🌟 Feed Management</h2></div>
