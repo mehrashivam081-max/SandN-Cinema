@@ -130,6 +130,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [newStudioPlan, setNewStudioPlan] = useState('FREE');
     const [customLimitGB, setCustomLimitGB] = useState('');
 
+    // 🏷️ NEW: DYNAMIC SUBSCRIPTION PLANS STATES
+    const [subPlans, setSubPlans] = useState([]);
+    const [subPlanForm, setSubPlanForm] = useState({ id: null, planName: '', storageLimitGB: '', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
+
     // ☁️ NEW: CLOUD STORAGE MANAGER STATES
     const [storageAccounts, setStorageAccounts] = useState([]);
     const [storageForm, setStorageForm] = useState({
@@ -216,6 +220,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchAds(); 
         fetchVacancies();
         fetchStorageConfigs(); // ☁️ Load Storage configs
+        fetchSubPlans(); // 🏷️ Load Subscription Plans
 
         const syncAdminData = async () => {
             try {
@@ -363,16 +368,59 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to remove storage config."); }
     };
 
+    // 🏷️ SUBSCRIPTION PLANS API CALLS
+    const fetchSubPlans = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/admin-get-subscription-plans`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if(res.data.success) setSubPlans(res.data.data);
+        } catch(e) { console.log("Failed to fetch sub plans"); }
+    };
+
+    const handleSaveSubPlan = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const featuresArray = typeof subPlanForm.features === 'string' ? subPlanForm.features.split(',').map(f => f.trim()).filter(f => f) : subPlanForm.features;
+            const payload = { ...subPlanForm, features: featuresArray };
+            const res = await axios.post(`${API_BASE}/manage-subscription-plan`, payload, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if(res.data.success) {
+                alert(`✅ ${res.data.message}`);
+                setSubPlanForm({ id: null, planName: '', storageLimitGB: '', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
+                fetchSubPlans();
+            } else alert(`❌ Error: ${res.data.message}`);
+        } catch(e) { alert("Server Error saving plan."); }
+        setLoading(false);
+    };
+
+    const handleDeleteSubPlan = async (id) => {
+        if(!window.confirm("Delete this Subscription Plan permanently?")) return;
+        try {
+            const res = await axios.post(`${API_BASE}/delete-subscription-plan`, { id }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if(res.data.success) { alert("🗑️ Plan Deleted."); fetchSubPlans(); }
+        } catch(e) { alert("Failed to delete plan."); }
+    };
+
+    const editSubPlan = (plan) => {
+        setSubPlanForm({
+            id: plan._id, planName: plan.planName, storageLimitGB: plan.storageLimitGB,
+            monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, discountPercentage: plan.discountPercentage,
+            offerText: plan.offerText, features: plan.features.join(', ')
+        });
+        document.getElementById('plan-form-section')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
     // 🏢 UPDATE STUDIO STORAGE PLAN API
     const handleUpdateStudioPlan = async (e) => {
         e.preventDefault();
         if (!window.confirm(`Update storage plan for ${editingStudioPlan.name || editingStudioPlan.studioName}?`)) return;
         setLoading(true);
         try {
+            const manualExp = document.getElementById('manualExpiryInput')?.value || '';
             const res = await axios.post(`${API_BASE}/update-studio-storage-plan`, {
                 targetMobile: editingStudioPlan.mobile,
-                newPlan: newStudioPlan,
-                customLimitGB: customLimitGB
+                newPlanName: newStudioPlan,
+                customLimitGB: customLimitGB,
+                expiryDays: manualExp
             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             
             if (res.data.success) {
@@ -2408,26 +2456,84 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 {activeTab === 'STUDIO_PLANS' && (
                     <div className="view-section">
                         <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🗄️ Studio Storage Management</h2></div>
-                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upgrade or override the cloud storage capacity for registered studios.</p>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Create custom cloud storage plans and assign them to your registered studios.</p>
 
-                        <div className="data-table-container" style={{ marginTop: '20px' }}>
+                        {/* ✅ CREATE / EDIT PLAN FORM */}
+                        <div id="plan-form-section" className="update-creation-container" style={{ maxWidth: '800px', margin: '0 auto 30px', borderTop: '4px solid #8e44ad' }}>
+                            <h3 style={{ margin: '0 0 15px 0', color: '#8e44ad' }}>{subPlanForm.id ? '✏️ Edit Storage Plan' : '➕ Create New Storage Plan'}</h3>
+                            <form onSubmit={handleSaveSubPlan} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Plan Name (e.g. Elite Plan)</label><input type="text" required placeholder="Name visible to Studio" value={subPlanForm.planName} onChange={e => setSubPlanForm({...subPlanForm, planName: e.target.value})} className="custom-admin-input"/></div>
+                                    <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Total Storage Limit (GB)</label><input type="number" required placeholder="e.g. 500" value={subPlanForm.storageLimitGB} onChange={e => setSubPlanForm({...subPlanForm, storageLimitGB: e.target.value})} className="custom-admin-input"/></div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Monthly Price (₹)</label><input type="number" required placeholder="e.g. 999" value={subPlanForm.monthlyPrice} onChange={e => setSubPlanForm({...subPlanForm, monthlyPrice: e.target.value})} className="custom-admin-input"/></div>
+                                    <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Yearly Price (₹)</label><input type="number" placeholder="Optional discounted price" value={subPlanForm.yearlyPrice} onChange={e => setSubPlanForm({...subPlanForm, yearlyPrice: e.target.value})} className="custom-admin-input"/></div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '15px', background: '#fdf2e9', padding: '10px', borderRadius: '8px', border: '1px solid #f39c12' }}>
+                                    <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>Discount (%)</label><input type="number" placeholder="e.g. 20" value={subPlanForm.discountPercentage} onChange={e => setSubPlanForm({...subPlanForm, discountPercentage: e.target.value})} className="custom-admin-input" style={{marginBottom:0}}/></div>
+                                    <div style={{ flex: 2 }}><label style={{ fontSize: '12px', fontWeight: 'bold', color: '#d35400' }}>Offer Tag (Badge Text)</label><input type="text" placeholder="e.g. Save 30% Today!" value={subPlanForm.offerText} onChange={e => setSubPlanForm({...subPlanForm, offerText: e.target.value})} className="custom-admin-input" style={{marginBottom:0}}/></div>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Plan Features (Comma Separated)</label>
+                                    <textarea rows="2" placeholder="e.g. High Speed Upload, Unlimited Event Subfolders, 24/7 Priority Support" value={subPlanForm.features} onChange={e => setSubPlanForm({...subPlanForm, features: e.target.value})} className="custom-admin-input"></textarea>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {subPlanForm.id && <button type="button" onClick={() => setSubPlanForm({ id: null, planName: '', storageLimitGB: '', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' })} style={{ background: '#95a5a6', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>}
+                                    <button type="submit" disabled={loading} style={{ flex: 1, background: subPlanForm.id ? '#2ecc71' : '#8e44ad', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                        {loading ? 'Saving...' : (subPlanForm.id ? '💾 Update Custom Plan' : '🚀 Publish New Storage Plan')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* ✅ LIVE PLANS TABLE */}
+                        <h3 style={{ color: '#2c3e50', padding: '15px 0 5px', margin: 0, borderBottom: '2px solid #eee' }}>🏷️ Custom Packages (Available for Studios)</h3>
+                        <div className="data-table-container" style={{ marginBottom: '40px' }}>
+                            <table className="admin-table">
+                                <thead><tr><th>Plan Details</th><th>Capacity</th><th>Pricing (Mo / Yr)</th><th>Perks</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {subPlans.map((plan, idx) => (
+                                        <tr key={idx}>
+                                            <td><strong>{plan.planName}</strong><br/>{plan.offerText && <span style={{fontSize:'9px', background:'#e74c3c', color:'#fff', padding:'2px 4px', borderRadius:'3px', fontWeight:'bold'}}>{plan.offerText}</span>}</td>
+                                            <td><strong style={{color:'#2980b9'}}>{plan.storageLimitGB} GB</strong></td>
+                                            <td style={{fontSize:'12px'}}>
+                                                <strong>₹{plan.monthlyPrice}</strong> /mo <br/>
+                                                {plan.yearlyPrice > 0 && <span style={{color: '#8e44ad'}}><strong>₹{plan.yearlyPrice}</strong> /yr</span>} 
+                                                {plan.discountPercentage > 0 && <span style={{color:'#27ae60', marginLeft:'5px'}}>{plan.discountPercentage}% OFF</span>}
+                                            </td>
+                                            <td style={{fontSize:'11px', color:'#555', maxWidth:'200px'}}>{plan.features.join(', ')}</td>
+                                            <td>
+                                                <button onClick={() => editSubPlan(plan)} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px', fontSize:'11px'}}>Edit</button>
+                                                <button onClick={() => handleDeleteSubPlan(plan._id)} style={{background: '#e74c3c', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize:'11px'}}>Delete</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {subPlans.length === 0 && <tr><td colSpan="5" style={{textAlign:'center', padding:'15px', color:'#777'}}>No Custom Plans Added Yet. Create one above!</td></tr>}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* ✅ ASSIGN TO STUDIOS TABLE */}
+                        <h3 style={{ color: '#2c3e50', padding: '15px 0 5px', margin: 0, borderBottom: '2px solid #eee' }}>🧑‍💼 Active Studios Usage & Limits</h3>
+                        <div className="data-table-container" style={{ marginTop: '10px' }}>
                             <table className="admin-table">
                                 <thead>
-                                    <tr><th>Studio Name</th><th>Mobile</th><th>Current Plan</th><th>Storage Used</th><th>Action</th></tr>
+                                    <tr><th>Studio Name</th><th>Mobile</th><th>Current Assigned Plan</th><th>Storage Capacity Used</th><th>Action</th></tr>
                                 </thead>
                                 <tbody>
                                     {accounts.filter(a => a.role === 'STUDIO').map((studio, index) => {
-                                        const allocated = studio.allocatedStorageGB || 5;
-                                        const used = studio.usedStorageGB || 0;
-                                        const percent = Math.min((used / allocated) * 100, 100).toFixed(1);
-                                        const isFull = percent > 95;
-                                        
-                                        return (
+                                        const allocated = studio.allocatedStorageGB || 5;
+                                        const used = studio.usedStorageGB || 0;
+                                        const percent = Math.min((used / allocated) * 100, 100).toFixed(1);
+                                        const isFull = percent > 95;
+                                        
+                                        return (
                                             <tr key={index}>
                                                 <td><strong style={{color: '#2c3e50'}}>{studio.studioName || studio.ownerName}</strong></td>
                                                 <td>{studio.mobile}</td>
                                                 <td>
-                                                    <span style={{ fontSize: '11px', background: studio.storagePlan === 'PREMIUM' ? '#8e44ad' : (studio.storagePlan === 'VIP' ? '#e67e22' : '#2980b9'), color: '#fff', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                    <span style={{ fontSize: '11px', background: studio.storagePlan === 'CUSTOM' ? '#f39c12' : (studio.storagePlan === 'FREE' ? '#7f8c8d' : '#8e44ad'), color: '#fff', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
                                                         {studio.storagePlan || 'FREE'}
                                                     </span>
                                                 </td>
@@ -2448,7 +2554,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                         setNewStudioPlan(studio.storagePlan || 'FREE'); 
                                                         setCustomLimitGB(studio.allocatedStorageGB || 5); 
                                                     }} style={{background: '#34495e', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold'}}>
-                                                        ⚙️ Edit Plan
+                                                        ⚙️ Override
                                                     </button>
                                                 </td>
                                             </tr>
@@ -2463,7 +2569,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     </div>
                 )}
 
-                {/* 🏢 STUDIO PLAN OVERRIDE MODAL */}
+                {/* 🏢 STUDIO PLAN OVERRIDE MODAL (DYNAMICS PLANS) */}
                 {editingStudioPlan && (
                     <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
                         <div style={{background:'#1a1a2e', padding:'25px', borderRadius:'15px', width:'90%', maxWidth:'400px', border: '1px solid #2ecc71', boxShadow:'0 20px 50px rgba(0,0,0,0.5)'}}>
@@ -2475,24 +2581,33 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                             <form onSubmit={handleUpdateStudioPlan} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div>
-                                    <label style={{color: '#aaa', fontSize: '12px'}}>Select Subscription Plan</label>
+                                    <label style={{color: '#aaa', fontSize: '12px'}}>Select New Plan to Assign</label>
                                     <select value={newStudioPlan} onChange={e => setNewStudioPlan(e.target.value)} className="custom-admin-input" style={{ marginTop: '5px' }}>
-                                        <option value="FREE">FREE Plan (5 GB)</option>
-                                        <option value="VIP">VIP Plan (50 GB)</option>
-                                        <option value="PREMIUM">PREMIUM Plan (200 GB)</option>
-                                        <option value="CUSTOM">CUSTOM (Set Manual Limit)</option>
+                                        <option value="FREE">FREE Plan (Default 5 GB)</option>
+                                        {/* Dynamically list created plans */}
+                                        {subPlans.map(p => (
+                                            <option key={p._id} value={p.planName}>{p.planName} ({p.storageLimitGB} GB)</option>
+                                        ))}
+                                        <option value="CUSTOM">MANUAL / CUSTOM OVERRIDE</option>
                                     </select>
                                 </div>
 
+                                {/* Custom Days Expiry (Optional override from Admin) */}
+                                <div>
+                                    <label style={{color: '#aaa', fontSize: '12px'}}>Add Expiry to Plan? (Optional)</label>
+                                    <input type="number" id="manualExpiryInput" placeholder="Days to Expire (e.g. 30)" className="custom-admin-input" style={{ marginTop: '5px' }} />
+                                    <p style={{fontSize:'10px', color:'#777', margin:'3px 0 0 0'}}>Leave blank for no expiry. If set, cron-job will auto downgrade them back to Free.</p>
+                                </div>
+
                                 {newStudioPlan === 'CUSTOM' && (
-                                    <div>
-                                        <label style={{color: '#f39c12', fontSize: '12px', fontWeight:'bold'}}>Custom Limit (in GB)</label>
-                                        <input type="number" required placeholder="e.g. 35" value={customLimitGB} onChange={e => setCustomLimitGB(e.target.value)} className="custom-admin-input" style={{ marginTop: '5px', border: '1px solid #f39c12' }} />
+                                    <div style={{background: 'rgba(243, 156, 18, 0.1)', padding: '10px', borderRadius: '5px', borderLeft: '3px solid #f39c12'}}>
+                                        <label style={{color: '#f39c12', fontSize: '12px', fontWeight:'bold'}}>Custom Storage Limit (GB)</label>
+                                        <input type="number" required placeholder="e.g. 500" value={customLimitGB} onChange={e => setCustomLimitGB(e.target.value)} className="custom-admin-input" style={{ marginTop: '5px', border: '1px solid #f39c12' }} />
                                     </div>
                                 )}
 
                                 <button type="submit" disabled={loading} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
-                                    {loading ? 'Saving...' : '💾 Update & Notify Studio'}
+                                    {loading ? 'Saving...' : '💾 Assign Plan & Execute'}
                                 </button>
                             </form>
                         </div>
