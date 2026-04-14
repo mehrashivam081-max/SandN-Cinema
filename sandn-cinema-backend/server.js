@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'sandn_cinema_super_secret_key_2024';
 
 // ✅ Added New Models Here
-const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy } = require('./models');
+const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan } = require('./models');
 
 // ✅ NEW: Service Model for App Services
 const serviceSchema = new mongoose.Schema({
@@ -2471,42 +2471,119 @@ app.post('/api/auth/delete-storage', authenticateToken, async (req, res) => {
 // ==========================================
 // 🏢 30. STUDIO PLAN & LIMIT MANAGEMENT
 // ==========================================
+
+// A. Admin creates/updates a Subscription Plan
+app.post('/api/auth/manage-subscription-plan', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
+        
+        const { id, planName, storageLimitGB, monthlyPrice, yearlyPrice, discountPercentage, offerText, features, isActive } = req.body;
+
+        const payload = {
+            planName,
+            storageLimitGB: Number(storageLimitGB),
+            monthlyPrice: Number(monthlyPrice),
+            yearlyPrice: Number(yearlyPrice) || 0,
+            discountPercentage: Number(discountPercentage) || 0,
+            offerText: offerText || '',
+            features: features || [],
+            isActive: isActive !== undefined ? isActive : true
+        };
+
+        if (id) {
+            await SubscriptionPlan.findByIdAndUpdate(id, payload);
+            return res.json({ success: true, message: "Subscription Plan updated successfully!" });
+        } else {
+            await SubscriptionPlan.create(payload);
+            return res.json({ success: true, message: "New Subscription Plan created!" });
+        }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server error managing plans." });
+    }
+});
+
+// B. Get all Subscription Plans (Public/Studio accessible)
+app.get('/api/auth/get-subscription-plans', async (req, res) => {
+    try {
+        const plans = await SubscriptionPlan.find({ isActive: true }).sort({ storageLimitGB: 1 });
+        res.json({ success: true, data: plans });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch plans." });
+    }
+});
+
+// C. Admin fetches ALL plans (even inactive ones)
+app.get('/api/auth/admin-get-subscription-plans', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
+        const plans = await SubscriptionPlan.find().sort({ storageLimitGB: 1 });
+        res.json({ success: true, data: plans });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch plans." });
+    }
+});
+
+// D. Delete a plan
+app.post('/api/auth/delete-subscription-plan', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized" });
+        await SubscriptionPlan.findByIdAndDelete(req.body.id);
+        res.json({ success: true, message: "Plan deleted permanently." });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to delete plan." });
+    }
+});
+
+// E. Admin Manual Override Studio Plan (Modified to read dynamic plans)
 app.post('/api/auth/update-studio-storage-plan', authenticateToken, async (req, res) => {
-    try {
-        // Only Admin/Owner can update plans
-        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
-            return res.json({ success: false, message: "Unauthorized Action" });
-        }
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
 
-        const { targetMobile, newPlan, customLimitGB } = req.body;
-        
-        const studio = await Studio.findOne({ mobile: getCleanMobile(targetMobile) });
-        if(!studio) return res.json({ success: false, message: "Studio not found" });
+        const { targetMobile, newPlanName, customLimitGB, expiryDays } = req.body;
+        
+        const studio = await Studio.findOne({ mobile: getCleanMobile(targetMobile) });
+        if(!studio) return res.json({ success: false, message: "Studio not found" });
 
-        let allocated = 5; // Default Free Plan
-        if (newPlan === 'VIP') allocated = 50;
-        if (newPlan === 'PREMIUM') allocated = 200;
-        if (newPlan === 'CUSTOM') allocated = parseFloat(customLimitGB) || 5;
+        let allocated = 5; // Fallback
+        
+        if (newPlanName === 'CUSTOM') {
+            allocated = parseFloat(customLimitGB) || 5;
+        } else if (newPlanName === 'FREE') {
+            allocated = 5;
+        } else {
+            // Find the dynamic plan created by Admin
+            const selectedPlan = await SubscriptionPlan.findOne({ planName: newPlanName });
+            if (selectedPlan) allocated = selectedPlan.storageLimitGB;
+        }
 
-        await Studio.updateOne(
-            { _id: studio._id },
-            { 
-                $set: { 
-                    storagePlan: newPlan, 
-                    allocatedStorageGB: allocated 
-                } 
-            },
-            { strict: false } // Allow fields not strictly enforced in older models
-        );
+        // Calculate Expiry Date
+        let expiryDate = null;
+        if (expiryDays && parseInt(expiryDays) > 0) {
+            expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + parseInt(expiryDays));
+        }
 
-        res.json({ success: true, message: `Storage upgraded to ${newPlan} (${allocated}GB) successfully!` });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: "Failed to update Studio Plan." });
-    }
+        await Studio.updateOne(
+            { _id: studio._id },
+            { 
+                $set: { 
+                    storagePlan: newPlanName, 
+                    allocatedStorageGB: allocated,
+                    planExpiryDate: expiryDate
+                } 
+            },
+            { strict: false } 
+        );
+
+        res.json({ success: true, message: `Studio updated to ${newPlanName} (${allocated}GB) successfully!` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Failed to update Studio Plan." });
+    }
 });
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });

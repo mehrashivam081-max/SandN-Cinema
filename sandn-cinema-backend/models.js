@@ -79,13 +79,15 @@ const studioSchema = new mongoose.Schema({
     },
     
     // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
-    storagePlan: { type: String, enum: ['FREE', 'VIP', 'PREMIUM', 'CUSTOM'], default: 'FREE' },
+    storagePlan: { type: String, default: 'FREE' },
     allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
-    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
+    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
+    planExpiryDate: { type: Date, default: null },    // When the current plan expires
+    autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
 
     otp: String,
-    otpExpires: Date,
-    joinedDate: { type: Date, default: Date.now }
+    otpExpires: Date,
+    joinedDate: { type: Date, default: Date.now }
 });
 
 // --- 3. ADMIN SCHEMA ---
@@ -224,25 +226,39 @@ const serviceSchema = new mongoose.Schema({
 
 // --- 10. VACANCY SCHEMA (For Admin Controlled Jobs) ---
 const vacancySchema = new mongoose.Schema({
-    role: { type: String, required: true },       // e.g. Video Editor
-    type: { type: String, required: true },       // e.g. Long Term / Short Term
-    time: { type: String },                       // e.g. Full Time (10-7)
-    salary: { type: String },                     // e.g. ₹20k - ₹35k
-    urgent: { type: Boolean, default: false },
-    description: { type: String },                // Optional extra details
-    isActive: { type: Boolean, default: true },   // Admin can hide/show
+    role: { type: String, required: true },       // e.g. Video Editor
+    type: { type: String, required: true },       // e.g. Long Term / Short Term
+    time: { type: String },                       // e.g. Full Time (10-7)
+    salary: { type: String },                     // e.g. ₹20k - ₹35k
+    urgent: { type: Boolean, default: false },
+    description: { type: String },                // Optional extra details
+    isActive: { type: Boolean, default: true },   // Admin can hide/show
+    createdAt: { type: Date, default: Date.now }
+});
+
+// --- 11. SUBSCRIPTION PLAN SCHEMA (For Studio Cloud Storage) ---
+const subscriptionPlanSchema = new mongoose.Schema({
+    planName: { type: String, required: true }, // e.g., 'VIP', 'PREMIUM', 'LIFETIME'
+    storageLimitGB: { type: Number, required: true }, // e.g., 50
+    monthlyPrice: { type: Number, required: true }, 
+    yearlyPrice: { type: Number }, // Optional discount for yearly
+    discountPercentage: { type: Number, default: 0 }, 
+    offerText: { type: String, default: '' }, // e.g., "Save 30% Today!"
+    features: [{ type: String }], // Array of strings, e.g., ["50 GB Cloud Storage", "24/7 Priority Support"]
+    isActive: { type: Boolean, default: true }, // Admin can disable old plans
     createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = {
-    User: mongoose.model('User', userSchema),
-    Studio: mongoose.model('Studio', studioSchema),
-    Admin: mongoose.model('Admin', adminSchema),
-    Content: mongoose.model('Content', contentSchema),
-    Offer: mongoose.model('Offer', offerSchema),
-    Booking: mongoose.model('Booking', bookingSchema),
-    CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
-    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
-    Service: mongoose.model('Service', serviceSchema),
-    Vacancy: mongoose.model('Vacancy', vacancySchema) 
+    User: mongoose.model('User', userSchema),
+    Studio: mongoose.model('Studio', studioSchema),
+    Admin: mongoose.model('Admin', adminSchema),
+    Content: mongoose.model('Content', contentSchema),
+    Offer: mongoose.model('Offer', offerSchema),
+    Booking: mongoose.model('Booking', bookingSchema),
+    CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
+    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
+    Service: mongoose.model('Service', serviceSchema),
+    Vacancy: mongoose.model('Vacancy', vacancySchema),
+    SubscriptionPlan: mongoose.model('SubscriptionPlan', subscriptionPlanSchema) 
 };
