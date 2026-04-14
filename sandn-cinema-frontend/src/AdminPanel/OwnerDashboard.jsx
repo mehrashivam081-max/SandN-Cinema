@@ -125,6 +125,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [previewAd, setPreviewAd] = useState(null); // ✅ NEW: Preview State
     const [editingAdId, setEditingAdId] = useState(null); // ✅ NEW: Edit State
 
+    // 🏢 NEW: STUDIO PLAN MANAGEMENT STATES
+    const [editingStudioPlan, setEditingStudioPlan] = useState(null);
+    const [newStudioPlan, setNewStudioPlan] = useState('FREE');
+    const [customLimitGB, setCustomLimitGB] = useState('');
+
     // ☁️ NEW: CLOUD STORAGE MANAGER STATES
     const [storageAccounts, setStorageAccounts] = useState([]);
     const [storageForm, setStorageForm] = useState({
@@ -356,6 +361,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
             const res = await axios.post(`${API_BASE}/delete-storage`, { accountId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if (res.data.success) fetchStorageConfigs(); else alert(res.data.message);
         } catch (e) { alert("Failed to remove storage config."); }
+    };
+
+    // 🏢 UPDATE STUDIO STORAGE PLAN API
+    const handleUpdateStudioPlan = async (e) => {
+        e.preventDefault();
+        if (!window.confirm(`Update storage plan for ${editingStudioPlan.name || editingStudioPlan.studioName}?`)) return;
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/update-studio-storage-plan`, {
+                targetMobile: editingStudioPlan.mobile,
+                newPlan: newStudioPlan,
+                customLimitGB: customLimitGB
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            
+            if (res.data.success) {
+                alert(`✅ ${res.data.message}`);
+                setEditingStudioPlan(null);
+                fetchAccounts(); // Nayi limit load karne ke liye
+            } else {
+                alert(`❌ Error: ${res.data.message}`);
+            }
+        } catch (error) { alert("Server Error updating plan."); }
+        setLoading(false);
     };
 
     // ✅ POST NEW JOB
@@ -1278,10 +1306,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             <span>{openDropdown === 'STUDIO' ? '▲' : '▼'}</span>
                         </div>
                         {openDropdown === 'STUDIO' && (
-                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                                <li style={{color:'#7f8c8d', fontSize:'12px', listStyle:'none', padding:'10px'}}>Future Studio Features</li>
-                            </div>
-                        )}
+                            <div className="menu-dropdown-content" style={{ paddingLeft: '15px', display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+                                <li className={activeTab === 'STUDIO_PLANS' ? 'active' : ''} onClick={() => { setActiveTab('STUDIO_PLANS'); setOpenDropdown(null); }} style={{color: '#2ecc71', fontWeight: 'bold'}}>🗄️ Studio Storage Plans</li>
+                                <li style={{color:'#7f8c8d', fontSize:'12px', listStyle:'none', padding:'10px'}}>More Studio Features Soon...</li>
+                            </div>
+                        )}
                     </div>
 
                     {/* ⚙️ MYSELF (ADMIN) */}
@@ -2370,6 +2399,100 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                                 <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#2ecc71', padding: '15px', fontSize: '15px' }}>
                                     {loading ? 'Linking...' : '💾 Link Storage Account'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )} 
+                {/* 🔴 TAB: STUDIO STORAGE PLANS */}
+                {activeTab === 'STUDIO_PLANS' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🗄️ Studio Storage Management</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Upgrade or override the cloud storage capacity for registered studios.</p>
+
+                        <div className="data-table-container" style={{ marginTop: '20px' }}>
+                            <table className="admin-table">
+                                <thead>
+                                    <tr><th>Studio Name</th><th>Mobile</th><th>Current Plan</th><th>Storage Used</th><th>Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    {accounts.filter(a => a.role === 'STUDIO').map((studio, index) => {
+                                        const allocated = studio.allocatedStorageGB || 5;
+                                        const used = studio.usedStorageGB || 0;
+                                        const percent = Math.min((used / allocated) * 100, 100).toFixed(1);
+                                        const isFull = percent > 95;
+                                        
+                                        return (
+                                            <tr key={index}>
+                                                <td><strong style={{color: '#2c3e50'}}>{studio.studioName || studio.ownerName}</strong></td>
+                                                <td>{studio.mobile}</td>
+                                                <td>
+                                                    <span style={{ fontSize: '11px', background: studio.storagePlan === 'PREMIUM' ? '#8e44ad' : (studio.storagePlan === 'VIP' ? '#e67e22' : '#2980b9'), color: '#fff', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                        {studio.storagePlan || 'FREE'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '120px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: isFull ? '#e74c3c' : '#7f8c8d', fontWeight: 'bold' }}>
+                                                            <span>{used.toFixed(2)}GB</span>
+                                                            <span>{allocated}GB</span>
+                                                        </div>
+                                                        <div style={{ width: '100%', height: '5px', background: '#ecf0f1', borderRadius: '5px', overflow: 'hidden' }}>
+                                                            <div style={{ width: `${percent}%`, height: '100%', background: isFull ? '#e74c3c' : '#2ecc71' }}></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <button onClick={() => { 
+                                                        setEditingStudioPlan(studio); 
+                                                        setNewStudioPlan(studio.storagePlan || 'FREE'); 
+                                                        setCustomLimitGB(studio.allocatedStorageGB || 5); 
+                                                    }} style={{background: '#34495e', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold'}}>
+                                                        ⚙️ Edit Plan
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {accounts.filter(a => a.role === 'STUDIO').length === 0 && (
+                                        <tr><td colSpan="5" style={{textAlign: 'center', padding: '20px', color: '#888'}}>No Studios Registered Yet.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🏢 STUDIO PLAN OVERRIDE MODAL */}
+                {editingStudioPlan && (
+                    <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
+                        <div style={{background:'#1a1a2e', padding:'25px', borderRadius:'15px', width:'90%', maxWidth:'400px', border: '1px solid #2ecc71', boxShadow:'0 20px 50px rgba(0,0,0,0.5)'}}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                <h2 style={{color:'#2ecc71', margin: 0}}>Upgrade Storage</h2>
+                                <button onClick={() => setEditingStudioPlan(null)} style={{background:'transparent', color:'#fff', border:'none', fontSize:'20px', cursor:'pointer'}}>✖</button>
+                            </div>
+                            <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Adjust storage limit for: <strong style={{ color: '#fff' }}>{editingStudioPlan.name || editingStudioPlan.studioName}</strong></p>
+
+                            <form onSubmit={handleUpdateStudioPlan} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div>
+                                    <label style={{color: '#aaa', fontSize: '12px'}}>Select Subscription Plan</label>
+                                    <select value={newStudioPlan} onChange={e => setNewStudioPlan(e.target.value)} className="custom-admin-input" style={{ marginTop: '5px' }}>
+                                        <option value="FREE">FREE Plan (5 GB)</option>
+                                        <option value="VIP">VIP Plan (50 GB)</option>
+                                        <option value="PREMIUM">PREMIUM Plan (200 GB)</option>
+                                        <option value="CUSTOM">CUSTOM (Set Manual Limit)</option>
+                                    </select>
+                                </div>
+
+                                {newStudioPlan === 'CUSTOM' && (
+                                    <div>
+                                        <label style={{color: '#f39c12', fontSize: '12px', fontWeight:'bold'}}>Custom Limit (in GB)</label>
+                                        <input type="number" required placeholder="e.g. 35" value={customLimitGB} onChange={e => setCustomLimitGB(e.target.value)} className="custom-admin-input" style={{ marginTop: '5px', border: '1px solid #f39c12' }} />
+                                    </div>
+                                )}
+
+                                <button type="submit" disabled={loading} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
+                                    {loading ? 'Saving...' : '💾 Update & Notify Studio'}
                                 </button>
                             </form>
                         </div>

@@ -718,11 +718,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 )}
                                 <li className={activeTab === 'LONG_UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('LONG_UPLOAD'); setOpenDropdown(null); }} style={{color: '#3498db', fontWeight: 'bold'}}>🎬 Cinematic Upload (Pro)</li>
                                 <li className={activeTab === 'REVENUE' ? 'active' : ''} onClick={() => { setActiveTab('REVENUE'); setOpenDropdown(null); }}>💰 Revenue</li>
-                                <li className={activeTab === 'PROFILE' ? 'active' : ''} onClick={() => { setActiveTab('PROFILE'); setOpenDropdown(null); }}>⚙️ Studio Profile</li>
-                            </div>
-                        )}
-                    </div>
-                </ul>
+                                <li className={activeTab === 'MY_STORAGE' ? 'active' : ''} onClick={() => { setActiveTab('MY_STORAGE'); setOpenDropdown(null); }} style={{color: '#2ecc71', fontWeight: 'bold'}}>🗄️ My Storage Vault</li>
+                                <li className={activeTab === 'PROFILE' ? 'active' : ''} onClick={() => { setActiveTab('PROFILE'); setOpenDropdown(null); }}>⚙️ Studio Profile</li>
+                            </div>
+                        )}
+                    </div>
+                </ul>
                 <button onClick={onLogout} className="admin-logout-btn">Log Out</button>
             </aside>
 
@@ -1600,13 +1601,102 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     💾 Save Profile Details
                                 </button>
                             </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* 🔴 TAB 6: MY STORAGE VAULT (STUDIO LIMITS) */}
+                {activeTab === 'MY_STORAGE' && (
+                    <div className="view-section">
+                        <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>🗄️ My Storage Vault</h2></div>
+                        <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Track your cloud storage usage and upgrade your plan to upload more cinematic videos and heavy photo albums.</p>
+
+                        <div className="update-creation-container" style={{ maxWidth: '800px', margin: '0 auto', background: '#fff', borderTop: '5px solid #3498db' }}>
+                            {/* Current Storage Progress */}
+                            <div style={{ marginBottom: '30px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50' }}>Current Usage</h3>
+                                        <p style={{ margin: 0, fontSize: '12px', color: '#7f8c8d' }}>
+                                            <strong style={{color: '#2980b9'}}>{(studioProfile.usedStorageGB || 0).toFixed(2)} GB</strong> used out of <strong>{studioProfile.allocatedStorageGB || 5} GB</strong>
+                                        </p>
+                                    </div>
+                                    <div style={{ background: studioProfile.storagePlan === 'PREMIUM' ? '#8e44ad' : (studioProfile.storagePlan === 'VIP' ? '#e67e22' : '#2980b9'), color: '#fff', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>
+                                        Current Plan: {studioProfile.storagePlan || 'FREE'}
+                                    </div>
+                                </div>
+                                
+                                {(() => {
+                                    const used = studioProfile.usedStorageGB || 0;
+                                    const allocated = studioProfile.allocatedStorageGB || 5;
+                                    const percent = Math.min((used / allocated) * 100, 100).toFixed(1);
+                                    const isCritical = percent > 90;
+                                    
+                                    return (
+                                        <>
+                                            <div style={{ width: '100%', height: '15px', background: '#ecf0f1', borderRadius: '10px', overflow: 'hidden', border: '1px solid #ddd' }}>
+                                                <div style={{ width: `${percent}%`, height: '100%', background: isCritical ? '#e74c3c' : 'linear-gradient(90deg, #3498db, #2ecc71)', transition: 'width 0.5s ease' }}></div>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '11px', fontWeight: 'bold' }}>
+                                                <span style={{ color: isCritical ? '#e74c3c' : '#7f8c8d' }}>{percent}% Full</span>
+                                                {isCritical && <span style={{ color: '#e74c3c' }}>⚠️ Almost full! Upgrade required.</span>}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Upgrade Plans Grid */}
+                            <h3 style={{ color: '#2c3e50', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '20px' }}>🚀 Upgrade Your Storage</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
+                                
+                                {/* VIP Plan Card */}
+                                <div style={{ border: '2px solid #e67e22', borderRadius: '12px', padding: '20px', textAlign: 'center', background: '#fdf7f2', position: 'relative' }}>
+                                    {studioProfile.storagePlan === 'VIP' && <div style={{position:'absolute', top:'-10px', left:'50%', transform:'translateX(-50%)', background:'#e67e22', color:'#fff', padding:'3px 10px', borderRadius:'10px', fontSize:'10px', fontWeight:'bold'}}>CURRENT PLAN</div>}
+                                    <h2 style={{ color: '#e67e22', margin: '0 0 5px 0' }}>VIP Plan</h2>
+                                    <h1 style={{ margin: '10px 0', color: '#333' }}>50 GB</h1>
+                                    <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>Perfect for growing studios and regular wedding uploads.</p>
+                                    <p style={{ fontWeight: 'bold', color: '#d35400', fontSize: '18px', marginBottom: '15px' }}>₹999 / month</p>
+                                    <button 
+                                        disabled={studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM'}
+                                        onClick={() => window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20want%20to%20upgrade%20my%20Snevio%20Storage%20to%20VIP%20(50GB).%20My%20Studio%20Mobile:%20${user.mobile}`, '_blank')}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: (studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM') ? '#bdc3c7' : '#e67e22', color: '#fff', fontWeight: 'bold', cursor: (studioProfile.storagePlan === 'VIP' || studioProfile.storagePlan === 'PREMIUM') ? 'not-allowed' : 'pointer' }}
+                                    >
+                                        {studioProfile.storagePlan === 'VIP' ? 'Active' : (studioProfile.storagePlan === 'PREMIUM' ? 'Included' : 'Request Upgrade')}
+                                    </button>
+                                </div>
+
+                                {/* Premium Plan Card */}
+                                <div style={{ border: '2px solid #8e44ad', borderRadius: '12px', padding: '20px', textAlign: 'center', background: '#f5eef8', position: 'relative' }}>
+                                    {studioProfile.storagePlan === 'PREMIUM' && <div style={{position:'absolute', top:'-10px', left:'50%', transform:'translateX(-50%)', background:'#8e44ad', color:'#fff', padding:'3px 10px', borderRadius:'10px', fontSize:'10px', fontWeight:'bold'}}>CURRENT PLAN</div>}
+                                    <h2 style={{ color: '#8e44ad', margin: '0 0 5px 0' }}>Premium Plan</h2>
+                                    <h1 style={{ margin: '10px 0', color: '#333' }}>200 GB</h1>
+                                    <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>For large cinema teams doing full 4K delivery on cloud.</p>
+                                    <p style={{ fontWeight: 'bold', color: '#6c3483', fontSize: '18px', marginBottom: '15px' }}>₹2,999 / month</p>
+                                    <button 
+                                        disabled={studioProfile.storagePlan === 'PREMIUM'}
+                                        onClick={() => window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20want%20to%20upgrade%20my%20Snevio%20Storage%20to%20PREMIUM%20(200GB).%20My%20Studio%20Mobile:%20${user.mobile}`, '_blank')}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: studioProfile.storagePlan === 'PREMIUM' ? '#bdc3c7' : '#8e44ad', color: '#fff', fontWeight: 'bold', cursor: studioProfile.storagePlan === 'PREMIUM' ? 'not-allowed' : 'pointer' }}
+                                    >
+                                        {studioProfile.storagePlan === 'PREMIUM' ? 'Active Plan' : 'Request Upgrade'}
+                                    </button>
+                                </div>
+
+                            </div>
+                            
+                            <div style={{ marginTop: '25px', background: '#fdfefe', padding: '15px', borderRadius: '10px', border: '1px dashed #ccc', textAlign: 'center' }}>
+                                <p style={{ fontSize: '12px', color: '#7f8c8d', margin: 0 }}>
+                                    Need even more space? <a href="#" onClick={(e) => { e.preventDefault(); window.open(`https://wa.me/91${process.env.ADMIN_MOBILE || '9999999999'}?text=Hi,%20I%20need%20a%20CUSTOM%20storage%20plan%20for%20my%20studio.`, '_blank'); }} style={{ color: '#3498db', fontWeight: 'bold', textDecoration: 'none' }}>Contact Support</a> for Custom Plans (500GB+).
+                                </p>
+                            </div>
+
                         </div>
                     </div>
                 )}
 
-            </main>
-        </div>
-    );
+            </main>
+        </div>
+    );
 };
 
 export default StudioDashboard;
