@@ -238,27 +238,84 @@ const vacancySchema = new mongoose.Schema({
 
 // --- 11. SUBSCRIPTION PLAN SCHEMA (For Studio Cloud Storage) ---
 const subscriptionPlanSchema = new mongoose.Schema({
-    planName: { type: String, required: true }, // e.g., 'VIP', 'PREMIUM', 'LIFETIME'
-    storageLimitGB: { type: Number, required: true }, // e.g., 50
+    planName: { type: String, required: true },
+    storageLimitGB: { type: Number, required: true },
     monthlyPrice: { type: Number, required: true }, 
-    yearlyPrice: { type: Number }, // Optional discount for yearly
+    yearlyPrice: { type: Number },
     discountPercentage: { type: Number, default: 0 }, 
-    offerText: { type: String, default: '' }, // e.g., "Save 30% Today!"
-    features: [{ type: String }], // Array of strings, e.g., ["50 GB Cloud Storage", "24/7 Priority Support"]
-    isActive: { type: Boolean, default: true }, // Admin can disable old plans
+    offerText: { type: String, default: '' },
+    features: [{ type: String }],
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
+// --- 12. SMART ALBUM SELECTION SCHEMA (NEW) ---
+const albumSelectionSchema = new mongoose.Schema({
+    studioMobile: { type: String, required: true },
+    studioName: { type: String, default: '' },
+    clientMobile: { type: String, required: true },
+    clientEmail: { type: String, default: '' },
+    folderName: { type: String, required: true },
+    
+    // ⚙️ Limits & Pricing (For Extra Earning)
+    sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain
+    imagesPerSheet: { type: Number, default: 0 },   // Ek sheet me kitni photos aayengi
+    costPerExtraSheet: { type: Number, default: 0 },// Extra sheet charge
+    
+    // 🔄 Workflow & Phase State
+    totalPhases: { type: Number, default: 3 },      // 1, 2, or 3
+    currentPhase: { type: Number, default: 1 },
+    status: { type: String, enum: ['Pending', 'Phase1', 'Phase2', 'Reviewing', 'PaymentPending', 'Completed'], default: 'Pending' },
+    
+    // 📸 Data Arrays (Stateful Image Tracking)
+    images: [{
+        url: String,
+        status: { type: String, enum: ['active', 'selected', 'rejected'], default: 'active' },
+        selectedBy: [{ type: String }], // Array of mobile numbers (Jo family member select karega uska number)
+        deletedAt: { type: Date, default: null } // 7-Day Soft Delete / Recovery ke liye
+    }],
+    
+    // 👨‍👩‍👧‍👦 Family Collaboration System
+    sharedWith: [{
+        mobile: String,
+        name: String,
+        expiryDate: Date,
+        hasSubmitted: { type: Boolean, default: false },
+        notifiedAt: Date // Track 1-time notification
+    }],
+    
+    // 💰 Payment & Output (PDF)
+    extraAmountToPay: { type: Number, default: 0 },
+    isPaid: { type: Boolean, default: true }, // False if limits exceeded
+    pdfUrl: { type: String, default: '' },    // Final Generated PDF Link
+    
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    completedAt: Date
+});
+
+// --- 13. USER SUBSCRIPTION SCHEMA (For Extra Family Access) ---
+const userSubscriptionSchema = new mongoose.Schema({
+    planName: { type: String, required: true }, // e.g. "Family Plus"
+    maxFamilyMembers: { type: Number, required: true }, // e.g. 10
+    price: { type: Number, required: true },
+    validityDays: { type: Number, default: 30 },
+    isActive: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = {
-    User: mongoose.model('User', userSchema),
-    Studio: mongoose.model('Studio', studioSchema),
-    Admin: mongoose.model('Admin', adminSchema),
-    Content: mongoose.model('Content', contentSchema),
-    Offer: mongoose.model('Offer', offerSchema),
-    Booking: mongoose.model('Booking', bookingSchema),
-    CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
-    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
-    Service: mongoose.model('Service', serviceSchema),
-    Vacancy: mongoose.model('Vacancy', vacancySchema),
-    SubscriptionPlan: mongoose.model('SubscriptionPlan', subscriptionPlanSchema) 
+    User: mongoose.model('User', userSchema),
+    Studio: mongoose.model('Studio', studioSchema),
+    Admin: mongoose.model('Admin', adminSchema),
+    Content: mongoose.model('Content', contentSchema),
+    Offer: mongoose.model('Offer', offerSchema),
+    Booking: mongoose.model('Booking', bookingSchema),
+    CollabRequest: mongoose.model('CollabRequest', collabRequestSchema),
+    PlatformSetting: mongoose.model('PlatformSetting', platformSettingSchema),
+    Service: mongoose.model('Service', serviceSchema),
+    Vacancy: mongoose.model('Vacancy', vacancySchema),
+    SubscriptionPlan: mongoose.model('SubscriptionPlan', subscriptionPlanSchema),
+    AlbumSelection: mongoose.model('AlbumSelection', albumSelectionSchema),
+    UserSubscription: mongoose.model('UserSubscription', userSubscriptionSchema)
 };

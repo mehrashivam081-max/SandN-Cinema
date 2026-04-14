@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'sandn_cinema_super_secret_key_2024';
 
 // ✅ Added New Models Here
-const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan } = require('./models');
+const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan, AlbumSelection, UserSubscription } = require('./models');
 
 // ✅ NEW: Service Model for App Services
 const serviceSchema = new mongoose.Schema({
@@ -2580,6 +2580,87 @@ app.post('/api/auth/update-studio-storage-plan', authenticateToken, async (req, 
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Failed to update Studio Plan." });
+    }
+});
+
+// ==========================================
+// 📸 31. SMART ALBUM SELECTION ENGINE
+// ==========================================
+
+// 1. Studio Creates a New Selection Event (Triggers Email)
+app.post('/api/auth/create-album-selection', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
+
+        const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider } = req.body;
+        
+        // Find Studio Name for Email
+        const studioAcc = await Studio.findOne({ mobile: req.user.mobile });
+        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Studio';
+
+        // Format Image Objects
+        const imageObjects = fileUrls.map(url => ({
+            url: url,
+            status: 'active',
+            selectedBy: [],
+            deletedAt: null
+        }));
+
+        const newSelection = await AlbumSelection.create({
+            studioMobile: req.user.mobile,
+            studioName: sName,
+            clientMobile: getCleanMobile(clientMobile),
+            clientEmail: clientEmail,
+            folderName: folderName,
+            sheetLimit: Number(sheetLimit) || 0,
+            imagesPerSheet: Number(imagesPerSheet) || 0,
+            costPerExtraSheet: Number(costPerExtraSheet) || 0,
+            totalPhases: Number(totalPhases) || 3,
+            cloudProvider: cloudProvider || 'CLOUDINARY',
+            images: imageObjects,
+            allImages: fileUrls
+        });
+
+        // 📩 Fire Email to Client (The Magic Link)
+        if (clientEmail && !clientEmail.includes('dummy_')) {
+            const magicLink = `${WEBSITE_URL}client-dashboard`; // Yahan user login karke seedha select karega
+            
+            const htmlContent = `
+                <div style="font-family: Arial, sans-serif; padding: 25px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
+                    <h2 style="color: #2ecc71; text-align: center;">📸 Your Photos are Ready for Selection!</h2>
+                    <p style="color: #444; font-size: 16px;">Hello,</p>
+                    <p style="color: #444; font-size: 15px;"><strong>${sName}</strong> has just uploaded your event photos for the album selection process.</p>
+                    
+                    <div style="background: #f9f9f9; border-left: 4px solid #f1c40f; padding: 15px; margin: 20px 0;">
+                        <h4 style={{margin: '0 0 5px 0'}}>Event: ${folderName}</h4>
+                        <p style={{margin: 0, fontSize: '13px', color: '#666'}}>You can select images in ${totalPhases} phases and collaborate with your family members.</p>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="${magicLink}" style="background-color: #3498db; color: #ffffff; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Log In & Start Selecting</a>
+                    </div>
+                    <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">Powered by Snevio Cloud</p>
+                </div>
+            `;
+            sendBrevoEmail(clientEmail, `Album Selection Request: ${folderName}`, htmlContent).catch(e => console.log("Selection email failed"));
+        }
+
+        res.json({ success: true, message: "Selection Event Created! Client Notified.", data: newSelection });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server error creating selection." });
+    }
+});
+
+// 2. Fetch Selections (For Studio Dashboard)
+app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
+        
+        const selections = await AlbumSelection.find({ studioMobile: req.user.mobile }).sort({ createdAt: -1 });
+        res.json({ success: true, data: selections });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch selection projects." });
     }
 });
 
