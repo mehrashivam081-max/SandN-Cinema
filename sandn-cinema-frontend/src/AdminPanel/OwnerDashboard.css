@@ -509,3 +509,84 @@
     .menu-dropdown-content li:active {
         background: rgba(255, 255, 255, 0.1) !important;
     }
+
+    /* =========================================
+   🎨 SNEVIO UI FIXES: TEXT & BG MIXING
+   ========================================= */
+
+/* 1. Inputs ko hamesha White BG aur Dark Text do */
+.custom-admin-input {
+    background-color: #ffffff !important;
+    color: #2c3e50 !important;
+    border: 1px solid #bdc3c7 !important;
+    padding: 10px;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    font-weight: 500;
+}
+
+/* Placeholder ka color thoda light rakho */
+.custom-admin-input::placeholder {
+    color: #95a5a6 !important;
+}
+
+/* 2. Dark Modals ke andar Text hamesha White/Light rakho */
+.popup-overlay-fixed {
+    color: #ffffff !important;
+}
+
+.popup-overlay-fixed h2, 
+.popup-overlay-fixed h3 {
+    color: #f1c40f !important; /* Main headings in modals */
+}
+
+.popup-overlay-fixed label, 
+.popup-overlay-fixed p {
+    color: #ecf0f1 !important; 
+}
+
+/* Lekin Modal ke andar ke inputs ka text dark hi rahega */
+.popup-overlay-fixed input, 
+.popup-overlay-fixed select, 
+.popup-overlay-fixed textarea {
+    color: #2c3e50 !important; 
+}
+
+/* 3. Dashboard ke Light Containers ko proper contrast do */
+.update-creation-container {
+    background-color: #ffffff;
+    color: #333333;
+}
+
+.update-creation-container h2, 
+.update-creation-container h3, 
+.update-creation-container label {
+    color: #2c3e50 !important;
+}
+
+.update-creation-container p {
+    color: #555555 !important;
+}
+
+/* 4. Tables ko Clean aur Readable banao */
+.admin-table {
+    background-color: #ffffff;
+    color: #333333;
+    width: 100%;
+}
+
+.admin-table th {
+    background-color: #f8f9fa;
+    color: #2c3e50 !important;
+    font-weight: bold;
+}
+
+.admin-table td {
+    color: #444444 !important;
+}
+
+/* Default Buttons fix */
+button {
+    color: #ffffff; 
+}

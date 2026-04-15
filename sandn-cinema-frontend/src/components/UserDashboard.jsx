@@ -54,8 +54,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
     const [adLoading, setAdLoading] = useState(false);
 
-    // ✅ WALLET MODAL & GLOBAL CHARGES STATES
-    const [showWalletModal, setShowWalletModal] = useState(false);
+    // ✅ NEW: SMART ALBUM SELECTION STATES
+    const [mySelections, setMySelections] = useState([]);
+    const [activeSelectionProject, setActiveSelectionProject] = useState(null);
+    const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
+    const [showSelectionReview, setShowSelectionReview] = useState(false);
+    const [showFamilyShareModal, setShowFamilyShareModal] = useState(false);
+    const [familyShareForm, setFamilyShareForm] = useState({ mobile: '', hours: '24' });
+
+    // ✅ WALLET MODAL & GLOBAL CHARGES STATES
+    const [showWalletModal, setShowWalletModal] = useState(false);
     const [walletTab, setWalletTab] = useState('BUY'); // 'BUY' or 'FREE'
     const [coinPackages, setCoinPackages] = useState([]);
     const [miniEvents, setMiniEvents] = useState([]);
@@ -114,9 +122,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // ✅ SMART BACK BUTTON FOR USER DASHBOARD
     useBackButton(() => {
-        if (viewProposalBooking) {
-            setViewProposalBooking(null);
-        } else if (showEmergencyModal) {
+        if (showFamilyShareModal) {
+            setShowFamilyShareModal(false);
+        } else if (showSelectionReview) {
+            setShowSelectionReview(false);
+        } else if (activeSelectionProject) {
+            setActiveSelectionProject(null);
+            setSelectionDraft([]);
+        } else if (viewProposalBooking) {
+            setViewProposalBooking(null);
+        } else if (showEmergencyModal) {
             setShowEmergencyModal(false);
         } else if (showCartModal) {
             setShowCartModal(false);
@@ -212,10 +227,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }
 
                 // 🔥 Auto-refresh Bookings and Shared Media silently
-                fetchServicesAndBookings(activeUser.mobile);
-                fetchSharedMedia(activeUser.mobile);
+                fetchServicesAndBookings(activeUser.mobile);
+                fetchSharedMedia(activeUser.mobile);
+                fetchUserSelections(activeUser.mobile);
 
-            } catch (error) {
+            } catch (error) {
                 console.error("Fetch error:", error);
                 if(isInitialLoad) setFolders([DEFAULT_FOLDER]); 
             } finally {
@@ -261,10 +277,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 setSharedByMe(res.data.data.sharedByMe || []);
             }
         } catch (e) { console.log(e); }
-        finally { setFetchingShared(false); }
+        finally { setFetchingShared(false); }
+    };
+
+    // ✅ FETCH SMART ALBUM SELECTIONS
+    const fetchUserSelections = async (userMobile) => {
+        try {
+            const token = getValidToken();
+            const res = await axios.post(`${API_BASE}/get-user-selections`, { mobile: userMobile }, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.data.success) setMySelections(res.data.data);
+        } catch (e) { console.error("Failed to load selections", e); }
     };
 
-    // --- FETCH SERVICES AND BOOKINGS ---
+    // --- FETCH SERVICES AND BOOKINGS ---
     const fetchServicesAndBookings = async (userMobile) => {
         setServicesLoading(true);
         try {
@@ -766,16 +791,238 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
 
     // --- RENDER TABS ---
-    const renderContent = () => {
-        if (currentTab === 'SERVICES') return renderServicesTab();
-        if (currentTab === 'BOOKINGS') return renderBookingsTab();
-        if (currentTab === 'HISTORY') return renderHistoryTab();
-        if (currentTab === 'PROFILE') return renderProfileTab();
-        if (currentTab === 'SHARED') return renderSharedTab(); // 👈 Nayi Tab 
-        return renderHomeTab();
+    const renderContent = () => {
+        if (currentTab === 'SERVICES') return renderServicesTab();
+        if (currentTab === 'BOOKINGS') return renderBookingsTab();
+        if (currentTab === 'HISTORY') return renderHistoryTab();
+        if (currentTab === 'PROFILE') return renderProfileTab();
+        if (currentTab === 'SHARED') return renderSharedTab();
+        if (currentTab === 'SELECTIONS') return renderSelectionsTab(); // 👈 SMART SELECTION
+        return renderHomeTab();
+    };
+
+    // ==============================================================
+    // ✨ SMART ALBUM SELECTION ENGINE (UI)
+    // ==============================================================
+    const handleSelectionToggle = (url) => {
+        setSelectionDraft(prev => prev.includes(url) ? prev.filter(item => item !== url) : [...prev, url]);
     };
 
-    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
+    const submitPhaseSelection = async (finalPhase = false) => {
+        if (!activeSelectionProject) return;
+        
+        let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
+        if (finalPhase) msg = `⚠️ WARNING: This is the Final Preview!\n\nUnselected images will be permanently removed from your album (kept in 7-day backup).\nAre you ready to submit your final selection to the studio?`;
+        
+        if (!window.confirm(msg)) return;
+
+        setLoading(true);
+        try {
+            // NOTE: We will write this API in the next step!
+            const res = await axios.post(`${API_BASE}/update-album-selection`, {
+                projectId: activeSelectionProject._id,
+                selectedImages: selectionDraft,
+                isFinal: finalPhase
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+
+            if (res.data.success) {
+                alert(`✅ ${res.data.message}`);
+                setShowSelectionReview(false);
+                setActiveSelectionProject(null);
+                fetchUserSelections(syncUser.mobile);
+            } else {
+                alert(`❌ ${res.data.message}`);
+            }
+        } catch(e) {
+            alert("Backend API coming in next step!"); // Placeholder until we build backend
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderSelectionsTab = () => {
+        // SCENARIO 1: Viewing the Grid for a specific project
+        if (activeSelectionProject && !showSelectionReview) {
+            const activeImages = activeSelectionProject.images.filter(img => img.status === 'active');
+            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div className="folder-header-nav" style={{background: '#8e44ad'}}>
+                        <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                        <h3 style={{color: '#fff'}}>Phase {activeSelectionProject.currentPhase} Selection</h3>
+                    </div>
+
+                    <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                        <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                            <span>Select the best shots. Swipe or Tap.</span>
+                            <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                        </div>
+                    </div>
+
+                    <div className="ud-grid-vip mt-20" style={{ padding: '0 15px' }}>
+                        {activeImages.map((img, idx) => {
+                            const isSelected = selectionDraft.includes(img.url);
+                            return (
+                                <div key={idx} onClick={() => handleSelectionToggle(img.url)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}>
+                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
+                                    
+                                    {/* Selection Circle */}
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* STICKY BOTTOM BAR FOR ACTIONS */}
+                    <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
+                        <div>
+                            <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
+                            {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
+                        </div>
+                        <button 
+                            onClick={() => setShowSelectionReview(true)}
+                            style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}
+                        >
+                            Preview Selection ➡️
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // SCENARIO 2: Review & Finalize Form
+        if (showSelectionReview && activeSelectionProject) {
+            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            const extraImages = Math.max(0, selectionDraft.length - totalAllowed);
+            const extraSheets = activeSelectionProject.imagesPerSheet > 0 ? Math.ceil(extraImages / activeSelectionProject.imagesPerSheet) : 0;
+            const extraCost = extraSheets * (activeSelectionProject.costPerExtraSheet || 0);
+            const isFinalPhase = activeSelectionProject.currentPhase >= activeSelectionProject.totalPhases;
+
+            return (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
+                    <div style={{ background: '#1a1a2e', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
+                        <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>Review & Finalize</h2>
+                        <button onClick={() => setShowSelectionReview(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px' }}>✖</button>
+                    </div>
+
+                    <div style={{ padding: '20px' }}>
+                        <div style={{ background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
+                            <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Summary</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
+                                <span style={{color: '#7f8c8d'}}>Total Selected</span>
+                                <strong style={{color: '#3498db', fontSize: '16px'}}>{selectionDraft.length} Photos</strong>
+                            </div>
+                            
+                            {totalAllowed > 0 && (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
+                                        <span style={{color: '#7f8c8d'}}>Free Allowance</span>
+                                        <strong style={{color: '#2ecc71'}}>{totalAllowed} Photos</strong>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
+                                        <span style={{color: '#7f8c8d'}}>Extra Sheets Required</span>
+                                        <strong style={{color: extraSheets > 0 ? '#e74c3c' : '#2ecc71'}}>{extraSheets} Sheets</strong>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', background: '#fdf2e9', padding: '15px', borderRadius: '10px' }}>
+                                        <span style={{color: '#d35400', fontWeight: 'bold'}}>Estimated Extra Charge</span>
+                                        <strong style={{color: '#d35400', fontSize: '18px'}}>₹{extraCost}</strong>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {isFinalPhase && (
+                            <div style={{ background: '#fdedec', border: '1px dashed #e74c3c', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+                                <h4 style={{ color: '#c0392b', margin: '0 0 5px 0' }}>⚠️ Final Submission Warning</h4>
+                                <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be removed from your album. A PDF receipt will be generated. You must pay the extra charge to the studio.</p>
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={() => submitPhaseSelection(isFinalPhase)}
+                            disabled={loading || selectionDraft.length === 0}
+                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
+                        >
+                            {loading ? 'Processing...' : (isFinalPhase ? '🚀 Finalize & Send to Studio' : '➡️ Lock Selection & Move Next')}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // SCENARIO 3: Main List of Selection Projects
+        return (
+            <div className="folders-view" style={{ paddingBottom: '80px' }}>
+                <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #9b59b6)' }}>
+                    <h1>✨ Smart Selections</h1>
+                    <p>Filter your best moments easily.</p>
+                </div>
+
+                <div style={{ padding: '20px' }}>
+                    {mySelections.length > 0 ? mySelections.map((sel, idx) => {
+                        const totalImgs = sel.images ? sel.images.length : 0;
+                        return (
+                            <div key={idx} style={{ background: '#fff', borderRadius: '15px', padding: '20px', marginBottom: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', borderLeft: sel.status === 'Completed' ? '5px solid #2ecc71' : '5px solid #f1c40f' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50', fontSize: '18px' }}>{sel.folderName}</h3>
+                                        <p style={{ margin: 0, fontSize: '12px', color: '#7f8c8d' }}>From: {sel.studioName}</p>
+                                    </div>
+                                    <span style={{ background: sel.status === 'Completed' ? '#e8f8f5' : '#fef9e7', color: sel.status === 'Completed' ? '#27ae60' : '#d4ac0d', padding: '4px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>
+                                        {sel.status}
+                                    </span>
+                                </div>
+                                
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8f9fa', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+                                    <div>
+                                        <span style={{ fontSize: '11px', color: '#7f8c8d', display: 'block' }}>Total Images</span>
+                                        <strong style={{ color: '#333' }}>{totalImgs}</strong>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <span style={{ fontSize: '11px', color: '#7f8c8d', display: 'block' }}>Progress</span>
+                                        <strong style={{ color: '#8e44ad' }}>Phase {sel.currentPhase} / {sel.totalPhases}</strong>
+                                    </div>
+                                </div>
+
+                                {sel.status !== 'Completed' ? (
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <button 
+                                            onClick={() => { setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }} 
+                                            style={{ flex: 1, background: '#8e44ad', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                        >
+                                            Start Selecting
+                                        </button>
+                                        <button 
+                                            onClick={() => alert("Family Collaboration Modal Opening Soon! (Coin Deduct Logic)")}
+                                            style={{ background: '#f39c12', color: '#fff', border: 'none', padding: '12px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                                        >
+                                            🤝 Invite Family
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => alert("Downloading PDF... (Next Step)")} style={{ width: '100%', background: '#2ecc71', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                        📄 Download Receipt PDF
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    }) : (
+                        <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888' }}>
+                            <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+                            <h3>No Pending Selections</h3>
+                            <p style={{ fontSize: '13px' }}>Studios will send you albums here to select photos.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
     const renderSharedTab = () => {
         const displayedList = sharedTabFilter === 'RECEIVED' ? sharedWithMe : sharedByMe;
 
@@ -1969,12 +2216,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             </main>
 
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
-                    🏠<span>Home</span>
+                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
+                    🏠<span>Home</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('SELECTIONS'); fetchUserSelections(syncUser.mobile); }}>
+                    ✨<span>Select</span>
                 </button>
-                <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
-                    🔐<span>Shared</span>
-                </button>
+                <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
+                    🔐<span>Shared</span>
+                </button>
                 <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
                     📸<span>Services</span>
                 </button>
