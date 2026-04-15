@@ -343,17 +343,57 @@ const StudioDashboard = ({ user, onLogout }) => {
         setFileStats(prev => ({ ...prev, feedPhotos, feedVideos }));
     };
 
-    const handleMobileChange = (e) => {
-        const val = e.target.value;
-        setClientMobile(val);
-        setShowMobileSuggestions(true);
-
-        const exactMatch = clients.find(c => c.mobile === val);
-        if (exactMatch) {
-            setClientName(exactMatch.name || exactMatch.studioName || '');
-            setClientEmail(exactMatch.email || ''); 
-        }
+    // 🛡️ Data Masking Helpers for Security
+    const maskName = (name) => {
+        if (!name) return '';
+        if (name.length <= 2) return name;
+        return name.charAt(0) + '*'.repeat(name.length - 2) + name.charAt(name.length - 1);
     };
+
+    const maskEmail = (email) => {
+        if (!email || !email.includes('@')) return '';
+        const [local, domain] = email.split('@');
+        if (local.length <= 2) return email;
+        return local.charAt(0) + '*'.repeat(local.length - 2) + local.charAt(local.length - 1) + '@' + domain;
+    };
+
+    const handleMobileChange = async (e) => {
+        const val = e.target.value;
+        setClientMobile(val);
+        setShowMobileSuggestions(val.length > 0);
+
+        // 1. Existing Client Check (Full Details)
+        const exactMatch = clients.find(c => c.mobile === val);
+        if (exactMatch) {
+            setClientName(exactMatch.name || exactMatch.studioName || '');
+            setClientEmail(exactMatch.email && !exactMatch.email.includes('dummy_') ? exactMatch.email : ''); 
+        } 
+        // 2. Global Search for New Clients (Masked Details)
+        else if (val.length === 10) {
+            try {
+                const res = await axios.post(`${API_BASE}/search-account`, { mobile: val });
+                if (res.data.success && res.data.data) {
+                    const globalUser = res.data.data;
+                    setClientName(maskName(globalUser.name || globalUser.studioName || 'Client'));
+                    if (globalUser.email && !globalUser.email.includes('dummy_')) {
+                        setClientEmail(maskEmail(globalUser.email));
+                    } else {
+                        setClientEmail('');
+                    }
+                    alert("User found in Snevio Network! Details are masked for privacy.");
+                } else {
+                    setClientName('');
+                    setClientEmail('');
+                }
+            } catch (err) {
+                console.log("Global search failed");
+            }
+        } 
+        else {
+            setClientName('');
+            setClientEmail('');
+        }
+    };
 
 // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
     const handleUpload = async (isFeed = false) => {

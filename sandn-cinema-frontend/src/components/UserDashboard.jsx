@@ -1506,15 +1506,35 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
 
         // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
-        return (
-            <div className="folders-view">
-                <div className="welcome-banner">
-                    <h1>Your Digital Memories</h1>
-                    <p>Select a folder to view your curated albums.</p>
-                </div>
-                
-                {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
-                    <div className="folders-grid">
+        return (
+            <div className="folders-view">
+                <div className="welcome-banner">
+                    <h1>Your Digital Memories</h1>
+                    <p>Select a folder to view your curated albums.</p>
+                </div>
+                
+                {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
+                    <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
+
+                        {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS */}
+                        {mySelections && mySelections.length > 0 && mySelections.map((sel, idx) => (
+                            <div 
+                                key={`sel-${idx}`} 
+                                className="folder-card" 
+                                onClick={() => { setCurrentTab('SELECTIONS'); setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }}
+                                style={{ background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.4)', animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                            >
+                                <div className="folder-icon" style={{background: 'rgba(255,255,255,0.2)'}}>📸</div>
+                                <h4 style={{color: '#fff', fontSize: '13px', textAlign: 'center', marginBottom: '5px'}}>Selection Task</h4>
+                                <p style={{color: '#f1c40f', fontWeight: 'bold', margin: '0 0 5px 0', fontSize: '11px', textAlign: 'center'}}>{sel.folderName}</p>
+                                <p style={{color: '#aaa', margin: 0, fontSize: '10px'}}>{sel.images?.length || 0} Items</p>
+                                <span style={{ display:'block', fontSize:'9px', color:'#fff', marginTop:'8px', background:'#e74c3c', padding:'3px 6px', borderRadius:'10px', width:'max-content' }}>
+                                    Phase {sel.currentPhase} Pending
+                                </span>
+                            </div>
+                        ))}
+                        
+                        {/* 📁 REGULAR FOLDERS */}
                         {folders.map((folder, index) => {
                             const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
                             const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
@@ -1527,7 +1547,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             }
 
                             return (
-                                <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1 }}>
+                                <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1, margin: 0 }}>
                                     <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
                                     <h4>{folder.folderName}</h4>
                                     <p>{totalFiles} Total Items</p>
@@ -2216,28 +2236,25 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             </main>
 
             <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
+                <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
                     🏠<span>Home</span>
                 </button>
-                <button className={`nav-item ${currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('SELECTIONS'); fetchUserSelections(syncUser.mobile); }}>
-                    ✨<span>Select</span>
-                </button>
                 <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
                     🔐<span>Shared</span>
                 </button>
-                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
-                    📸<span>Services</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
-                    📅<span>Bookings</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>
-                    📜<span>History</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
-                    👤<span>{(editName || 'User').split(' ')[0]}</span>
-                </button>
-            </nav>
+                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
+                    📸<span>Services</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
+                    📅<span>Bookings</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>
+                    📜<span>History</span>
+                </button>
+                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
+                    👤<span>{(editName || 'User').split(' ')[0]}</span>
+                </button>
+            </nav>
         </div>
     );
 };
