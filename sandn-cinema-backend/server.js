@@ -2654,17 +2654,105 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
 
 // 2. Fetch Selections (For Studio Dashboard)
 app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
+        
+        const selections = await AlbumSelection.find({ studioMobile: req.user.mobile }).sort({ createdAt: -1 });
+        res.json({ success: true, data: selections });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Failed to fetch selection projects." });
+    }
+});
+
+// 3. Fetch Selections (For User Dashboard)
+app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) => {
     try {
-        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
+        const clientMobile = getCleanMobile(req.body.mobile);
+        if(!clientMobile) return res.json({ success: false, message: "Invalid Mobile" });
         
-        const selections = await AlbumSelection.find({ studioMobile: req.user.mobile }).sort({ createdAt: -1 });
+        const selections = await AlbumSelection.find({ clientMobile: clientMobile }).sort({ createdAt: -1 });
         res.json({ success: true, data: selections });
     } catch (e) {
-        res.status(500).json({ success: false, message: "Failed to fetch selection projects." });
+        res.status(500).json({ success: false, message: "Failed to fetch user selections." });
+    }
+});
+
+// 4. Update Selection Phase & Finalize Engine
+app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, selectedImages, isFinal } = req.body;
+        
+        const selection = await AlbumSelection.findById(projectId);
+        if (!selection) return res.json({ success: false, message: "Project not found" });
+
+        // Update image statuses inside the array
+        selection.images = selection.images.map(img => {
+            if (selectedImages.includes(img.url)) {
+                return { ...img, status: 'selected' };
+            } else {
+                return { ...img, status: isFinal ? 'rejected' : 'active' }; // Drop to rejected only if final
+            }
+        });
+
+        // 💰 If Final Phase, Calculate any extra charges
+        if (isFinal) {
+            const totalAllowed = (selection.sheetLimit || 0) * (selection.imagesPerSheet || 0);
+            const extraImages = Math.max(0, selectedImages.length - totalAllowed);
+            const extraSheets = selection.imagesPerSheet > 0 ? Math.ceil(extraImages / selection.imagesPerSheet) : 0;
+            const extraAmountToPay = extraSheets * (selection.costPerExtraSheet || 0);
+
+            selection.extraAmountToPay = extraAmountToPay;
+            selection.isPaid = extraAmountToPay === 0; // Automatically paid if 0 extra charge
+            
+            selection.status = 'Completed'; // Mark task done for User UI
+            selection.completedAt = new Date();
+
+            // Set 7-day deletion expiry for rejected items
+            const sevenDaysFromNow = new Date();
+            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+            
+            selection.images.forEach(img => {
+                if (img.status === 'rejected') {
+                    img.deletedAt = sevenDaysFromNow;
+                }
+            });
+
+            // Trigger Studio notification email about completion
+            const studioAcc = await Studio.findOne({ mobile: selection.studioMobile });
+            if (studioAcc && studioAcc.email) {
+                const htmlContent = `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px;">
+                        <h2 style="color: #2b5876;">Selection Completed! 🎉</h2>
+                        <p style="color: #444;">Your client has finalized their photo selections for <strong>${selection.folderName}</strong>.</p>
+                        <p style="color: #444;">Total Selected: <strong>${selectedImages.length}</strong> photos.</p>
+                        ${extraAmountToPay > 0 ? `<p style="color: #e74c3c;">Note: The client selected extra sheets resulting in an additional charge of <strong>₹${extraAmountToPay}</strong>.</p>` : ''}
+                        <div style="margin-top: 25px;">
+                            <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details in Dashboard</a>
+                        </div>
+                    </div>`;
+                sendBrevoEmail(studioAcc.email, "Client Selection Finalized", htmlContent).catch(() => {});
+            }
+
+        } else {
+            // Move to next phase
+            selection.currentPhase += 1;
+            selection.status = `Phase${selection.currentPhase}`;
+        }
+
+        await selection.save();
+
+        res.json({ 
+            success: true, 
+            message: isFinal ? "Selection Finalized successfully! Notification sent to studio." : `Selection locked. Moving to Phase ${selection.currentPhase}.` 
+        });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server error during selection update." });
     }
 });
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
