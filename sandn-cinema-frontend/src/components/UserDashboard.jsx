@@ -8,6 +8,11 @@ import SyncPlayer from '../components/SyncPlayer';
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
+// ✅ SUPER TOKEN GRABBER: Ye token ko securely fetch karega
+const getValidToken = () => {
+    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+};
+
 const UserDashboard = ({ user, userData, onLogout }) => {
     // --- UI STATES ---
     const [currentTab, setCurrentTab] = useState('HOME'); 
@@ -59,6 +64,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [activeSelectionProject, setActiveSelectionProject] = useState(null);
     const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
     const [showSelectionReview, setShowSelectionReview] = useState(false);
+    const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
     const [showFamilyShareModal, setShowFamilyShareModal] = useState(false);
     const [familyShareForm, setFamilyShareForm] = useState({ mobile: '', hours: '24' });
 
@@ -123,9 +129,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ SMART BACK BUTTON FOR USER DASHBOARD
     useBackButton(() => {
         if (showFamilyShareModal) {
-            setShowFamilyShareModal(false);
-        } else if (showSelectionReview) {
-            setShowSelectionReview(false);
+            setShowFamilyShareModal(false);
+        } else if (showMissedImages) {
+            setShowMissedImages(false);
+        } else if (showSelectionReview) {
+            setShowSelectionReview(false);
         } else if (activeSelectionProject) {
             setActiveSelectionProject(null);
             setSelectionDraft([]);
@@ -841,40 +849,59 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     const renderSelectionsTab = () => {
-        // SCENARIO 1: Viewing the Grid for a specific project
+        // SCENARIO 1: Viewing the Grid for a specific project (3-PHASE ENGINE)
         if (activeSelectionProject && !showSelectionReview) {
-            const activeImages = activeSelectionProject.images.filter(img => img.status === 'active');
+            const currentPhase = activeSelectionProject.currentPhase || 1;
             const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            
+            // 🧠 LOGIC: Phase 1 shows all. Phase 2 & 3 show ONLY currently drafted images.
+            let displayedImages = [];
+            let missedImages = [];
+
+            if (currentPhase === 1) {
+                displayedImages = activeSelectionProject.images;
+            } else {
+                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
+                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
+            }
             
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div className="folder-header-nav" style={{background: '#8e44ad'}}>
-                        <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                        <h3 style={{color: '#fff'}}>Phase {activeSelectionProject.currentPhase} Selection</h3>
+                        <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                        <h3 style={{color: '#fff'}}>Phase {currentPhase} Selection</h3>
                     </div>
 
                     <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
                         <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                            <span>Select the best shots. Swipe or Tap.</span>
+                            <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
                             <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
                         </div>
                     </div>
 
-                    <div className="ud-grid-vip mt-20" style={{ padding: '0 15px' }}>
-                        {activeImages.map((img, idx) => {
+                    {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
+                    {currentPhase > 1 && (
+                        <div style={{ padding: '0 15px', marginBottom: '15px' }}>
+                            <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                ♻️ View & Add Missed Images ({missedImages.length})
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="ud-grid-vip" style={{ padding: '0 15px' }}>
+                        {displayedImages.map((img, idx) => {
                             const isSelected = selectionDraft.includes(img.url);
                             return (
                                 <div key={idx} onClick={() => handleSelectionToggle(img.url)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}>
                                     <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                    
-                                    {/* Selection Circle */}
                                     <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
                                     </div>
                                 </div>
                             );
                         })}
+                        {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>No images selected. Add from Missed Images.</p>}
                     </div>
 
                     {/* STICKY BOTTOM BAR FOR ACTIONS */}
@@ -883,13 +910,34 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
                             {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
                         </div>
-                        <button 
-                            onClick={() => setShowSelectionReview(true)}
-                            style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}
-                        >
-                            Preview Selection ➡️
+                        <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
+                            Preview Phase {currentPhase} ➡️
                         </button>
                     </div>
+
+                    {/* ✅ RECOVER MISSED IMAGES MODAL */}
+                    {showMissedImages && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
+                            <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
+                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Add Missed Images</h2>
+                                <button onClick={() => setShowMissedImages(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+                            </div>
+                            <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                Tap on any image below to recover and add it back to your active selection list.
+                            </div>
+                            <div className="ud-grid-vip" style={{ padding: '0 15px 30px 15px' }}>
+                                {missedImages.map((img, idx) => (
+                                    <div key={idx} onClick={() => { handleSelectionToggle(img.url); setShowMissedImages(false); }} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '1px solid #ddd', cursor: 'pointer' }}>
+                                        <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} />
+                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(230, 126, 34, 0.9)', color: '#fff', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>
+                                            ➕ Add Back
+                                        </div>
+                                    </div>
+                                ))}
+                                {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -911,7 +959,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     <div style={{ padding: '20px' }}>
                         <div style={{ background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
-                            <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Summary</h3>
+                            <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Summary (Phase {activeSelectionProject.currentPhase})</h3>
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
                                 <span style={{color: '#7f8c8d'}}>Total Selected</span>
                                 <strong style={{color: '#3498db', fontSize: '16px'}}>{selectionDraft.length} Photos</strong>
@@ -938,7 +986,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         {isFinalPhase && (
                             <div style={{ background: '#fdedec', border: '1px dashed #e74c3c', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
                                 <h4 style={{ color: '#c0392b', margin: '0 0 5px 0' }}>⚠️ Final Submission Warning</h4>
-                                <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be removed from your album. A PDF receipt will be generated. You must pay the extra charge to the studio.</p>
+                                <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be permanently removed. A PDF receipt will be generated. You must pay the extra charge directly to the studio.</p>
                             </div>
                         )}
 
@@ -954,72 +1002,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             );
         }
 
-        // SCENARIO 3: Main List of Selection Projects
-        return (
-            <div className="folders-view" style={{ paddingBottom: '80px' }}>
-                <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #9b59b6)' }}>
-                    <h1>✨ Smart Selections</h1>
-                    <p>Filter your best moments easily.</p>
-                </div>
-
-                <div style={{ padding: '20px' }}>
-                    {mySelections.length > 0 ? mySelections.map((sel, idx) => {
-                        const totalImgs = sel.images ? sel.images.length : 0;
-                        return (
-                            <div key={idx} style={{ background: '#fff', borderRadius: '15px', padding: '20px', marginBottom: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', borderLeft: sel.status === 'Completed' ? '5px solid #2ecc71' : '5px solid #f1c40f' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                                    <div>
-                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50', fontSize: '18px' }}>{sel.folderName}</h3>
-                                        <p style={{ margin: 0, fontSize: '12px', color: '#7f8c8d' }}>From: {sel.studioName}</p>
-                                    </div>
-                                    <span style={{ background: sel.status === 'Completed' ? '#e8f8f5' : '#fef9e7', color: sel.status === 'Completed' ? '#27ae60' : '#d4ac0d', padding: '4px 10px', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold' }}>
-                                        {sel.status}
-                                    </span>
-                                </div>
-                                
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8f9fa', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-                                    <div>
-                                        <span style={{ fontSize: '11px', color: '#7f8c8d', display: 'block' }}>Total Images</span>
-                                        <strong style={{ color: '#333' }}>{totalImgs}</strong>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: '11px', color: '#7f8c8d', display: 'block' }}>Progress</span>
-                                        <strong style={{ color: '#8e44ad' }}>Phase {sel.currentPhase} / {sel.totalPhases}</strong>
-                                    </div>
-                                </div>
-
-                                {sel.status !== 'Completed' ? (
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button 
-                                            onClick={() => { setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }} 
-                                            style={{ flex: 1, background: '#8e44ad', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
-                                        >
-                                            Start Selecting
-                                        </button>
-                                        <button 
-                                            onClick={() => alert("Family Collaboration Modal Opening Soon! (Coin Deduct Logic)")}
-                                            style={{ background: '#f39c12', color: '#fff', border: 'none', padding: '12px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
-                                        >
-                                            🤝 Invite Family
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button onClick={() => alert("Downloading PDF... (Next Step)")} style={{ width: '100%', background: '#2ecc71', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                        📄 Download Receipt PDF
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    }) : (
-                        <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888' }}>
-                            <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
-                            <h3>No Pending Selections</h3>
-                            <p style={{ fontSize: '13px' }}>Studios will send you albums here to select photos.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
+        // SCENARIO 3: Main List handled by Home Tab Now
+        return null;
     };
 
     // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
@@ -1400,19 +1384,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         )}
 
                                         {isCinematic(filePath) ? (
-                                            // 🎬 CINEMATIC THUMBNAIL
                                             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #2c3e50, #1a1a2e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#f1c40f', filter: isUnlocked ? 'none' : 'blur(2px)' }}>
                                                 <span style={{ fontSize: '40px', marginBottom: '5px' }}>🎬</span>
                                                 <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px' }}>CINEMATIC</span>
                                             </div>
                                         ) : isVideo(filePath) ? (
-                                            // 🎥 NORMAL VIDEO THUMBNAIL
                                             <>
                                                 <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
                                             </>
                                         ) : (
-                                            // 📸 IMAGE THUMBNAIL
                                             <img src={getCleanUrl(filePath)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
                                         )}
 
@@ -1506,32 +1487,89 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
 
         // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
-        return (
-            <div className="folders-view">
-                <div className="welcome-banner">
-                    <h1>Your Digital Memories</h1>
-                    <p>Select a folder to view your curated albums.</p>
-                </div>
-                
-                {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
-                    <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
+        return (
+            <div className="folders-view">
+                <div className="welcome-banner">
+                    <h1>Your Digital Memories</h1>
+                    <p>Select a folder to view your curated albums.</p>
+                </div>
+                
+                {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
+                    <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
 
                         {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS */}
                         {mySelections && mySelections.length > 0 && mySelections.map((sel, idx) => (
-                            <div 
-                                key={`sel-${idx}`} 
-                                className="folder-card" 
-                                onClick={() => { setCurrentTab('SELECTIONS'); setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }}
-                                style={{ background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.4)', animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-                            >
-                                <div className="folder-icon" style={{background: 'rgba(255,255,255,0.2)'}}>📸</div>
-                                <h4 style={{color: '#fff', fontSize: '13px', textAlign: 'center', marginBottom: '5px'}}>Selection Task</h4>
-                                <p style={{color: '#f1c40f', fontWeight: 'bold', margin: '0 0 5px 0', fontSize: '11px', textAlign: 'center'}}>{sel.folderName}</p>
-                                <p style={{color: '#aaa', margin: 0, fontSize: '10px'}}>{sel.images?.length || 0} Items</p>
-                                <span style={{ display:'block', fontSize:'9px', color:'#fff', marginTop:'8px', background:'#e74c3c', padding:'3px 6px', borderRadius:'10px', width:'max-content' }}>
-                                    Phase {sel.currentPhase} Pending
-                                </span>
-                            </div>
+                            <React.Fragment key={`sel-${idx}`}>
+                                <div 
+                                    className="folder-card" 
+                                    onClick={() => { setCurrentTab('SELECTIONS'); setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }}
+                                    style={{ background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.4)', animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                                >
+                                    <div className="folder-icon" style={{background: 'rgba(255,255,255,0.2)'}}>📸</div>
+                                    <h4 style={{color: '#fff', fontSize: '13px', textAlign: 'center', marginBottom: '5px'}}>Selection Task</h4>
+                                    <p style={{color: '#f1c40f', fontWeight: 'bold', margin: '0 0 5px 0', fontSize: '11px', textAlign: 'center'}}>{sel.folderName}</p>
+                                    <p style={{color: '#aaa', margin: 0, fontSize: '10px'}}>{sel.images?.length || 0} Items</p>
+                                    
+                                    {sel.status !== 'Completed' && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setActiveSelectionProject(sel); setShowFamilyShareModal(true); }}
+                                            style={{ marginTop: '10px', background: '#f39c12', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}
+                                        >
+                                            🤝 Invite Family
+                                        </button>
+                                    )}
+
+                                    <span style={{ display:'block', fontSize:'9px', color:'#fff', marginTop:'8px', background:'#e74c3c', padding:'3px 6px', borderRadius:'10px', width:'max-content' }}>
+                                        {sel.status === 'Completed' ? '✅ Completed' : `Phase ${sel.currentPhase} Pending`}
+                                    </span>
+                                </div>
+
+                                {/* ✅ FAMILY COLLABORATION MODAL */}
+                                {showFamilyShareModal && activeSelectionProject?._id === sel._id && (
+                                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                                        <div style={{ background: '#fff', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                                <h2 style={{ color: '#f39c12', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🤝 Invite Family</h2>
+                                                <button onClick={() => setShowFamilyShareModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#333', cursor: 'pointer' }}>✖</button>
+                                            </div>
+                                            <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Share this album selection folder with a family member so they can also select their favorite photos. <strong>Cost: 10 Coins per invite.</strong></p>
+                                            
+                                            <form onSubmit={(e) => {
+                                                e.preventDefault();
+                                                if(wallet.coins < 10) {
+                                                    alert("Not enough coins! You need 10 coins to invite family.");
+                                                    setShowFamilyShareModal(false);
+                                                    setShowWalletModal(true);
+                                                    return;
+                                                }
+                                                if(familyShareForm.mobile.length !== 10) return alert("Enter valid 10-digit mobile number!");
+                                                
+                                                setLoading(true);
+                                                // Future API Call Here. Local simulation for now.
+                                                setTimeout(() => {
+                                                    alert(`✅ Invitation link sent successfully to ${familyShareForm.mobile} via WhatsApp!`);
+                                                    setWallet({...wallet, coins: wallet.coins - 10});
+                                                    setLoading(false);
+                                                    setShowFamilyShareModal(false);
+                                                    setFamilyShareForm({mobile: '', hours: '24'});
+                                                }, 1500);
+                                            }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                <input 
+                                                    type="number" required placeholder="Family Member's 10-Digit Mobile" 
+                                                    value={familyShareForm.mobile} onChange={e => setFamilyShareForm({...familyShareForm, mobile: e.target.value})} 
+                                                    style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%', color: '#333', backgroundColor: '#f8f9fa' }} 
+                                                />
+                                                <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#d4ac0d', fontWeight: 'bold' }}>
+                                                    Wallet Balance: 🪙 {wallet.coins} Coins
+                                                </div>
+                                                <button type="submit" disabled={loading} style={{ background: wallet.coins >= 10 ? '#f39c12' : '#ccc', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: wallet.coins >= 10 && !loading ? 'pointer' : 'not-allowed' }}>
+                                                    {loading ? 'Processing...' : 'Pay 10 Coins & Invite'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
+                            </React.Fragment>
                         ))}
                         
                         {/* 📁 REGULAR FOLDERS */}
@@ -1547,7 +1585,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             }
 
                             return (
-                                <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1, margin: 0 }}>
+                                <div key={index} className="folder-card" onClick={() => setActiveFolder(folder)} style={{ opacity: isLocked ? 0.7 : 1, margin: 0, cursor: 'pointer' }}>
                                     <div className="folder-icon">{isLocked ? '🔒' : '📁'}</div>
                                     <h4>{folder.folderName}</h4>
                                     <p>{totalFiles} Total Items</p>
