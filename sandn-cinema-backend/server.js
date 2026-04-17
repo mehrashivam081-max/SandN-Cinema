@@ -2724,50 +2724,65 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
     }
 });
 
-// 4. Update Selection Phase & Finalize Engine
+// 4. Update Selection Phase & Finalize Engine (CRASH-PROOF & EMAIL ENABLED)
 app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
     try {
         const { projectId, selectedImages, isFinal } = req.body;
         
-        const selection = await AlbumSelection.findById(projectId);
+        const selection = await AlbumSelection.findById(projectId).lean();
         if (!selection) return res.json({ success: false, message: "Project not found" });
 
-        // Update image statuses safely for Mongoose
-        selection.images.forEach(img => {
+        const sevenDaysFromNow = new Date();
+        sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+        // 1. Update image statuses safely
+        const updatedImages = selection.images.map(img => {
+            let newStatus = isFinal ? 'rejected' : 'active';
             if (selectedImages.includes(img.url)) {
-                img.status = 'selected';
-            } else {
-                img.status = isFinal ? 'rejected' : 'active';
+                newStatus = 'selected';
             }
+            return {
+                ...img,
+                status: newStatus,
+                deletedAt: (newStatus === 'rejected' && isFinal) ? sevenDaysFromNow : img.deletedAt
+            };
         });
 
-        // 💰 If Final Phase, Calculate any extra charges
+        let updatePayload = { images: updatedImages };
+        let extraAmountToPay = 0;
+        let nextPhaseMsg = "";
+
+        // 2. 💰 If Final Phase, Calculate any extra charges
         if (isFinal) {
             const totalAllowed = (selection.sheetLimit || 0) * (selection.imagesPerSheet || 0);
             const extraImages = Math.max(0, selectedImages.length - totalAllowed);
             const extraSheets = selection.imagesPerSheet > 0 ? Math.ceil(extraImages / selection.imagesPerSheet) : 0;
-            const extraAmountToPay = extraSheets * (selection.costPerExtraSheet || 0);
+            extraAmountToPay = extraSheets * (selection.costPerExtraSheet || 0);
 
-            selection.extraAmountToPay = extraAmountToPay;
-            selection.isPaid = extraAmountToPay === 0; // Automatically paid if 0 extra charge
-            
-            selection.status = 'Completed'; // Mark task done for User UI
-            selection.completedAt = new Date();
+            updatePayload.extraAmountToPay = extraAmountToPay;
+            updatePayload.isPaid = extraAmountToPay === 0;
+            updatePayload.status = 'Completed';
+            updatePayload.completedAt = new Date();
+        } else {
+            // Move to next phase
+            updatePayload.currentPhase = (selection.currentPhase || 1) + 1;
+            updatePayload.status = `Phase ${updatePayload.currentPhase} Pending`;
+            nextPhaseMsg = `You have successfully completed Phase ${selection.currentPhase}. You can now proceed to Phase ${updatePayload.currentPhase} in your dashboard.`;
+        }
 
-            // Set 7-day deletion expiry for rejected items
-            const sevenDaysFromNow = new Date();
-            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-            
-            selection.images.forEach(img => {
-                if (img.status === 'rejected') {
-                    img.deletedAt = sevenDaysFromNow;
-                }
-            });
+        // 3. FORCE SAVE into Database
+        await AlbumSelection.updateOne(
+            { _id: projectId }, 
+            { $set: updatePayload }, 
+            { strict: false }
+        );
 
-            // Trigger Studio notification email about completion
+        // 4. 📩 FIRE EMAIL NOTIFICATIONS
+        if (isFinal) {
+            // Email to Studio
             const studioAcc = await Studio.findOne({ mobile: selection.studioMobile });
             if (studioAcc && studioAcc.email) {
-                const htmlContent = `
+                const studioHtml = `
                     <div style="font-family: Arial, sans-serif; padding: 20px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px;">
                         <h2 style="color: #2b5876;">Selection Completed! 🎉</h2>
                         <p style="color: #444;">Your client has finalized their photo selections for <strong>${selection.folderName}</strong>.</p>
@@ -2777,25 +2792,46 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                             <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details in Dashboard</a>
                         </div>
                     </div>`;
-                sendBrevoEmail(studioAcc.email, "Client Selection Finalized", htmlContent).catch(() => {});
+                sendBrevoEmail(studioAcc.email, `Client Finalized Selection: ${selection.folderName}`, studioHtml).catch(() => {});
             }
-
+            
+            // Email to Client
+            if (selection.clientEmail && !selection.clientEmail.includes('dummy_')) {
+                const clientHtml = `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                        <h2 style="color: #2ecc71;">Selection Submitted! ✅</h2>
+                        <p style="color: #444;">Thank you for finalizing your photos for <strong>${selection.folderName}</strong>.</p>
+                        <p style="color: #444;">You selected <strong>${selectedImages.length}</strong> photos.</p>
+                        ${extraAmountToPay > 0 ? `<p style="color: #e74c3c;">You have an estimated extra charge of <strong>₹${extraAmountToPay}</strong> for additional sheets. The studio will contact you regarding this.</p>` : ''}
+                        <p style="color: #666; font-size: 13px; margin-top: 20px;">The studio has been notified and will begin processing your album.</p>
+                    </div>`;
+                sendBrevoEmail(selection.clientEmail, `Your Selection is Confirmed - ${selection.folderName}`, clientHtml).catch(() => {});
+            }
         } else {
-                // Move to next phase safely
-                selection.currentPhase = (selection.currentPhase || 1) + 1;
-                selection.status = `Phase ${selection.currentPhase} Pending`;
+            // Email to Client for Phase progression (Phase 1 -> 2, etc.)
+            if (selection.clientEmail && !selection.clientEmail.includes('dummy_')) {
+                const phaseHtml = `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                        <h2 style="color: #8e44ad;">Phase ${selection.currentPhase} Complete! 📸</h2>
+                        <p style="color: #444;">You have successfully saved your progress for <strong>${selection.folderName}</strong>.</p>
+                        <p style="color: #444;">${nextPhaseMsg}</p>
+                        <p style="color: #666; font-size: 13px;">So far, you have shortlisted <strong>${selectedImages.length}</strong> photos.</p>
+                        <div style="margin-top: 25px;">
+                            <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Continue Selection</a>
+                        </div>
+                    </div>`;
+                sendBrevoEmail(selection.clientEmail, `Phase ${selection.currentPhase} Saved - ${selection.folderName}`, phaseHtml).catch(() => {});
             }
-
-        await selection.save();
+        }
 
         res.json({ 
             success: true, 
-            message: isFinal ? "Selection Finalized successfully! Notification sent to studio." : `Selection locked. Moving to Phase ${selection.currentPhase}.` 
+            message: isFinal ? "Selection Finalized successfully! Notification sent to studio." : `Selection locked. Moving to Phase ${updatePayload.currentPhase}.` 
         });
 
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ success: false, message: "Server error during selection update." });
+        console.error("Selection Update Error:", e);
+        res.status(500).json({ success: false, message: "Server error during selection update.", error: e.message });
     }
 });
 
