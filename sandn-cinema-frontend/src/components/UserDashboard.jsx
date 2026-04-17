@@ -892,12 +892,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             let displayedImages = [];
             let missedImages = [];
 
-            if (currentPhase === 1) {
-                displayedImages = activeSelectionProject.images;
-            } else {
-                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
-                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
-            }
+            const isCompleted = activeSelectionProject.status === 'Completed';
+
+            if (isCompleted) {
+                // If finalized, ONLY show the final selected images
+                displayedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
+                missedImages = []; // Hide missed images
+            } else if (currentPhase === 1) {
+                displayedImages = activeSelectionProject.images;
+            } else {
+                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
+                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
+            }
 
             // 👇 SMART Helper for Long Press Preview (Ignores Scrolling)
             const startPress = (e, url) => {
@@ -920,26 +926,37 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     actionFn(); // Do normal click if not held long enough
                 }
             };
-            
-            return (
-                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+            
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     {/* ✅ STICKY TOP SECTION: Header + Info + Missed Images Button */}
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
+                        <div className="folder-header-nav" style={{background: isCompleted ? '#27ae60' : '#8e44ad', margin: 0, borderRadius: 0}}>
                             <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>Phase {currentPhase} Selection</h3>
+                            <h3 style={{color: '#fff', margin: 0}}>{isCompleted ? 'Final Album Selections' : `Phase ${currentPhase} Selection`}</h3>
                         </div>
 
-                        <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                                <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
-                                <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                        {isCompleted ? (
+                            // ✅ COMPLETED STATUS BANNER
+                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
+                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Album in Production!</h3>
+                                <p style={{ margin: 0, fontSize: '12px', color: '#2c3e50' }}>
+                                    Expected Delivery: <strong>{activeSelectionProject.expectedDeliveryDate ? new Date(activeSelectionProject.expectedDeliveryDate).toLocaleDateString() : 'Updating soon...'}</strong>
+                                </p>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You selected {displayedImages.length} final photos. Editing is locked.</p>
                             </div>
-                        </div>
+                        ) : (
+                            <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                                    <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
+                                    <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                                </div>
+                            </div>
+                        )}
 
-                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
-                        {currentPhase > 1 && (
+                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3 AND Not Completed) */}
+                        {currentPhase > 1 && !isCompleted && (
                             <div style={{ padding: '0 15px' }}>
                                 <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                                     ♻️ View & Add Missed Images ({missedImages.length})
@@ -949,13 +966,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
 
                     <div className="ud-grid-vip" style={{ padding: '15px' }}>
-                        {displayedImages.map((img, idx) => {
-                            const isSelected = selectionDraft.includes(img.url);
-                            return (
-                                <div key={idx} 
+                        {displayedImages.map((img, idx) => {
+                            const isSelected = isCompleted ? true : selectionDraft.includes(img.url);
+                            return (
+                                <div key={idx} 
                                     onPointerDown={(e) => startPress(e, img.url)}
                                     onPointerMove={movePress}
                                     onPointerUp={() => endPress(() => {
+                                        if(isCompleted) return; // 🚫 DISABLE CLICK IF COMPLETED (Read Only)
+                                        
+                                        // Ask for confirmation if trying to remove in Phase 2 or 3
                                         if (currentPhase > 1 && isSelected) {
                                             setImageToRemove(img.url);
                                         } else {
@@ -963,19 +983,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         }
                                     })}
                                     onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                    className="gallery-item-vip"
-                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
+                                    className="gallery-item-vip" 
+                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: isCompleted ? 'zoom-in' : 'pointer' }}
                                 >
-                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         {/* ✅ IMAGE REMOVAL CONFIRMATION MODAL */}
-                        {imageToRemove && (
+                        {imageToRemove && !isCompleted && (
                             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
                                 <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
                                     <div style={{fontSize: '40px', marginBottom: '10px'}}>🗑️</div>
@@ -988,11 +1008,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 </div>
                             </div>
                         )}
-                        {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>No images selected. Add from Missed Images.</p>}
+                        {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>No images available.</p>}
                     </div>
 
-                    {/* STICKY BOTTOM BAR FOR ACTIONS */}
-                    <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
+                    {/* ✅ STICKY BOTTOM BAR FOR ACTIONS (HIDE IF COMPLETED) */}
+                    {!isCompleted && (
+                        <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
                         <div>
                             <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
                             {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
@@ -1001,7 +1022,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             Preview Phase {currentPhase} ➡️
                         </button>
                     </div>
-
+                )}
                     {/* ✅ RECOVER MISSED IMAGES MODAL (With Multi-Select & Long Press) */}
                         {showMissedImages && (
                             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
