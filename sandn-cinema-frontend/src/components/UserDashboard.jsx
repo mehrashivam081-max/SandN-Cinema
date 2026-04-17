@@ -262,12 +262,29 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
         
         if (rewardResult.rewardAdded) {
-            setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: rewardResult.currentStreak });
-            setWallet(rewardResult);
-            setTimeout(() => setRewardPopup({ show: false }), 4000); 
+            // ✅ REAL API CALL: Database mein permanently 1 Coin add karo
+            axios.post(`${API_BASE}/add-coins`, {
+                mobile: currentUserData.mobile,
+                amount: 1,
+                reason: `Daily Login Reward (Streak: ${rewardResult.currentStreak})`
+            }).then(res => {
+                if(res.data.success) {
+                    setWallet(res.data.wallet); // Update current header coins instantly
+                    setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: rewardResult.currentStreak });
+                    
+                    // 🪄 MAGIC ANIMATION: Header wale Coin Badge ko uchaal do
+                    const coinBadge = document.querySelector('.ud-coin-badge-vip');
+                    if(coinBadge) {
+                        coinBadge.classList.add('coin-bump-animation');
+                        setTimeout(() => coinBadge.classList.remove('coin-bump-animation'), 2000);
+                    }
+                    setTimeout(() => setRewardPopup({ show: false }), 4000);
+                }
+            }).catch(err => console.log("Daily reward sync failed", err));
+            
         } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
             setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
-            setWallet(rewardResult);
+            setWallet({...wallet, currentStreak: 1});
             setTimeout(() => setRewardPopup({ show: false }), 4000);
         }
 
@@ -1643,6 +1660,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             {/* Inline CSS for Pulse Animation (Emergency Button) */}
             <style>{`
+                /* 🌟 NEW: Daily Reward Coin Bounce Animation */
+                @keyframes coinBump {
+                    0% { transform: scale(1); box-shadow: 0 0 0px transparent; }
+                    50% { transform: scale(1.3) translateY(-5px); box-shadow: 0 0 20px #f1c40f; background: #f39c12; color: #fff; }
+                    100% { transform: scale(1); box-shadow: 0 0 0px transparent; }
+                }
+                .coin-bump-animation {
+                    animation: coinBump 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                    transition: all 0.3s;
+                }
+
                 @keyframes pulseEmergency {
                     0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
                     70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
