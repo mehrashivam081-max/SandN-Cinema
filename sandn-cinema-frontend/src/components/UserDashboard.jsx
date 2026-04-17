@@ -899,18 +899,25 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
             }
 
-            // 👇 Helper for Long Press Preview (Press & Hold for 500ms)
-            const startPress = (url) => {
+            // 👇 SMART Helper for Long Press Preview (Ignores Scrolling)
+            const startPress = (e, url) => {
                 touchRef.current.isLong = false;
+                touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
                 touchRef.current.timer = setTimeout(() => {
                     touchRef.current.isLong = true;
                     setPreviewMedia(url); // Opens Full Screen Preview
                 }, 500); 
             };
+            const movePress = (e) => {
+                const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+                if (Math.abs(currentY - touchRef.current.startY) > 15) {
+                    clearTimeout(touchRef.current.timer); // Cancel preview if user is scrolling
+                }
+            };
             const endPress = (actionFn) => {
                 clearTimeout(touchRef.current.timer);
                 if (!touchRef.current.isLong) {
-                    actionFn(); // Do normal click (Toggle/Select) if not held long enough
+                    actionFn(); // Do normal click if not held long enough
                 }
             };
             
@@ -946,16 +953,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             const isSelected = selectionDraft.includes(img.url);
                             return (
                                 <div key={idx} 
-                                    onPointerDown={() => startPress(img.url)}
+                                    onPointerDown={(e) => startPress(e, img.url)}
+                                    onPointerMove={movePress}
                                     onPointerUp={() => endPress(() => {
-                                        // Ask for confirmation if trying to remove in Phase 2 or 3
                                         if (currentPhase > 1 && isSelected) {
                                             setImageToRemove(img.url);
                                         } else {
                                             handleSelectionToggle(img.url);
                                         }
                                     })}
-                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)} // Cancel preview if finger scrolled away
+                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
                                     className="gallery-item-vip"
                                     style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
                                 >
@@ -1010,7 +1017,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         const isMissedSelected = missedSelection.includes(img.url);
                                         return (
                                             <div key={idx} 
-                                                onPointerDown={() => startPress(img.url)}
+                                                onPointerDown={(e) => startPress(e, img.url)}
+                                                onPointerMove={movePress}
                                                 onPointerUp={() => endPress(() => {
                                                     setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
                                                 })}
