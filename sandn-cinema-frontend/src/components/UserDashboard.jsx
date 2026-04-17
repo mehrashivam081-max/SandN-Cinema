@@ -258,10 +258,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }, 30000); // 30 seconds
         
         // 3. Daily Reward Logic (Only runs once on mount)
-        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
-        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
-        
-        if (rewardResult.rewardAdded) {
+        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
+        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
+        
+        if (rewardResult.rewardAdded) {
             // ✅ REAL API CALL: Database mein permanently 1 Coin add karo
             axios.post(`${API_BASE}/add-coins`, {
                 mobile: currentUserData.mobile,
@@ -280,6 +280,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     }
                     setTimeout(() => setRewardPopup({ show: false }), 4000);
                 }
+            }).catch(err => console.log("Daily reward sync failed", err));
+            
+        } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
+            setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
+            setWallet({...wallet, currentStreak: 1});
+            setTimeout(() => setRewardPopup({ show: false }), 4000);
+        }
             }).catch(err => console.log("Daily reward sync failed", err));
             
         } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
