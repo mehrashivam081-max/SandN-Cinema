@@ -64,7 +64,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [activeSelectionProject, setActiveSelectionProject] = useState(null);
     const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
     const [showSelectionReview, setShowSelectionReview] = useState(false);
-    const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
+    const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
+    const [imageToRemove, setImageToRemove] = useState(null); // 👈 NEW: Phase 2/3 Removal Confirmation State
     const [showFamilyShareModal, setShowFamilyShareModal] = useState(false);
     const [familyShareForm, setFamilyShareForm] = useState({ mobile: '', hours: '24' });
 
@@ -895,46 +896,70 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             }
             
             return (
-                <div className="folders-view" style={{ paddingBottom: '100px' }}>
-                    <div className="folder-header-nav" style={{background: '#8e44ad'}}>
-                        <button onClick={() => { 
-                            setActiveSelectionProject(null); 
-                            setSelectionDraft([]); 
-                            setShowMissedImages(false); 
-                            setCurrentTab('HOME'); 
-                        }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                        <h3 style={{color: '#fff'}}>Phase {currentPhase} Selection</h3>
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    {/* ✅ STICKY TOP SECTION: Header + Info + Missed Images Button */}
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>Phase {currentPhase} Selection</h3>
+                        </div>
+
+                        <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                            <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                                <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
+                                <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                            </div>
+                        </div>
+
+                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
+                        {currentPhase > 1 && (
+                            <div style={{ padding: '0 15px' }}>
+                                <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                    ♻️ View & Add Missed Images ({missedImages.length})
+                                </button>
+                            </div>
+                        )}
                     </div>
 
-                    <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
-                        <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                            <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
-                            <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
-                        </div>
-                    </div>
+                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                        {displayedImages.map((img, idx) => {
+                            const isSelected = selectionDraft.includes(img.url);
+                            return (
+                                <div key={idx} 
+                                    onClick={() => {
+                                        // ✅ NEW LOGIC: Ask for confirmation if trying to remove an image in Phase 2 or 3
+                                        if (currentPhase > 1 && isSelected) {
+                                            setImageToRemove(img.url);
+                                        } else {
+                                            handleSelectionToggle(img.url);
+                                        }
+                                    }} 
+                                    className="gallery-item-vip" 
+                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
+                                >
+                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
-                    {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
-                    {currentPhase > 1 && (
-                        <div style={{ padding: '0 15px', marginBottom: '15px' }}>
-                            <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                ♻️ View & Add Missed Images ({missedImages.length})
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="ud-grid-vip" style={{ padding: '0 15px' }}>
-                        {displayedImages.map((img, idx) => {
-                            const isSelected = selectionDraft.includes(img.url);
-                            return (
-                                <div key={idx} onClick={() => handleSelectionToggle(img.url)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}>
-                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                        {/* ✅ IMAGE REMOVAL CONFIRMATION MODAL */}
+                        {imageToRemove && (
+                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                                <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                                    <div style={{fontSize: '40px', marginBottom: '10px'}}>🗑️</div>
+                                    <h3 style={{ color: '#e74c3c', margin: '0 0 10px 0' }}>Remove Image?</h3>
+                                    <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Are you sure you want to discard this image from your final album? You can still recover it from the 'Missed Images' section.</p>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <button onClick={() => setImageToRemove(null)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                        <button onClick={() => { handleSelectionToggle(imageToRemove); setImageToRemove(null); }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e74c3c', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Remove</button>
                                     </div>
                                 </div>
-                            );
-                        })}
+                            </div>
+                        )}
                         {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>No images selected. Add from Missed Images.</p>}
                     </div>
 
