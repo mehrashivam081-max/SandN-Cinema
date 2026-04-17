@@ -67,6 +67,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
     const [imageToRemove, setImageToRemove] = useState(null); // 👈 NEW: Phase 2/3 Removal Confirmation State
     const [showFamilyShareModal, setShowFamilyShareModal] = useState(false);
+    const [missedSelection, setMissedSelection] = useState([]); // 👈 For multi-selecting missed images
+    const [showMissedRestoreConfirm, setShowMissedRestoreConfirm] = useState(false); // 👈 Confirmation for restoring missed images
+    const touchRef = useRef({ isLong: false, timer: null }); // 👈 For long-press detection
     const [familyShareForm, setFamilyShareForm] = useState({ mobile: '', hours: '24' });
 
     // ✅ WALLET MODAL & GLOBAL CHARGES STATES
@@ -889,13 +892,28 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             let missedImages = [];
 
             if (currentPhase === 1) {
-                displayedImages = activeSelectionProject.images;
-            } else {
-                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
-                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
-            }
-            
-            return (
+                displayedImages = activeSelectionProject.images;
+            } else {
+                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
+                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
+            }
+
+            // 👇 Helper for Long Press Preview (Press & Hold for 500ms)
+            const startPress = (url) => {
+                touchRef.current.isLong = false;
+                touchRef.current.timer = setTimeout(() => {
+                    touchRef.current.isLong = true;
+                    setPreviewMedia(url); // Opens Full Screen Preview
+                }, 500); 
+            };
+            const endPress = (actionFn) => {
+                clearTimeout(touchRef.current.timer);
+                if (!touchRef.current.isLong) {
+                    actionFn(); // Do normal click (Toggle/Select) if not held long enough
+                }
+            };
+            
+            return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     {/* ✅ STICKY TOP SECTION: Header + Info + Missed Images Button */}
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
@@ -927,15 +945,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             const isSelected = selectionDraft.includes(img.url);
                             return (
                                 <div key={idx} 
-                                    onClick={() => {
-                                        // ✅ NEW LOGIC: Ask for confirmation if trying to remove an image in Phase 2 or 3
+                                    onPointerDown={() => startPress(img.url)}
+                                    onPointerUp={() => endPress(() => {
+                                        // Ask for confirmation if trying to remove in Phase 2 or 3
                                         if (currentPhase > 1 && isSelected) {
                                             setImageToRemove(img.url);
                                         } else {
                                             handleSelectionToggle(img.url);
                                         }
-                                    }} 
-                                    className="gallery-item-vip" 
+                                    })}
+                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)} // Cancel preview if finger scrolled away
+                                    className="gallery-item-vip"
                                     style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
                                 >
                                     <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
@@ -974,29 +994,71 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         </button>
                     </div>
 
-                    {/* ✅ RECOVER MISSED IMAGES MODAL */}
-                    {showMissedImages && (
-                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
-                            <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
-                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Add Missed Images</h2>
-                                <button onClick={() => setShowMissedImages(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
-                            </div>
-                            <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                Tap on any image below to recover and add it back to your active selection list.
-                            </div>
-                            <div className="ud-grid-vip" style={{ padding: '0 15px 30px 15px' }}>
-                                {missedImages.map((img, idx) => (
-                                    <div key={idx} onClick={() => { handleSelectionToggle(img.url); setShowMissedImages(false); }} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '1px solid #ddd', cursor: 'pointer' }}>
-                                        <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} />
-                                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(230, 126, 34, 0.9)', color: '#fff', padding: '5px 10px', borderRadius: '15px', fontSize: '12px', fontWeight: 'bold' }}>
-                                            ➕ Add Back
-                                        </div>
+                    {/* ✅ RECOVER MISSED IMAGES MODAL (With Multi-Select & Long Press) */}
+                        {showMissedImages && (
+                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                    <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
+                                    <button onClick={() => { setShowMissedImages(false); setMissedSelection([]); }} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+                                </div>
+                                <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                    <strong>Tap</strong> to select multiple images. <strong>Press and hold</strong> to view full preview.
+                                </div>
+                                <div className="ud-grid-vip" style={{ padding: '0 15px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
+                                    {missedImages.map((img, idx) => {
+                                        const isMissedSelected = missedSelection.includes(img.url);
+                                        return (
+                                            <div key={idx} 
+                                                onPointerDown={() => startPress(img.url)}
+                                                onPointerUp={() => endPress(() => {
+                                                    setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
+                                                })}
+                                                onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                                className="gallery-item-vip" 
+                                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isMissedSelected ? '3px solid #e67e22' : '1px solid #ddd', cursor: 'pointer' }}
+                                            >
+                                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isMissedSelected ? 1 : 0.5 }} />
+                                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isMissedSelected ? '#e67e22' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {isMissedSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
+                                </div>
+
+                                {/* Bottom Sticky Bar for Missed Images */}
+                                {missedSelection.length > 0 && (
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', padding: '15px', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', zIndex: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{fontWeight: 'bold', color: '#e67e22'}}>{missedSelection.length} Selected</span>
+                                        <button onClick={() => setShowMissedRestoreConfirm(true)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(230, 126, 34, 0.4)' }}>
+                                            Restore Images
+                                        </button>
                                     </div>
-                                ))}
-                                {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
+                                )}
                             </div>
-                        </div>
-                    )}
+                        )}
+
+                        {/* ✅ MISSED IMAGES RESTORE CONFIRMATION MODAL */}
+                        {showMissedRestoreConfirm && (
+                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                                <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                                    <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
+                                    <h3 style={{ color: '#e67e22', margin: '0 0 10px 0' }}>Restore {missedSelection.length} Images?</h3>
+                                    <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>These images will be added back to your active album selection.</p>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <button onClick={() => setShowMissedRestoreConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                        <button onClick={() => { 
+                                            setSelectionDraft(prev => [...prev, ...missedSelection]); 
+                                            setMissedSelection([]); 
+                                            setShowMissedRestoreConfirm(false); 
+                                            setShowMissedImages(false); 
+                                            alert("✅ Images restored successfully!");
+                                        }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Restore</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                 </div>
             );
         }
@@ -1691,6 +1753,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             <button onClick={() => setShowExitPopup(false)} style={{background:'#34495e', color:'#fff', padding:'10px 20px', border:'none', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', flex: 1}}>No, Stay</button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ✅ GLOBAL LONG PRESS IMAGE PREVIEW MODAL */}
+            {previewMedia && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999999, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => setPreviewMedia(null)}>
+                    <button style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', zIndex: 10 }}>✖</button>
+                    <img src={getCleanUrl(previewMedia)} style={{ maxWidth: '95%', maxHeight: '90%', borderRadius: '10px', objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} alt="Preview" />
+                    <p style={{ position: 'absolute', bottom: '20px', color: '#aaa', fontSize: '12px' }}>Tap anywhere to close preview</p>
                 </div>
             )}
 
