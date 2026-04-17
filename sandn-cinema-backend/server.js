@@ -2732,12 +2732,12 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
         const selection = await AlbumSelection.findById(projectId);
         if (!selection) return res.json({ success: false, message: "Project not found" });
 
-        // Update image statuses inside the array
-        selection.images = selection.images.map(img => {
+        // Update image statuses safely for Mongoose
+        selection.images.forEach(img => {
             if (selectedImages.includes(img.url)) {
-                return { ...img, status: 'selected' };
+                img.status = 'selected';
             } else {
-                return { ...img, status: isFinal ? 'rejected' : 'active' }; // Drop to rejected only if final
+                img.status = isFinal ? 'rejected' : 'active';
             }
         });
 
@@ -2781,10 +2781,10 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
             }
 
         } else {
-            // Move to next phase
-            selection.currentPhase += 1;
-            selection.status = `Phase${selection.currentPhase}`;
-        }
+                // Move to next phase safely
+                selection.currentPhase = (selection.currentPhase || 1) + 1;
+                selection.status = `Phase ${selection.currentPhase} Pending`;
+            }
 
         await selection.save();
 
