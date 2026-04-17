@@ -2664,16 +2664,63 @@ app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) 
     }
 });
 
-// 3. Fetch Selections (For User Dashboard)
+// 3. Fetch Selections (For User Dashboard - UPDATED FOR FAMILY COLLAB)
 app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) => {
     try {
         const clientMobile = getCleanMobile(req.body.mobile);
         if(!clientMobile) return res.json({ success: false, message: "Invalid Mobile" });
         
-        const selections = await AlbumSelection.find({ clientMobile: clientMobile }).sort({ createdAt: -1 });
+        // ✅ NEW: Ab ye check karega ki user Main Client hai YA Family Member hai
+        const selections = await AlbumSelection.find({ 
+            $or: [
+                { clientMobile: clientMobile },
+                { familyMembers: clientMobile } // Check if mobile exists in family array
+            ]
+        }).sort({ createdAt: -1 });
+        
         res.json({ success: true, data: selections });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to fetch user selections." });
+    }
+});
+
+// 3.5 🤝 Invite Family Member to Selection Project
+app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, senderMobile, familyMobile, cost } = req.body;
+
+        // 1. User aur uske Coins check karo
+        const account = await findAccount(senderMobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        if (wallet.coins < cost) return res.json({ success: false, message: "Not enough coins!" });
+
+        // 2. 10 Coins kaato
+        wallet.coins -= cost;
+        wallet.history.unshift({
+            action: `Family Invite Sent to ${familyMobile}`,
+            amount: `-${cost} Coins`,
+            date: new Date().toLocaleDateString(),
+            type: "debit"
+        });
+
+        if (account.type === 'STUDIO') await Studio.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
+        else await User.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
+
+        // 3. Project me family member ka number add karo
+        const selection = await AlbumSelection.findById(projectId);
+        if (!selection) return res.json({ success: false, message: "Selection project not found." });
+
+        // $addToSet se duplicate number baar-baar add nahi hoga
+        await AlbumSelection.findByIdAndUpdate(projectId, {
+            $addToSet: { familyMembers: getCleanMobile(familyMobile) }
+        }, { strict: false });
+
+        res.json({ success: true, wallet, message: "Family member invited successfully!" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server error during invitation." });
     }
 });
 
