@@ -236,11 +236,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }
 
                 // 🔥 Auto-refresh Bookings and Shared Media silently
-                fetchServicesAndBookings(activeUser.mobile);
-                fetchSharedMedia(activeUser.mobile);
+                fetchServicesAndBookings(activeUser.mobile);
+                fetchSharedMedia(activeUser.mobile);
                 fetchUserSelections(activeUser.mobile);
 
-            } catch (error) {
+            } catch (error) {
                 console.error("Fetch error:", error);
                 if(isInitialLoad) setFolders([DEFAULT_FOLDER]); 
             } finally {
@@ -258,10 +258,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }, 30000); // 30 seconds
         
         // 3. Daily Reward Logic (Only runs once on mount)
-        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
-        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
-        
-        if (rewardResult.rewardAdded) {
+        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
+        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
+        
+        // ✅ NEW: Check if already claimed today
+        const todayStr = new Date().toDateString(); // Result: "Fri Apr 17 2026"
+        const rewardKey = `claimed_reward_${currentUserData.mobile}_${todayStr}`;
+
+        if (rewardResult.rewardAdded && !localStorage.getItem(rewardKey)) {
+            localStorage.setItem(rewardKey, 'true'); // 🔒 Lock it for today!
+
             // ✅ REAL API CALL: Database mein permanently 1 Coin add karo
             axios.post(`${API_BASE}/add-coins`, {
                 mobile: currentUserData.mobile,
@@ -269,10 +275,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 reason: `Daily Login Reward (Streak: ${rewardResult.currentStreak})`
             }).then(res => {
                 if(res.data.success) {
-                    setWallet(res.data.wallet); // Update current header coins instantly
+                    setWallet(res.data.wallet); 
                     setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: rewardResult.currentStreak });
                     
-                    // 🪄 MAGIC ANIMATION: Header wale Coin Badge ko uchaal do
+                    // 🪄 MAGIC ANIMATION
                     const coinBadge = document.querySelector('.ud-coin-badge-vip');
                     if(coinBadge) {
                         coinBadge.classList.add('coin-bump-animation');
@@ -280,16 +286,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     }
                     setTimeout(() => setRewardPopup({ show: false }), 4000);
                 }
-            }).catch(err => console.log("Daily reward sync failed", err));
+            }).catch(err => {
+                console.log("Daily reward sync failed", err);
+                localStorage.removeItem(rewardKey); // Unlock if API fails so it can try again
+            });
             
-        } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
-            setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
-            setWallet({...wallet, currentStreak: 1});
-            setTimeout(() => setRewardPopup({ show: false }), 4000);
-        }
-            }).catch(err => console.log("Daily reward sync failed", err));
-            
-        } else if (rewardResult.streakReset && rewardResult.currentStreak === 1) {
+        } else if (rewardResult.streakReset && rewardResult.currentStreak === 1 && !localStorage.getItem(rewardKey)) {
+            localStorage.setItem(rewardKey, 'true'); // 🔒 Lock it for today!
             setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
             setWallet({...wallet, currentStreak: 1});
             setTimeout(() => setRewardPopup({ show: false }), 4000);
