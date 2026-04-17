@@ -870,7 +870,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 alert(`❌ ${res.data.message}`);
             }
         } catch(e) {
-            alert("Backend API coming in next step!"); // Placeholder until we build backend
+            console.error("Submission Error:", e);
+            alert("Server Error: Failed to save your selection. Please try again."); 
         } finally {
             setLoading(false);
         }
