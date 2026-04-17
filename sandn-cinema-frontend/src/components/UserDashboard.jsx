@@ -866,11 +866,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
             if (res.data.success) {
-                alert(`✅ ${res.data.message}`);
-                setShowSelectionReview(false);
-                setActiveSelectionProject(null);
-                fetchUserSelections(syncUser.mobile);
-            } else {
+                alert(`✅ ${res.data.message}`);
+                setShowSelectionReview(false);
+                setActiveSelectionProject(null);
+                setCurrentTab('HOME'); // 👈 NEW: Redirect to Home to avoid blank screen
+                fetchUserSelections(syncUser.mobile);
+            } else {
                 alert(`❌ ${res.data.message}`);
             }
         } catch(e) {
