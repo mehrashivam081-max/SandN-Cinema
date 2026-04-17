@@ -2763,6 +2763,12 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
             updatePayload.isPaid = extraAmountToPay === 0;
             updatePayload.status = 'Completed';
             updatePayload.completedAt = new Date();
+
+            // ✅ NEW: Default Delivery Date = Today + 25 Days
+            const deliveryDate = new Date();
+            deliveryDate.setDate(deliveryDate.getDate() + 25);
+            updatePayload.expectedDeliveryDate = deliveryDate;
+            updatePayload.remindersSent = []; // Track emails sent
         } else {
             // Move to next phase
             updatePayload.currentPhase = (selection.currentPhase || 1) + 1;
@@ -2834,6 +2840,105 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
         res.status(500).json({ success: false, message: "Server error during selection update.", error: e.message });
     }
 });
+
+// ==========================================
+// 📅 32. ALBUM DELIVERY & AUTOMATED REMINDERS
+// ==========================================
+
+// API for Studio to manually change the expected delivery date
+app.post('/api/auth/update-album-delivery-date', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
+        
+        const { projectId, newDaysToAdd } = req.body;
+        
+        const newDate = new Date();
+        newDate.setDate(newDate.getDate() + parseInt(newDaysToAdd));
+
+        await AlbumSelection.updateOne(
+            { _id: projectId }, 
+            { 
+                $set: { expectedDeliveryDate: newDate },
+                $pull: { remindersSent: { $in: [10, 3, 1] } } // Reset reminders if date changes
+            }, 
+            { strict: false }
+        );
+
+        res.json({ success: true, message: `Delivery date updated to ${newDaysToAdd} days from today.` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server error." });
+    }
+});
+
+// 🤖 THE AUTOMATED EMAIL ENGINE (Runs every 12 hours)
+const checkAndSendReminders = async () => {
+    console.log("🤖 Running Automated Album Reminder Check...");
+    try {
+        // Find projects that are completed but not yet physically delivered
+        const activeProjects = await AlbumSelection.find({ status: 'Completed', isAlbumDelivered: { $ne: true } });
+
+        const today = new Date();
+
+        for (let project of activeProjects) {
+            if (!project.expectedDeliveryDate || !project.clientEmail || !project.studioMobile) continue;
+
+            // Calculate days left
+            const deliveryDate = new Date(project.expectedDeliveryDate);
+            const timeDiff = deliveryDate.getTime() - today.getTime();
+            const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+            let reminderToSend = null;
+
+            if (daysLeft === 10 && !project.remindersSent?.includes(10)) reminderToSend = 10;
+            else if (daysLeft === 3 && !project.remindersSent?.includes(3)) reminderToSend = 3;
+            else if (daysLeft === 1 && !project.remindersSent?.includes(1)) reminderToSend = 1;
+
+            if (reminderToSend) {
+                console.log(`✉️ Sending ${reminderToSend}-Day Reminder for project ${project.folderName}...`);
+
+                // 1. Email to Studio
+                const studioAcc = await Studio.findOne({ mobile: project.studioMobile });
+                if (studioAcc && studioAcc.email) {
+                    const studioHtml = `
+                        <div style="font-family: Arial; padding: 20px; border: 1px solid #e67e22; border-radius: 8px;">
+                            <h2 style="color: #e67e22;">⏳ Album Delivery Reminder</h2>
+                            <p>Hello Studio,</p>
+                            <p>The album <strong>${project.folderName}</strong> is expected to be delivered in exactly <strong>${reminderToSend} days</strong>.</p>
+                            <p>Please ensure printing and binding are on track to meet the deadline.</p>
+                        </div>`;
+                    sendBrevoEmail(studioAcc.email, `⏳ ${reminderToSend} Days Left: ${project.folderName}`, studioHtml).catch(()=>{});
+                }
+
+                // 2. Email to Client
+                if (!project.clientEmail.includes('dummy_')) {
+                    const clientHtml = `
+                        <div style="font-family: Arial; padding: 20px; border: 1px solid #3498db; border-radius: 8px;">
+                            <h2 style="color: #3498db;">Exciting News! 🎉</h2>
+                            <p>Hello,</p>
+                            <p>Your beautiful album for <strong>${project.folderName}</strong> is almost ready!</p>
+                            <p>Expected delivery is in just <strong>${reminderToSend} days</strong>.</p>
+                            <p>We can't wait for you to see the final result!</p>
+                        </div>`;
+                    sendBrevoEmail(project.clientEmail, `Your Album is Almost Ready! (${reminderToSend} Days Left)`, clientHtml).catch(()=>{});
+                }
+
+                // 3. Mark as sent in DB
+                await AlbumSelection.updateOne(
+                    { _id: project._id },
+                    { $addToSet: { remindersSent: reminderToSend } },
+                    { strict: false }
+                );
+            }
+        }
+    } catch (e) {
+        console.log("Cron Error:", e.message);
+    }
+};
+
+// Start the timer (Checks every 12 Hours: 12 * 60 * 60 * 1000 ms)
+setInterval(checkAndSendReminders, 43200000); 
+// Run once immediately on server start just to catch up
+setTimeout(checkAndSendReminders, 10000);
 
 // --- START SERVER ---
 app.listen(PORT, async () => {
