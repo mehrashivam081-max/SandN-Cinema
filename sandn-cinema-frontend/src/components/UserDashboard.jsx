@@ -137,7 +137,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } else if (activeSelectionProject) {
             setActiveSelectionProject(null);
             setSelectionDraft([]);
-        } else if (viewProposalBooking) {
+            setCurrentTab('HOME');
+        } else if (viewProposalBooking) {
             setViewProposalBooking(null);
         } else if (showEmergencyModal) {
             setShowEmergencyModal(false);
@@ -868,7 +869,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div className="folder-header-nav" style={{background: '#8e44ad'}}>
-                        <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                        <button onClick={() => { 
+                            setActiveSelectionProject(null); 
+                            setSelectionDraft([]); 
+                            setShowMissedImages(false); 
+                            setCurrentTab('HOME'); 
+                        }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
                         <h3 style={{color: '#fff'}}>Phase {currentPhase} Selection</h3>
                     </div>
 
@@ -1534,7 +1540,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             </div>
                                             <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Share this album selection folder with a family member so they can also select their favorite photos. <strong>Cost: 10 Coins per invite.</strong></p>
                                             
-                                            <form onSubmit={(e) => {
+                                            <form onSubmit={async (e) => {
                                                 e.preventDefault();
                                                 if(wallet.coins < 10) {
                                                     alert("Not enough coins! You need 10 coins to invite family.");
@@ -1545,14 +1551,29 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                 if(familyShareForm.mobile.length !== 10) return alert("Enter valid 10-digit mobile number!");
                                                 
                                                 setLoading(true);
-                                                // Future API Call Here. Local simulation for now.
-                                                setTimeout(() => {
-                                                    alert(`✅ Invitation link sent successfully to ${familyShareForm.mobile} via WhatsApp!`);
-                                                    setWallet({...wallet, coins: wallet.coins - 10});
+                                                try {
+                                                    // ✅ NEW: Single API call to deduct coins AND grant access internally
+                                                    const token = getValidToken();
+                                                    const res = await axios.post(`${API_BASE}/invite-family-selection`, {
+                                                        projectId: activeSelectionProject._id,
+                                                        senderMobile: syncUser.mobile,
+                                                        familyMobile: familyShareForm.mobile,
+                                                        cost: 10
+                                                    }, { headers: { 'Authorization': `Bearer ${token}` } });
+
+                                                    if (res.data.success) {
+                                                        setWallet(res.data.wallet); // Update coins instantly
+                                                        alert(`✅ Access granted! ${familyShareForm.mobile} can now login to SandN Cinema to view and select photos.`);
+                                                        setShowFamilyShareModal(false);
+                                                        setFamilyShareForm({mobile: '', hours: '24'});
+                                                    } else {
+                                                        alert(res.data.message || "Failed to invite family member. Try again.");
+                                                    }
+                                                } catch(err) {
+                                                    alert("Server error during invitation. Please try again.");
+                                                } finally {
                                                     setLoading(false);
-                                                    setShowFamilyShareModal(false);
-                                                    setFamilyShareForm({mobile: '', hours: '24'});
-                                                }, 1500);
+                                                }
                                             }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                                 <input 
                                                     type="number" required placeholder="Family Member's 10-Digit Mobile" 
