@@ -2300,14 +2300,22 @@ const SharedMedia = mongoose.models.SharedMedia || mongoose.model('SharedMedia',
 
 // 📤 API 1: Grant Temporary Access
 app.post('/api/auth/grant-media-access', authenticateToken, async (req, res) => {
-    try {
-        const { senderMobile, receiverMobile, mediaUrl, mediaType, hours } = req.body;
-        
-        // Check if receiver exists
-        const receiverAcc = await findAccount(receiverMobile);
-        if (!receiverAcc) return res.json({ success: false, message: "User not found! Receiver must be registered on Snevio." });
+    try {
+        const { senderMobile, receiverMobile, mediaUrl, mediaType, hours } = req.body;
+        
+        if(senderMobile === receiverMobile) return res.json({ success: false, message: "You cannot share media with yourself!" });
 
-        const expiryDate = new Date();
+        // ✅ NEW: Check if this exact media is already shared with this person
+        const existingShare = await SharedMedia.findOne({ senderMobile, receiverMobile, mediaUrl });
+        if(existingShare) {
+            return res.json({ success: false, message: `⚠️ Already Shared! This ${mediaType} is already accessible to this user.` });
+        }
+
+        // Check if receiver exists
+        const receiverAcc = await findAccount(receiverMobile);
+        if (!receiverAcc) return res.json({ success: false, message: "User not found! Receiver must be registered on Snevio." });
+
+        const expiryDate = new Date();
         expiryDate.setHours(expiryDate.getHours() + parseInt(hours));
 
         const senderAcc = await findAccount(senderMobile);
@@ -2695,14 +2703,19 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
         if (wallet.coins < cost) return res.json({ success: false, message: "Not enough coins!" });
 
         const selection = await AlbumSelection.findById(projectId);
-        if (!selection) return res.json({ success: false, message: "Selection project not found." });
+        if (!selection) return res.json({ success: false, message: "Selection project not found." });
 
-        // ✅ Check if already invited
-        const alreadyInvited = (selection.familyMembers || []).find(f => f.mobile === getCleanMobile(familyMobile));
-        if (alreadyInvited) return res.json({ success: false, message: "User already invited!" });
+        // ✅ NEW: Smart Duplicate Check (Prevents coin deduction for same folder)
+        const alreadyInvited = (selection.familyMembers || []).find(f => f.mobile === getCleanMobile(familyMobile));
+        if (alreadyInvited) {
+            return res.json({ 
+                success: false, 
+                message: `⚠️ Already Shared! You have already invited ${alreadyInvited.nickname || familyMobile} to the "${selection.folderName}" folder.` 
+            });
+        }
 
-        // Cut Coins
-        wallet.coins -= cost;
+        // Cut Coins
+        wallet.coins -= cost;
         wallet.history.unshift({
             action: `Family Invite Sent to ${nickname || familyMobile}`,
             amount: `-${cost} Coins`,
