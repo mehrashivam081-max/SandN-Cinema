@@ -2592,6 +2592,7 @@ app.post('/api/auth/update-studio-storage-plan', authenticateToken, async (req, 
 });
 
 // ==========================================
+// ==========================================
 // 📸 31. SMART ALBUM SELECTION ENGINE
 // ==========================================
 
@@ -2606,13 +2607,17 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const studioAcc = await Studio.findOne({ mobile: req.user.mobile });
         const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Studio';
 
-        // Format Image Objects
-        const imageObjects = fileUrls.map(url => ({
-            url: url,
-            status: 'active',
-            selectedBy: [],
-            deletedAt: null
-        }));
+        // ✅ FORMAT IMAGES (Smart Logic for Normal Arrays vs New Objects)
+        const imageObjects = fileUrls.map(item => {
+            if (typeof item === 'string') {
+                return { url: item, status: 'active', selectedBy: [], subFolder: 'Main Event', deletedAt: null };
+            } else {
+                return { url: item.url, status: 'active', selectedBy: [], subFolder: item.subFolder || 'Main Event', deletedAt: null };
+            }
+        });
+
+        // ✅ Extract raw URLs for fallback
+        const rawUrls = imageObjects.map(img => img.url);
 
         const newSelection = await AlbumSelection.create({
             studioMobile: req.user.mobile,
@@ -2626,7 +2631,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
             totalPhases: Number(totalPhases) || 3,
             cloudProvider: cloudProvider || 'CLOUDINARY',
             images: imageObjects,
-            allImages: fileUrls
+            allImages: rawUrls
         });
 
         // 📩 Fire Email to Client (The Magic Link)
