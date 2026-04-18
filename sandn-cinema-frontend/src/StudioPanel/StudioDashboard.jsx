@@ -309,12 +309,33 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    const handleFileChange = (e) => {
+    // ✅ UPGRADED: Can read files OR entire folders natively!
+    const handleFileChange = (e, isFolderUpload = false) => {
         const selectedFiles = Array.from(e.target.files);
-        setFiles(selectedFiles);
-        const photos = selectedFiles.filter(file => file.type.startsWith('image/')).length;
-        const videos = selectedFiles.filter(file => file.type.startsWith('video/')).length;
-        setFileStats(prev => ({ ...prev, photos, videos }));
+        
+        // Filter out junk files (like .DS_Store on Mac or .ini on Windows)
+        const validMediaFiles = selectedFiles.filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
+        
+        // Extract sub-folder names automatically from the file path
+        const structuredFiles = validMediaFiles.map(file => {
+            let extractedSubFolder = 'Main Event';
+            if (isFolderUpload && file.webkitRelativePath) {
+                // Path looks like: "Wedding_Data/Haldi/IMG_001.jpg"
+                const pathParts = file.webkitRelativePath.split('/');
+                if (pathParts.length >= 3) {
+                    extractedSubFolder = pathParts[pathParts.length - 2]; // Get the immediate parent folder name (e.g., 'Haldi')
+                }
+            }
+            // Safely attach the subfolder name to the file object
+            Object.defineProperty(file, 'customSubFolder', { value: extractedSubFolder, writable: true });
+            return file;
+        });
+
+        setFiles(prev => [...prev, ...structuredFiles]);
+        
+        const photos = structuredFiles.filter(file => file.type.startsWith('image/')).length;
+        const videos = structuredFiles.filter(file => file.type.startsWith('video/')).length;
+        setFileStats(prev => ({ ...prev, photos: prev.photos + photos, videos: prev.videos + videos }));
     };
 
     const processFeedFiles = (selectedFiles) => {
@@ -478,7 +499,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                             }
                         }
                     });
-                    return res.data.url;
+                    // ✅ Return URL ALONG WITH its auto-detected sub-folder!
+                    return { 
+                        url: res.data.url, 
+                        subFolder: file.customSubFolder || targetSubFolder || 'Main Event' 
+                    };
                 });
 
                 // Wait for the chunk of 5 to finish before starting the next 5
@@ -538,14 +563,14 @@ const StudioDashboard = ({ user, onLogout }) => {
             let backendRes;
             
             if (uploadType === 'SELECTION') {
-                // Smart Album Selection Payload
+                // ✅ Smart Album uses our auto-structured Objects directly!
                 const selPayload = {
                     clientMobile, clientEmail, folderName: baseFolder, 
                     sheetLimit: selectionForm.sheetLimit,
                     imagesPerSheet: selectionForm.imagesPerSheet,
                     costPerExtraSheet: selectionForm.costPerExtraSheet,
                     totalPhases: selectionForm.totalPhases,
-                    fileUrls: uploadedUrls,
+                    fileUrls: uploadedUrls, 
                     cloudProvider: 'CLOUDINARY'
                 };
                 
@@ -553,22 +578,15 @@ const StudioDashboard = ({ user, onLogout }) => {
                     headers: { 'Authorization': `Bearer ${getValidToken()}` }
                 });
             } else {
-                // Normal Client Data Payload
-                const payload = {
-                    mobile: clientMobile,
-                    name: clientName || 'Client',
-                    type: 'USER',
-                    folderName: baseFolder,
-                    subFolderName: targetSubFolder, 
-                    email: clientEmail,
-                    expiryDays: expiryDays || '30',
-                    downloadLimit: downloadLimit || '0',
-                    addedBy: user?.mobile || 'ADMIN',
-                    fileUrls: uploadedUrls,
-                    imageCost: '5',
-                    videoCost: '10',
-                    unlockValidity: '24 Hours'
-                };
+                // Normal Upload (Fallback: Extracts only URLs if backend doesn't support objects here yet)
+                const payload = {
+                    mobile: clientMobile, name: clientName || 'Client', type: 'USER',
+                    folderName: baseFolder, subFolderName: targetSubFolder, 
+                    email: clientEmail, expiryDays: expiryDays || '30', downloadLimit: downloadLimit || '0',
+                    addedBy: user?.mobile || 'ADMIN',
+                    fileUrls: uploadedUrls.map(obj => obj.url), // Extract plain strings for Normal Upload
+                    imageCost: '5', videoCost: '10', unlockValidity: '24 Hours'
+                };
 
                 // ✅ SAFE DB CALL WITH VALID TOKEN
                 backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payload, {
@@ -1383,8 +1401,21 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 </div>
 
                                 <div style={{ border: '2px dashed #ccc', padding: '20px', borderRadius: '10px', textAlign: 'center', background: '#f9f9f9' }}>
-                                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '10px', color: '#444' }}>📁 Select Photos/Videos</label>
-                                    <input id="file-input-field" type="file" multiple accept="image/*,video/*" onChange={handleFileChange} style={{ color: '#333' }} />
+                                    <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '15px', color: '#444' }}>📁 Upload Media (Smart Structuring)</label>
+                                    
+                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+                                        <button type="button" onClick={() => document.getElementById('file-input-field').click()} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                            📄 Select Specific Files
+                                        </button>
+                                        <button type="button" onClick={() => document.getElementById('folder-input-field').click()} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                            🗂️ Select Entire Folder
+                                        </button>
+                                    </div>
+                                    <p style={{ fontSize: '11px', color: '#777', margin: '0 0 15px 0' }}>Tip: Select a root folder (e.g. 'Wedding') and we'll automatically detect its sub-folders (Haldi, Mehndi)!</p>
+
+                                    <input id="file-input-field" type="file" multiple accept="image/*,video/*" onChange={(e) => handleFileChange(e, false)} style={{ display: 'none' }} />
+                                    {/* ✅ THE MAGIC DIRECTORY ATTRIBUTE */}
+                                    <input id="folder-input-field" type="file" webkitdirectory="true" directory="true" multiple onChange={(e) => handleFileChange(e, true)} style={{ display: 'none' }} />
                                     
                                     {files.length > 0 && (
                                         <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'center', gap: '15px' }}>
