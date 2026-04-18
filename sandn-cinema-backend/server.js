@@ -3075,6 +3075,18 @@ app.post('/api/auth/delete-specific-data', authenticateToken, async (req, res) =
     }
 });
 
+// 🗑️ Delete Smart Selection Project Completely
+app.post('/api/auth/delete-selection-project', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.body;
+        await AlbumSelection.findByIdAndDelete(projectId);
+        res.json({ success: true, message: "Project deleted successfully" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Server error deleting project" });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
