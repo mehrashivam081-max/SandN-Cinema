@@ -81,6 +81,9 @@ const StudioDashboard = ({ user, onLogout }) => {
     });
     const abortControllerRef = useRef(null);
     const [showNotifications, setShowNotifications] = useState(false); // ✅ Added Notification State
+    
+    // ✅ NEW: VIEW CLIENT UI STATE (For Modal)
+    const [previewProject, setPreviewProject] = useState(null);
 
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -672,19 +675,36 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // ✅ 1. MAGIC LOGIN (View Client UI) - FIXED for Unregistered Clients
-    const handleMagicLogin = (clientMobile) => {
-        // Bina DB check kiye direct fake user inject karo, taaki pending clients ka data bhi dikh sake
-        const fakeUserObj = { 
-            name: 'Client Preview', 
-            mobile: clientMobile, 
-            role: 'USER', 
-            isMagicLogin: true 
-        };
-        const magicUrl = `${window.location.origin}/dashboard?magic=${btoa(JSON.stringify(fakeUserObj))}`;
-        window.open(magicUrl, '_blank');
+    // ✅ 1. VIEW CLIENT UI (Opens In-App Modal)
+    const handleMagicLogin = (project) => {
+        if (!project || !project.images || project.images.length === 0) {
+            return alert("No images found in this project.");
+        }
+        setPreviewProject(project); // Set the project to show in modal
     };
 
+    // ✅ NEW: DELETE SMART SELECTION PROJECT
+    const handleDeleteSelectionProject = async (projectId) => {
+        if (!window.confirm("⚠️ WARNING: Are you absolutely sure you want to delete this Selection Project? All data and client progress will be permanently lost!")) return;
+        
+        try {
+            const token = getValidToken();
+            if(!token) return alert("Security Token missing. Please relogin.");
+
+            const res = await axios.post(`${API_BASE}/delete-selection-project`, { projectId }, { headers: { 'Authorization': `Bearer ${token}` } });
+            
+            if (res.data.success) {
+                alert("✅ Project deleted successfully!");
+                // Remove it directly from UI for instant effect without waiting for fetch
+                setMySelections(prev => prev.filter(sel => sel._id !== projectId)); 
+            } else {
+                alert("❌ Failed to delete: " + res.data.message);
+            }
+        } catch (e) {
+            console.error("Delete Error:", e);
+            alert(`Error deleting project: ${e.response?.data?.message || e.message}`);
+        }
+    };
     // ✅ NEW: DELETE SMART SELECTION PROJECT
     const handleDeleteSelectionProject = async (projectId) => {
         if (!window.confirm("⚠️ Are you sure you want to completely delete this Selection Project? All client progress and links will be destroyed!")) return;
@@ -867,6 +887,36 @@ const StudioDashboard = ({ user, onLogout }) => {
                         {downloadManager.failedFiles.length > 0 && (
                             <p style={{ margin: '10px 0 0 0', fontSize: '10px', color: '#e74c3c', textAlign: 'center' }}>⚠️ {downloadManager.failedFiles.length} files failed. System will retry them.</p>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ CLIENT DATA PREVIEW MODAL */}
+            {previewProject && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '20px', borderRadius: '15px', width: '90%', maxWidth: '800px', height: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+                            <div>
+                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>📂 Preview: {previewProject.folderName}</h2>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#aaa' }}>Client: {previewProject.clientMobile} | Total Images: {previewProject.images?.length || 0}</p>
+                            </div>
+                            <button onClick={() => setPreviewProject(null)} style={{ background: 'transparent', border: 'none', fontSize: '24px', color: '#fff', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '15px', padding: '10px' }}>
+                            {previewProject.images && previewProject.images.length > 0 ? (
+                                previewProject.images.map((img, idx) => (
+                                    <div key={idx} style={{ position: 'relative', height: '120px', background: '#000', borderRadius: '8px', overflow: 'hidden', border: img.status === 'selected' ? '3px solid #2ecc71' : '1px solid #333' }}>
+                                        <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: img.status === 'selected' ? 1 : 0.6 }} alt={`img-${idx}`} />
+                                        {img.status === 'selected' && (
+                                            <div style={{ position: 'absolute', top: '5px', right: '5px', background: '#2ecc71', color: '#fff', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <p style={{ color: '#888', gridColumn: '1 / -1', textAlign: 'center' }}>No images found.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -1466,7 +1516,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     {sel.extraAmountToPay > 0 && <div style={{fontSize:'10px', color: sel.isPaid ? '#2ecc71' : '#e74c3c'}}>{sel.isPaid ? 'Paid' : 'Unpaid'}</div>}
                                                 </td>
                                                 <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                    <button onClick={() => handleMagicLogin(sel.clientMobile)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>👁️ View Client UI</button>
+                                                    <button onClick={() => handleMagicLogin(sel)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>👁️ Preview Data</button>
                                                     
                                                     <button onClick={() => handleDeleteSelectionProject(sel._id)} style={{background:'#e74c3c', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>🗑️ Delete Project</button>
                                                     
