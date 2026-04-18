@@ -849,21 +849,30 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     const submitPhaseSelection = async (finalPhase = false) => {
-        if (!activeSelectionProject) return;
-        
-        let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
-        if (finalPhase) msg = `⚠️ WARNING: This is the Final Preview!\n\nUnselected images will be permanently removed from your album (kept in 7-day backup).\nAre you ready to submit your final selection to the studio?`;
-        
-        if (!window.confirm(msg)) return;
+        if (!activeSelectionProject) return;
 
-        setLoading(true);
-        try {
-            // NOTE: We will write this API in the next step!
-            const res = await axios.post(`${API_BASE}/update-album-selection`, {
-                projectId: activeSelectionProject._id,
-                selectedImages: selectionDraft,
-                isFinal: finalPhase
-            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+        // ✅ Check if the current user is a Family Member (not the main client)
+        const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
+        
+        let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
+        
+        if (isFamilyMember && finalPhase) {
+            msg = `Send your selected images to the main client? You won't be able to change them later.`;
+        } else if (finalPhase) {
+            msg = `⚠️ WARNING: This is the Final Preview!\n\nUnselected images will be permanently removed from your album (kept in 7-day backup).\nAre you ready to submit your final selection to the studio?`;
+        }
+        
+        if (!window.confirm(msg)) return;
+
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/update-album-selection`, {
+                projectId: activeSelectionProject._id,
+                selectedImages: selectionDraft,
+                isFinal: finalPhase,
+                isFamilyMember: isFamilyMember, // ✅ Sent to backend
+                userMobile: syncUser.mobile
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
             if (res.data.success) {
                 alert(`✅ ${res.data.message}`);
@@ -1024,82 +1033,86 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
                 )}
                     {/* ✅ RECOVER MISSED IMAGES MODAL (With Multi-Select & Long Press) */}
-                        {showMissedImages && (
-                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-                                    <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
-                                    <button onClick={() => { setShowMissedImages(false); setMissedSelection([]); }} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
-                                </div>
-                                <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                    <strong>Tap</strong> to select multiple images. <strong>Press and hold</strong> to view full preview.
-                                </div>
-                                <div className="ud-grid-vip" style={{ padding: '0 15px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
-                                    {missedImages.map((img, idx) => {
-                                        const isMissedSelected = missedSelection.includes(img.url);
-                                        return (
-                                            <div key={idx} 
-                                                onPointerDown={(e) => startPress(e, img.url)}
-                                                onPointerMove={movePress}
-                                                onPointerUp={() => endPress(() => {
-                                                    setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
-                                                })}
-                                                onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                                className="gallery-item-vip" 
-                                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isMissedSelected ? '3px solid #e67e22' : '1px solid #ddd', cursor: 'pointer' }}
-                                            >
-                                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isMissedSelected ? 1 : 0.5 }} />
-                                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isMissedSelected ? '#e67e22' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    {isMissedSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                                                </div>
+                    {showMissedImages && !isCompleted && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
+                                <button onClick={() => { setShowMissedImages(false); setMissedSelection([]); }} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+                            </div>
+                            <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                <strong>Tap</strong> to select multiple images. <strong>Press and hold</strong> to view full preview.
+                            </div>
+                            <div className="ud-grid-vip" style={{ padding: '0 15px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
+                                {missedImages.map((img, idx) => {
+                                    const isMissedSelected = missedSelection.includes(img.url);
+                                    return (
+                                        <div key={idx} 
+                                            onPointerDown={(e) => startPress(e, img.url)}
+                                            onPointerMove={movePress}
+                                            onPointerUp={() => endPress(() => {
+                                                setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
+                                            })}
+                                            onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                            className="gallery-item-vip" 
+                                            style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isMissedSelected ? '3px solid #e67e22' : '1px solid #ddd', cursor: 'pointer' }}
+                                        >
+                                            <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isMissedSelected ? 1 : 0.5 }} />
+                                            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isMissedSelected ? '#e67e22' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                {isMissedSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
                                             </div>
-                                        );
-                                    })}
-                                    {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
-                                </div>
-
-                                {/* Bottom Sticky Bar for Missed Images */}
-                                {missedSelection.length > 0 && (
-                                    <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', padding: '15px', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', zIndex: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{fontWeight: 'bold', color: '#e67e22'}}>{missedSelection.length} Selected</span>
-                                        <button onClick={() => setShowMissedRestoreConfirm(true)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(230, 126, 34, 0.4)' }}>
-                                            Restore Images
-                                        </button>
-                                    </div>
-                                )}
+                                        </div>
+                                    );
+                                })}
+                                {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
                             </div>
-                        )}
 
-                        {/* ✅ MISSED IMAGES RESTORE CONFIRMATION MODAL */}
-                        {showMissedRestoreConfirm && (
-                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-                                <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-                                    <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
-                                    <h3 style={{ color: '#e67e22', margin: '0 0 10px 0' }}>Restore {missedSelection.length} Images?</h3>
-                                    <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>These images will be added back to your active album selection.</p>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button onClick={() => setShowMissedRestoreConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
-                                        <button onClick={() => { 
-                                            setSelectionDraft(prev => [...prev, ...missedSelection]); 
-                                            setMissedSelection([]); 
-                                            setShowMissedRestoreConfirm(false); 
-                                            setShowMissedImages(false); 
-                                            alert("✅ Images restored successfully!");
-                                        }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Restore</button>
-                                    </div>
+                            {/* Bottom Sticky Bar for Missed Images */}
+                            {missedSelection.length > 0 && (
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', padding: '15px', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', zIndex: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{fontWeight: 'bold', color: '#e67e22'}}>{missedSelection.length} Selected</span>
+                                    <button onClick={() => setShowMissedRestoreConfirm(true)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(230, 126, 34, 0.4)' }}>
+                                        Restore Images
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ✅ MISSED IMAGES RESTORE CONFIRMATION MODAL */}
+                    {showMissedRestoreConfirm && !isCompleted && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                            <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                                <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
+                                <h3 style={{ color: '#e67e22', margin: '0 0 10px 0' }}>Restore {missedSelection.length} Images?</h3>
+                                <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>These images will be added back to your active album selection.</p>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button onClick={() => setShowMissedRestoreConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                    <button onClick={() => { 
+                                        setSelectionDraft(prev => [...prev, ...missedSelection]); 
+                                        setMissedSelection([]); 
+                                        setShowMissedRestoreConfirm(false); 
+                                        setShowMissedImages(false); 
+                                        alert("✅ Images restored successfully!");
+                                    }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Restore</button>
                                 </div>
                             </div>
-                        )}
+                        </div>
+                    )}
                 </div>
             );
         }
 
         // SCENARIO 2: Review & Finalize Form
-        if (showSelectionReview && activeSelectionProject) {
-            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
-            const extraImages = Math.max(0, selectionDraft.length - totalAllowed);
-            const extraSheets = activeSelectionProject.imagesPerSheet > 0 ? Math.ceil(extraImages / activeSelectionProject.imagesPerSheet) : 0;
-            const extraCost = extraSheets * (activeSelectionProject.costPerExtraSheet || 0);
-            const isFinalPhase = activeSelectionProject.currentPhase >= activeSelectionProject.totalPhases;
+        if (showSelectionReview && activeSelectionProject) {
+            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
+            // ✅ Force Family Members to stop at Phase 2
+            const effectiveTotalPhases = isFamilyMember ? Math.min(2, activeSelectionProject.totalPhases) : activeSelectionProject.totalPhases;
+
+            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            const extraImages = Math.max(0, selectionDraft.length - totalAllowed);
+            const extraSheets = activeSelectionProject.imagesPerSheet > 0 ? Math.ceil(extraImages / activeSelectionProject.imagesPerSheet) : 0;
+            const extraCost = extraSheets * (activeSelectionProject.costPerExtraSheet || 0);
+            const isFinalPhase = activeSelectionProject.currentPhase >= effectiveTotalPhases;
 
             return (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
@@ -1141,13 +1154,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             </div>
                         )}
 
-                        <button 
-                            onClick={() => submitPhaseSelection(isFinalPhase)}
-                            disabled={loading || selectionDraft.length === 0}
-                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
-                        >
-                            {loading ? 'Processing...' : (isFinalPhase ? '🚀 Finalize & Send to Studio' : '➡️ Lock Selection & Move Next')}
-                        </button>
+                        <button 
+                            onClick={() => submitPhaseSelection(isFinalPhase)}
+                            disabled={loading || selectionDraft.length === 0}
+                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
+                        >
+                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
+                        </button>
                     </div>
                 </div>
             );
@@ -1162,8 +1175,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const displayedList = sharedTabFilter === 'RECEIVED' ? sharedWithMe : sharedByMe;
         
         // ✅ NEW LOGIC: Extract Album Selection Invites automatically
-        const receivedInvites = mySelections.filter(sel => sel.clientMobile !== syncUser?.mobile && (sel.familyMembers || []).includes(syncUser?.mobile));
-        const sentInvites = mySelections.filter(sel => sel.clientMobile === syncUser?.mobile && (sel.familyMembers || []).length > 0);
+        const receivedInvites = mySelections.filter(sel => sel.clientMobile !== syncUser?.mobile && (sel.familyMembers || []).some(f => f.mobile === syncUser?.mobile));
+        const sentInvites = mySelections.filter(sel => sel.clientMobile === syncUser?.mobile && (sel.familyMembers || []).length > 0);
         
         const displayedInvites = sharedTabFilter === 'RECEIVED' ? receivedInvites : sentInvites;
 
@@ -1195,10 +1208,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '16px' }}>Album Collaboration</h3>
                                     <p style={{ color: '#f1c40f', margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold' }}>{sel.folderName}</p>
                                     
-                                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '15px' }}>
+                                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '15px', lineHeight: '1.4' }}>
                                         {sharedTabFilter === 'RECEIVED' 
                                             ? `Invited by: ${sel.clientMobile}` 
-                                            : `Invited: ${sel.familyMembers.join(', ')}`}
+                                            : <span>Invited: {sel.familyMembers.map((f, i) => <span key={i}><strong style={{color: '#f1c40f'}}>{f.nickname}</strong> ({f.mobile}){i < sel.familyMembers.length-1 ? ', ' : ''}</span>)}</span>}
                                     </div>
                                     
                                     <button onClick={() => { 
@@ -1729,23 +1742,24 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                     return;
                                                 }
                                                 if(familyShareForm.mobile.length !== 10) return alert("Enter valid 10-digit mobile number!");
+                                                if(!familyShareForm.nickname.trim()) return alert("Please provide a Nickname!");
                                                 
                                                 setLoading(true);
                                                 try {
-                                                    // ✅ NEW: Single API call to deduct coins AND grant access internally
                                                     const token = getValidToken();
                                                     const res = await axios.post(`${API_BASE}/invite-family-selection`, {
                                                         projectId: activeSelectionProject._id,
                                                         senderMobile: syncUser.mobile,
                                                         familyMobile: familyShareForm.mobile,
+                                                        nickname: familyShareForm.nickname, // ✅ Sent to Backend
                                                         cost: 10
                                                     }, { headers: { 'Authorization': `Bearer ${token}` } });
 
                                                     if (res.data.success) {
-                                                        setWallet(res.data.wallet); // Update coins instantly
-                                                        alert(`✅ Access granted! ${familyShareForm.mobile} can now login to SandN Cinema to view and select photos.`);
+                                                        setWallet(res.data.wallet);
+                                                        alert(`✅ Access granted! ${familyShareForm.nickname} can now view and select photos.`);
                                                         setShowFamilyShareModal(false);
-                                                        setFamilyShareForm({mobile: '', hours: '24'});
+                                                        setFamilyShareForm({mobile: '', nickname: '', hours: '24'});
                                                     } else {
                                                         alert(res.data.message || "Failed to invite family member. Try again.");
                                                     }
@@ -1755,9 +1769,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                     setLoading(false);
                                                 }
                                             }} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                
                                                 <input 
                                                     type="number" required placeholder="Family Member's 10-Digit Mobile" 
                                                     value={familyShareForm.mobile} onChange={e => setFamilyShareForm({...familyShareForm, mobile: e.target.value})} 
+                                                    style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%', color: '#333', backgroundColor: '#f8f9fa' }} 
+                                                />
+                                                <input 
+                                                    type="text" required placeholder="Nickname (e.g. Uncle Rahul)" 
+                                                    value={familyShareForm.nickname} onChange={e => setFamilyShareForm({...familyShareForm, nickname: e.target.value})} 
                                                     style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '14px', width: '100%', color: '#333', backgroundColor: '#f8f9fa' }} 
                                                 />
                                                 <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#d4ac0d', fontWeight: 'bold' }}>
