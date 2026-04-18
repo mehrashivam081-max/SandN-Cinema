@@ -1157,29 +1157,62 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return null;
     };
 
-    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE) 👇
+    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE - WITH FAMILY COLLAB) 👇
     const renderSharedTab = () => {
         const displayedList = sharedTabFilter === 'RECEIVED' ? sharedWithMe : sharedByMe;
+        
+        // ✅ NEW LOGIC: Extract Album Selection Invites automatically
+        const receivedInvites = mySelections.filter(sel => sel.clientMobile !== syncUser?.mobile && (sel.familyMembers || []).includes(syncUser?.mobile));
+        const sentInvites = mySelections.filter(sel => sel.clientMobile === syncUser?.mobile && (sel.familyMembers || []).length > 0);
+        
+        const displayedInvites = sharedTabFilter === 'RECEIVED' ? receivedInvites : sentInvites;
 
         return (
             <div className="folders-view" style={{ paddingBottom: '80px' }}>
                 <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #3498db)' }}>
                     <h1>🔐 Media Sharing</h1>
-                    <p>Manage access to premium content.</p>
+                    <p>Manage access to premium content & album collabs.</p>
                 </div>
                 
-                {/* 🎛️ NEW: TOGGLE BUTTONS */}
+                {/* 🎛️ NEW: TOGGLE BUTTONS (Count updated dynamically) */}
                 <div style={{ display: 'flex', gap: '10px', padding: '20px 20px 0 20px' }}>
                     <button onClick={() => setSharedTabFilter('RECEIVED')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'RECEIVED' ? '#8e44ad' : '#1a1a2e', color: sharedTabFilter === 'RECEIVED' ? '#fff' : '#888' }}>
-                        📥 Received ({sharedWithMe.length})
+                        📥 Received ({sharedWithMe.length + receivedInvites.length})
                     </button>
                     <button onClick={() => setSharedTabFilter('SENT')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'SENT' ? '#3498db' : '#1a1a2e', color: sharedTabFilter === 'SENT' ? '#fff' : '#888' }}>
-                        📤 Shared By Me ({sharedByMe.length})
+                        📤 Shared By Me ({sharedByMe.length + sentInvites.length})
                     </button>
                 </div>
 
-                {fetchingShared ? <div className="loading-state-vip">Checking for shared media...</div> : (
+                {fetchingShared ? <div className="loading-state-vip">Checking for shared data...</div> : (
                     <div className="ud-grid-vip mt-20" style={{ padding: '20px' }}>
+                        
+                        {/* 🌟 1. RENDER ALBUM COLLAB INVITES FIRST (Top Priority) */}
+                        {displayedInvites.map((sel, idx) => (
+                            <div key={`invite-${idx}`} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', borderRadius: '12px', overflow: 'hidden', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(241, 196, 15, 0.2)' }}>
+                                <div style={{ padding: '20px', textAlign: 'center', flex: 1 }}>
+                                    <div style={{ fontSize: '40px', marginBottom: '10px' }}>🤝</div>
+                                    <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '16px' }}>Album Collaboration</h3>
+                                    <p style={{ color: '#f1c40f', margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold' }}>{sel.folderName}</p>
+                                    
+                                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '15px' }}>
+                                        {sharedTabFilter === 'RECEIVED' 
+                                            ? `Invited by: ${sel.clientMobile}` 
+                                            : `Invited: ${sel.familyMembers.join(', ')}`}
+                                    </div>
+                                    
+                                    <button onClick={() => { 
+                                        setCurrentTab('SELECTIONS'); 
+                                        setActiveSelectionProject(sel); 
+                                        setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); 
+                                    }} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '10px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                        {sharedTabFilter === 'RECEIVED' ? 'View & Vote ❤️' : 'Open Selection Folder'}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* 🌟 2. RENDER NORMAL SHARED MEDIA */}
                         {displayedList.length > 0 ? displayedList.map((item, idx) => (
                             <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: sharedTabFilter === 'RECEIVED' ? '1px solid #8e44ad' : '1px solid #3498db' }}>
                                 
@@ -1213,7 +1246,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     </p>
                                     <p style={{ margin: '0 0 10px 0', color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
                                     
-                                    {/* 👇 NAYA BUTTON: REVOKE ACCESS (Sirf Sender ke liye) 👇 */}
                                     {sharedTabFilter === 'SENT' && (
                                         <button onClick={() => handleRevokeAccess(item._id)} style={{ width: '100%', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '8px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
                                             ❌ Revoke Access
@@ -1221,11 +1253,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     )}
                                 </div>
                             </div>
-                        )) : (
+                        )) : null}
+
+                        {/* NO DATA STATE */}
+                        {displayedList.length === 0 && displayedInvites.length === 0 && (
                             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888', width: '100%', gridColumn: '1 / -1' }}>
                                 <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
                                 <h3>No Media Here</h3>
-                                <p style={{ fontSize: '13px' }}>{sharedTabFilter === 'RECEIVED' ? 'No one has shared media with you yet.' : 'You haven\'t shared any media securely yet.'}</p>
+                                <p style={{ fontSize: '13px' }}>{sharedTabFilter === 'RECEIVED' ? 'No one has shared media or albums with you yet.' : 'You haven\'t shared anything securely yet.'}</p>
                             </div>
                         )}
                     </div>
