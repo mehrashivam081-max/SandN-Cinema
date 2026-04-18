@@ -272,6 +272,7 @@ const albumSelectionSchema = new mongoose.Schema({
         url: String,
         status: { type: String, enum: ['active', 'selected', 'rejected'], default: 'active' },
         selectedBy: [{ type: String }], // Array of mobile numbers (Jo family member select karega uska number)
+        subFolder: { type: String, default: 'Main Event' }, // ✅ Added subFolder support for Multi-Folder Uploads
         deletedAt: { type: Date, default: null } // 7-Day Soft Delete / Recovery ke liye
     }],
     
