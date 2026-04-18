@@ -1330,10 +1330,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '5px 8px', borderRadius: '5px' }}>
                                                         <span><strong style={{color: '#f1c40f'}}>{f.nickname}</strong> ({f.mobile})</span>
                                                         <a 
-                                                            href={`https://wa.me/91${f.mobile}?text=Hi%20${f.nickname},%20I%20have%20shared%20the%20${sel.folderName}%20album%20with%20you.%20Please%20login%20to%20SandN%20Cinema%20to%20select%20your%20favorite%20photos!`} 
+                                                            href={`https://wa.me/91${f.mobile}?text=Hi%20${f.nickname},%20I%20have%20securely%20shared%20the%20"${sel.folderName}"%20album%20with%20you.%20For%20privacy,%20please%20login%20using%20this%20mobile%20number%20(${f.mobile})%20at%20${WEBSITE_URL}%20to%20view%20and%20vote!%20📸`} 
                                                             target="_blank" rel="noreferrer"
                                                             style={{ background: '#25D366', color: '#fff', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', fontWeight: 'bold', fontSize: '10px' }}
-                                                            onClick={(e) => e.stopPropagation()} // Prevent card click
+                                                            onClick={(e) => e.stopPropagation()} 
                                                         >
                                                             WhatsApp 💬
                                                         </a>
@@ -1387,11 +1387,20 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     </p>
                                     <p style={{ margin: '0 0 10px 0', color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
                                     
-                                    {sharedTabFilter === 'SENT' && (
-                                        <button onClick={() => handleRevokeAccess(item._id)} style={{ width: '100%', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '8px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
-                                            ❌ Revoke Access
-                                        </button>
-                                    )}
+                                    {/* ✅ Single WhatsApp Reminder Button (Only for Sender) */}
+                                        {sharedTabFilter === 'SENT' && (
+                                            <button onClick={() => {
+                                                const text = `Hi Family! I have securely shared the "${sel.folderName}" album with you. \n\n🔒 *Security Note:* To view the photos, you must log in using the exact mobile number I invited you with.\n\nClick here to login and vote:`;
+                                                if (navigator.share) {
+                                                    navigator.share({ title: 'Secure Album Invite', text: text, url: WEBSITE_URL });
+                                                } else {
+                                                    navigator.clipboard.writeText(`${text} ${WEBSITE_URL}`);
+                                                    alert("Secure invite message copied! Paste it in your Family WhatsApp group.");
+                                                }
+                                            }} style={{ background: '#25D366', color: '#fff', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                💬 Share Secure Link in WhatsApp
+                                            </button>
+                                        )}
                                 </div>
                             </div>
                         )) : null}
