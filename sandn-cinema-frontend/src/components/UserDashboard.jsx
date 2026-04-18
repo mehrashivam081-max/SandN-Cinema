@@ -951,20 +951,62 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 );
             }
 
-            // --- REGULAR LOGIC STARTS HERE FOR MAIN CLIENT / UN-SUBMITTED MEMBER ---
-            const currentPhase = activeSelectionProject.currentPhase || 1;
-            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
-            
-            let displayedImages = [];
-            let missedImages = [];
+            // 🛑 IF MAIN CLIENT HAS ALREADY SUBMITTED FINAL SELECTION, SHOW READ-ONLY UI
+            if (!isFamilyMember && activeSelectionProject.status === 'Completed') {
+                const finalSelectedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
+                
+                // Read-Only Long Press Helper
+                const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
+                const movePress = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
+                const endPress = () => { clearTimeout(touchRef.current.timer); }; // No click action
+                
+                return (
+                    <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                        <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                            <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
+                                <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                                <h3 style={{color: '#fff', margin: 0}}>Album in Production 🚚</h3>
+                            </div>
 
-            const isCompleted = activeSelectionProject.status === 'Completed';
+                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
+                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Final Selection Sent!</h3>
+                                <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>
+                                    Expected Delivery: {activeSelectionProject.expectedDeliveryDate ? new Date(activeSelectionProject.expectedDeliveryDate).toLocaleDateString() : 'Updating soon...'}
+                                </p>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You finalized <strong>{finalSelectedImages.length}</strong> photos. The studio is processing your album.</p>
+                            </div>
+                        </div>
 
-            if (isCompleted) {
-                // If finalized, ONLY show the final selected images
-                displayedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
-                missedImages = []; // Hide missed images
-            } else if (currentPhase === 1) {
+                        <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                            {finalSelectedImages.map((img, idx) => (
+                                <div key={idx} 
+                                    onPointerDown={(e) => startPress(e, img.url)}
+                                    onPointerMove={movePress}
+                                    onPointerUp={endPress}
+                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                    className="gallery-item-vip" 
+                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #3498db', cursor: 'zoom-in' }}>
+                                    
+                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} />
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#3498db', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>
+                                    </div>
+                                    <div style={{ position: 'absolute', bottom: '5px', left: 0, width: '100%', textAlign: 'center', color: '#fff', fontSize: '9px', background: 'rgba(0,0,0,0.5)', padding: '2px 0' }}>Hold to view</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- REGULAR LOGIC STARTS HERE FOR ACTIVE SELECTION (Not Completed Yet) ---
+            const currentPhase = activeSelectionProject.currentPhase || 1;
+            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            
+            let displayedImages = [];
+            let missedImages = [];
+
+            if (currentPhase === 1) {
                 displayedImages = activeSelectionProject.images;
             } else {
                 displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
@@ -997,32 +1039,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     {/* ✅ STICKY TOP SECTION: Header + Info + Missed Images Button */}
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: isCompleted ? '#27ae60' : '#8e44ad', margin: 0, borderRadius: 0}}>
+                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
                             <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>{isCompleted ? 'Final Album Selections' : `Phase ${currentPhase} Selection`}</h3>
+                            <h3 style={{color: '#fff', margin: 0}}>{isFamilyMember ? 'Family Selection' : `Phase ${currentPhase} Selection`}</h3>
                         </div>
 
-                        {isCompleted ? (
-                            // ✅ COMPLETED STATUS BANNER
-                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
-                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Album in Production!</h3>
-                                <p style={{ margin: 0, fontSize: '12px', color: '#2c3e50' }}>
-                                    Expected Delivery: <strong>{activeSelectionProject.expectedDeliveryDate ? new Date(activeSelectionProject.expectedDeliveryDate).toLocaleDateString() : 'Updating soon...'}</strong>
-                                </p>
-                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You selected {displayedImages.length} final photos. Editing is locked.</p>
+                        <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                            <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                                <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
+                                <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
                             </div>
-                        ) : (
-                            <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                                    <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
-                                    <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
-                                </div>
-                            </div>
-                        )}
+                        </div>
 
-                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3 AND Not Completed) */}
-                        {currentPhase > 1 && !isCompleted && (
+                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
+                        {currentPhase > 1 && (
                             <div style={{ padding: '0 15px' }}>
                                 <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                                     ♻️ View & Add Missed Images ({missedImages.length})
@@ -1037,7 +1068,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             
                             // ✅ NEW: Family Member Vote Logic (Get nicknames of voters)
                             let voterNames = [];
-                            if (img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
+                            // Ensure the user viewing is the Main Client, and there are votes, and family members exist
+                            if (!isFamilyMember && img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
                                 img.selectedBy.forEach(voterMobile => {
                                     // Exclude main client's own mobile (they know what they picked)
                                     if (voterMobile !== activeSelectionProject.clientMobile) {
@@ -1085,7 +1117,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         })}
 
                         {/* ✅ IMAGE REMOVAL CONFIRMATION MODAL */}
-                        {imageToRemove && !isCompleted && (
+                        {imageToRemove && (
                             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
                                 <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
                                     <div style={{fontSize: '40px', marginBottom: '10px'}}>🗑️</div>
@@ -1102,7 +1134,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
 
                     {/* ✅ STICKY BOTTOM BAR FOR ACTIONS (HIDE IF COMPLETED) */}
-                    {!isCompleted && (
+                    {true && (
                         <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
                         <div>
                             <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
@@ -1114,7 +1146,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
                 )}
                     {/* ✅ RECOVER MISSED IMAGES MODAL (With Multi-Select & Long Press) */}
-                    {showMissedImages && !isCompleted && (
+                    {showMissedImages && (
                         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
                             <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                                 <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
@@ -1160,7 +1192,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     )}
 
                     {/* ✅ MISSED IMAGES RESTORE CONFIRMATION MODAL */}
-                    {showMissedRestoreConfirm && !isCompleted && (
+                    {showMissedRestoreConfirm && (
                         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
                             <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
                                 <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
@@ -1292,7 +1324,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '15px', lineHeight: '1.4' }}>
                                         {sharedTabFilter === 'RECEIVED' 
                                             ? `Invited by: ${sel.clientMobile}` 
-                                            : <span>Invited: {sel.familyMembers.map((f, i) => <span key={i}><strong style={{color: '#f1c40f'}}>{f.nickname}</strong> ({f.mobile}){i < sel.familyMembers.length-1 ? ', ' : ''}</span>)}</span>}
+                                            : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <span style={{ color: '#fff' }}>Invited Members:</span>
+                                                {sel.familyMembers.map((f, i) => (
+                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '5px 8px', borderRadius: '5px' }}>
+                                                        <span><strong style={{color: '#f1c40f'}}>{f.nickname}</strong> ({f.mobile})</span>
+                                                        <a 
+                                                            href={`https://wa.me/91${f.mobile}?text=Hi%20${f.nickname},%20I%20have%20shared%20the%20${sel.folderName}%20album%20with%20you.%20Please%20login%20to%20SandN%20Cinema%20to%20select%20your%20favorite%20photos!`} 
+                                                            target="_blank" rel="noreferrer"
+                                                            style={{ background: '#25D366', color: '#fff', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', fontWeight: 'bold', fontSize: '10px' }}
+                                                            onClick={(e) => e.stopPropagation()} // Prevent card click
+                                                        >
+                                                            WhatsApp 💬
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>}
                                     </div>
                                     
                                     <button onClick={() => { 
