@@ -2664,17 +2664,16 @@ app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) 
     }
 });
 
-// 3. Fetch Selections (For User Dashboard - UPDATED FOR FAMILY COLLAB)
+// 3. Fetch Selections (For User Dashboard - UPDATED FOR FAMILY COLLAB & NICKNAME)
 app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) => {
     try {
         const clientMobile = getCleanMobile(req.body.mobile);
         if(!clientMobile) return res.json({ success: false, message: "Invalid Mobile" });
         
-        // ✅ NEW: Ab ye check karega ki user Main Client hai YA Family Member hai
         const selections = await AlbumSelection.find({ 
             $or: [
                 { clientMobile: clientMobile },
-                { familyMembers: clientMobile } // Check if mobile exists in family array
+                { "familyMembers.mobile": clientMobile } // ✅ FIXED: Check inside array of objects
             ]
         }).sort({ createdAt: -1 });
         
@@ -2684,22 +2683,28 @@ app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) =>
     }
 });
 
-// 3.5 🤝 Invite Family Member to Selection Project
+// 3.5 🤝 Invite Family Member to Selection Project (WITH NICKNAME)
 app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res) => {
     try {
-        const { projectId, senderMobile, familyMobile, cost } = req.body;
+        const { projectId, senderMobile, familyMobile, nickname, cost } = req.body;
 
-        // 1. User aur uske Coins check karo
         const account = await findAccount(senderMobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
         let wallet = account.data.wallet || { coins: 0, history: [] };
         if (wallet.coins < cost) return res.json({ success: false, message: "Not enough coins!" });
 
-        // 2. 10 Coins kaato
+        const selection = await AlbumSelection.findById(projectId);
+        if (!selection) return res.json({ success: false, message: "Selection project not found." });
+
+        // ✅ Check if already invited
+        const alreadyInvited = (selection.familyMembers || []).find(f => f.mobile === getCleanMobile(familyMobile));
+        if (alreadyInvited) return res.json({ success: false, message: "User already invited!" });
+
+        // Cut Coins
         wallet.coins -= cost;
         wallet.history.unshift({
-            action: `Family Invite Sent to ${familyMobile}`,
+            action: `Family Invite Sent to ${nickname || familyMobile}`,
             amount: `-${cost} Coins`,
             date: new Date().toLocaleDateString(),
             type: "debit"
@@ -2708,13 +2713,9 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
         if (account.type === 'STUDIO') await Studio.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
         else await User.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
 
-        // 3. Project me family member ka number add karo
-        const selection = await AlbumSelection.findById(projectId);
-        if (!selection) return res.json({ success: false, message: "Selection project not found." });
-
-        // $addToSet se duplicate number baar-baar add nahi hoga
+        // ✅ Push as an Object with Nickname
         await AlbumSelection.findByIdAndUpdate(projectId, {
-            $addToSet: { familyMembers: getCleanMobile(familyMobile) }
+            $push: { familyMembers: { mobile: getCleanMobile(familyMobile), nickname: nickname || 'Family', hasSubmitted: false } }
         }, { strict: false });
 
         res.json({ success: true, wallet, message: "Family member invited successfully!" });
@@ -2727,11 +2728,43 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
 // 4. Update Selection Phase & Finalize Engine (CRASH-PROOF & EMAIL ENABLED)
 app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
     try {
-        const { projectId, selectedImages, isFinal } = req.body;
+        const { projectId, selectedImages, isFinal, isFamilyMember, userMobile } = req.body; 
         
         const selection = await AlbumSelection.findById(projectId).lean();
         if (!selection) return res.json({ success: false, message: "Project not found" });
 
+        // ✅ NEW: IF FAMILY MEMBER IS VOTING (They don't affect main project status)
+        if (isFamilyMember && userMobile) {
+            selection.images.forEach(img => {
+                if (!img.selectedBy) img.selectedBy = [];
+                // Add vote if selected
+                if (selectedImages.includes(img.url)) {
+                    if (!img.selectedBy.includes(userMobile)) img.selectedBy.push(userMobile);
+                } else {
+                    // Remove vote if deselected
+                    img.selectedBy = img.selectedBy.filter(m => m !== userMobile);
+                }
+            });
+
+            // Mark this family member as 'submitted' if they click the final submit
+            if (isFinal && selection.familyMembers) {
+                const fm = selection.familyMembers.find(f => f.mobile === userMobile);
+                if (fm) fm.hasSubmitted = true;
+            }
+
+            await AlbumSelection.updateOne(
+                { _id: projectId }, 
+                { $set: { images: selection.images, familyMembers: selection.familyMembers } }, 
+                { strict: false }
+            );
+            
+            return res.json({ 
+                success: true, 
+                message: isFinal ? "Selections sent to the main client successfully! ❤️" : "Draft saved successfully." 
+            });
+        }
+
+        // --- BELOW IS THE REGULAR LOGIC FOR MAIN CLIENT ---
         const sevenDaysFromNow = new Date();
         sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
