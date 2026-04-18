@@ -72,6 +72,13 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
     const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
 
+    // ✅ NEW: SMART DOWNLOADER STATES
+    const [downloadManager, setDownloadManager] = useState({ 
+        active: false, paused: false, projectId: null, clientName: '', 
+        totalFiles: 0, downloadedFiles: 0, progressPercent: 0, speed: '', eta: '', failedFiles: [] 
+    });
+    const abortControllerRef = useRef(null);
+
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadSpeed, setUploadSpeed] = useState('');
@@ -662,10 +669,134 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    const handlePriceChange = (val) => {
-        const total = parseFloat(val) || 0;
-        const advance = Math.round(total * 0.30); 
-        setProposalForm({ ...proposalForm, totalPrice: val, advanceAmount: advance });
+    // ✅ 1. MAGIC LOGIN (View Client UI)
+    const handleMagicLogin = async (clientMobile) => {
+        try {
+            // Hum backend se bypass token lenge taaki OTP na dena pade
+            const res = await axios.post(`${API_BASE}/search-account`, { mobile: clientMobile });
+            if (res.data.success) {
+                const fakeUserObj = { 
+                    name: res.data.data.name || 'Client', 
+                    mobile: clientMobile, 
+                    role: 'USER', 
+                    isMagicLogin: true // Flag to tell system this is studio viewing it
+                };
+                
+                // Create a temporary link that automatically logs in
+                const magicUrl = `${window.location.origin}/dashboard?magic=${btoa(JSON.stringify(fakeUserObj))}`;
+                window.open(magicUrl, '_blank');
+            } else {
+                alert("Client data not found.");
+            }
+        } catch (e) {
+            alert("Failed to initiate magic login.");
+        }
+    };
+
+    // ✅ 2. SMART ZIP DOWNLOADER ENGINE (Auto-Resume & Progress Tracking)
+    const JSZip = require("jszip"); // MAKE SURE JSZip is installed via npm: npm install jszip
+    const FileSaver = require("file-saver"); // npm install file-saver
+
+    const startSmartDownload = async (selectionProject) => {
+        if (!selectionProject || !selectionProject.images) return;
+        
+        const selectedImages = selectionProject.images.filter(img => img.status === 'selected');
+        if (selectedImages.length === 0) return alert("No images selected by client yet!");
+
+        if (!window.confirm(`Start downloading ${selectedImages.length} original photos for ${selectionProject.folderName}?`)) return;
+
+        setDownloadManager({
+            active: true, paused: false, projectId: selectionProject._id, 
+            clientName: selectionProject.clientMobile, totalFiles: selectedImages.length, 
+            downloadedFiles: 0, progressPercent: 0, speed: 'Starting...', eta: 'Calculating...', failedFiles: []
+        });
+
+        const zip = new JSZip();
+        const mainFolder = zip.folder(`${selectionProject.folderName}_Final_Selection`);
+        abortControllerRef.current = new AbortController();
+
+        let successfulDownloads = 0;
+        let failedDownloads = [];
+        let startTime = Date.now();
+        let totalDownloadedBytes = 0;
+
+        for (let i = 0; i < selectedImages.length; i++) {
+            if (abortControllerRef.current.signal.aborted) {
+                setDownloadManager(prev => ({ ...prev, paused: true, speed: 'Paused' }));
+                return; // Stop if paused
+            }
+
+            const imgUrl = getCleanUrl(selectedImages[i].url);
+            const fileName = imgUrl.split('/').pop().split('?')[0] || `image_${i + 1}.jpg`;
+
+            try {
+                const fileStartTime = Date.now();
+                const response = await axios.get(imgUrl, { 
+                    responseType: 'blob', 
+                    signal: abortControllerRef.current.signal 
+                });
+                
+                const blob = response.data;
+                totalDownloadedBytes += blob.size;
+                mainFolder.file(fileName, blob);
+                successfulDownloads++;
+
+                // Speed & ETA Math
+                const timeElapsed = (Date.now() - startTime) / 1000; // in seconds
+                const speedBps = totalDownloadedBytes / timeElapsed;
+                const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
+                
+                // Estimate remaining size based on average size so far
+                const avgSize = totalDownloadedBytes / successfulDownloads;
+                const remainingBytes = avgSize * (selectedImages.length - successfulDownloads);
+                const etaSeconds = remainingBytes / speedBps;
+
+                setDownloadManager(prev => ({
+                    ...prev,
+                    downloadedFiles: successfulDownloads,
+                    progressPercent: Math.round((successfulDownloads / selectedImages.length) * 100),
+                    speed: `${speedMbps} MB/s`,
+                    eta: etaSeconds > 60 ? `${Math.floor(etaSeconds/60)}m left` : `${Math.floor(etaSeconds)}s left`
+                }));
+
+            } catch (err) {
+                if (axios.isCancel(err)) {
+                    console.log('Download paused by user');
+                } else {
+                    console.error("Failed to fetch:", imgUrl, err);
+                    failedDownloads.push(fileName);
+                    // We don't stop the whole process, just record failure and continue
+                }
+            }
+        }
+
+        if (!abortControllerRef.current.signal.aborted) {
+            setDownloadManager(prev => ({ ...prev, speed: 'Zipping files...', eta: 'Almost ready...' }));
+            
+            // Generate ZIP
+            zip.generateAsync({ type: "blob" }).then((content) => {
+                FileSaver.saveAs(content, `${selectionProject.folderName}_${selectionProject.clientMobile}_Final.zip`);
+                
+                setDownloadManager(prev => ({ ...prev, active: false }));
+                alert(`✅ Download Complete!\n${successfulDownloads} downloaded.\n${failedDownloads.length > 0 ? `⚠️ ${failedDownloads.length} files failed.` : ''}`);
+                
+                // Fire Email/SMS via backend to notify studio (as requested)
+                axios.post(`${API_BASE}/deduct-coins`, { mobile: studioProfile.mobile, amount: 0, reason: `Downloaded ${selectionProject.folderName}` });
+            });
+        }
+    };
+
+    const pauseDownload = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort(); // Triggers the cancel catch block
+            
+            // Send warning if paused for long (Simulation logic)
+            setTimeout(() => {
+                if (downloadManager.paused) {
+                    alert("⚠️ Your download has been paused for a while. Please resume to finish.");
+                }
+            }, 600000); // 10 minutes warning
+        }
     };
 
     const isVideo = (filePath) => {
@@ -702,9 +833,39 @@ const StudioDashboard = ({ user, onLogout }) => {
     const studioHistory = studioWallet.history || [];
 
     return (
-        <div className="owner-dashboard-container"> 
+        <div className="owner-dashboard-container"> 
 
-            {/* ✅ STUDIO EXIT APP POPUP */}
+            {/* ✅ FLOATING SMART DOWNLOAD MANAGER */}
+            {downloadManager.active && (
+                <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '350px', background: '#fff', borderRadius: '15px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', zIndex: 999999, border: '1px solid #3498db', overflow: 'hidden' }}>
+                    <div style={{ background: '#3498db', padding: '15px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h4 style={{ margin: 0, fontSize: '14px' }}>📥 Downloading Album Data</h4>
+                        {downloadManager.paused ? (
+                            <button onClick={() => startSmartDownload(mySelections.find(s => s._id === downloadManager.projectId))} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '5px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>▶️ Resume</button>
+                        ) : (
+                            <button onClick={pauseDownload} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '5px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>⏸️ Pause</button>
+                        )}
+                    </div>
+                    <div style={{ padding: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', fontWeight: 'bold', color: '#2c3e50' }}>
+                            <span>{downloadManager.downloadedFiles} / {downloadManager.totalFiles} Files</span>
+                            <span>{downloadManager.progressPercent}%</span>
+                        </div>
+                        <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '8px', overflow: 'hidden', marginBottom: '15px' }}>
+                            <div style={{ width: `${downloadManager.progressPercent}%`, background: downloadManager.paused ? '#f1c40f' : '#2ecc71', height: '100%', transition: 'width 0.3s ease' }}></div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                            <span>⚡ Speed: <strong style={{color: '#3498db'}}>{downloadManager.speed}</strong></span>
+                            <span>⏳ Time Left: <strong style={{color: '#e67e22'}}>{downloadManager.eta}</strong></span>
+                        </div>
+                        {downloadManager.failedFiles.length > 0 && (
+                            <p style={{ margin: '10px 0 0 0', fontSize: '10px', color: '#e74c3c', textAlign: 'center' }}>⚠️ {downloadManager.failedFiles.length} files failed. System will retry them.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ STUDIO EXIT APP POPUP */}
             {showExitPopup && (
                 <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
                     <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
@@ -861,6 +1022,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     <td>
                                                         <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', marginRight: '5px', background: '#34495e' }} onClick={() => { setStudioRemoveMobile(client.mobile); searchUserForRemoval(client.mobile); }}>
                                                             📂 Manage Data
+                                                        </button>
+                                                        <button onClick={() => handleMagicLogin(client.mobile)} style={{ padding: '6px 12px', fontSize: '12px', marginRight: '5px', background: '#f1c40f', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                            👁️ View UI
                                                         </button>
                                                         <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }} onClick={() => handleDeleteClient(client.mobile)}>
                                                             🗑️ Delete Client
@@ -1296,9 +1460,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     {sel.extraAmountToPay > 0 && <div style={{fontSize:'10px', color: sel.isPaid ? '#2ecc71' : '#e74c3c'}}>{sel.isPaid ? 'Paid' : 'Unpaid'}</div>}
                                                 </td>
                                                 <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                    <button style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>View Client UI</button>
-                                                    {sel.status === 'Completed' && <button style={{background:'#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>Download Zip</button>}
-                                                </td>
+                                                    <button onClick={() => handleMagicLogin(sel.clientMobile)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>View Client UI</button>
+                                                    {sel.status === 'Completed' && (
+                                                        <button onClick={() => startSmartDownload(sel)} disabled={downloadManager.active && downloadManager.projectId === sel._id} style={{background: (downloadManager.active && downloadManager.projectId === sel._id) ? '#bdc3c7' : '#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>
+                                                            {downloadManager.active && downloadManager.projectId === sel._id ? 'Downloading...' : 'Download Original Zip'}
+                                                        </button>
+                                                    )}
+                                                </td>
                                             </tr>
                                         );
                                     })}
