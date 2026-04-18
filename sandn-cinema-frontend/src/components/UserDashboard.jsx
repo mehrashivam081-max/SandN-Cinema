@@ -892,18 +892,75 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     const renderSelectionsTab = () => {
-        // SCENARIO 1: Viewing the Grid for a specific project (3-PHASE ENGINE)
-        if (activeSelectionProject && !showSelectionReview) {
-            const currentPhase = activeSelectionProject.currentPhase || 1;
-            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+        // SCENARIO 1: Viewing the Grid for a specific project (3-PHASE ENGINE)
+        if (activeSelectionProject && !showSelectionReview) {
             
-            // 🧠 LOGIC: Phase 1 shows all. Phase 2 & 3 show ONLY currently drafted images.
-            let displayedImages = [];
-            let missedImages = [];
+            // ✅ NEW: Extract Family Member Status & Check if they already submitted
+            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
+            let currentFamilyMember = null;
+            if (isFamilyMember && activeSelectionProject.familyMembers) {
+                currentFamilyMember = activeSelectionProject.familyMembers.find(f => f.mobile === syncUser?.mobile);
+            }
+            const hasFamilySubmitted = currentFamilyMember?.hasSubmitted || false;
 
-            const isCompleted = activeSelectionProject.status === 'Completed';
+            // 🛑 IF FAMILY MEMBER HAS ALREADY SUBMITTED, SHOW READ-ONLY "THANK YOU" UI
+            if (isFamilyMember && hasFamilySubmitted) {
+                const myVotedImages = activeSelectionProject.images.filter(img => img.selectedBy && img.selectedBy.includes(syncUser?.mobile));
+                
+                // Read-Only Long Press Helper
+                const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
+                const movePress = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
+                const endPress = () => { clearTimeout(touchRef.current.timer); }; // No click action, only view
+                
+                return (
+                    <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                        <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                            <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
+                                <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                                <h3 style={{color: '#fff', margin: 0}}>Selection Submitted</h3>
+                            </div>
 
-            if (isCompleted) {
+                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
+                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Thank You, {currentFamilyMember?.nickname}!</h3>
+                                <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>
+                                    Your votes have been successfully sent to the main client.
+                                </p>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You voted for <strong>{myVotedImages.length}</strong> photos. Your selection is now locked.</p>
+                            </div>
+                        </div>
+
+                        <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                            {myVotedImages.length > 0 ? myVotedImages.map((img, idx) => (
+                                <div key={idx} 
+                                    onPointerDown={(e) => startPress(e, img.url)}
+                                    onPointerMove={movePress}
+                                    onPointerUp={endPress}
+                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                    className="gallery-item-vip" 
+                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #2ecc71', cursor: 'zoom-in' }}>
+                                    
+                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} />
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#2ecc71', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>❤️</span>
+                                    </div>
+                                    <div style={{ position: 'absolute', bottom: '5px', left: 0, width: '100%', textAlign: 'center', color: '#fff', fontSize: '9px', background: 'rgba(0,0,0,0.5)', padding: '2px 0' }}>Hold to view</div>
+                                </div>
+                            )) : <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>You didn't select any photos.</p>}
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- REGULAR LOGIC STARTS HERE FOR MAIN CLIENT / UN-SUBMITTED MEMBER ---
+            const currentPhase = activeSelectionProject.currentPhase || 1;
+            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+            
+            let displayedImages = [];
+            let missedImages = [];
+
+            const isCompleted = activeSelectionProject.status === 'Completed';
+
+            if (isCompleted) {
                 // If finalized, ONLY show the final selected images
                 displayedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
                 missedImages = []; // Hide missed images
