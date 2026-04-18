@@ -1279,15 +1279,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return null;
     };
 
-    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE - WITH FAMILY COLLAB) 👇
+   // 👇 NAYA FUNCTION (SHARED TAB KE LIYE - CLEAN UI & WHATSAPP REMINDER) 👇
     const renderSharedTab = () => {
+        // ✅ BUG FIX: Define FRONTEND_URL to avoid undefined error
+        const FRONTEND_URL = "https://snevio.com/"; // Make sure this points to your frontend app
+
         const displayedList = sharedTabFilter === 'RECEIVED' ? sharedWithMe : sharedByMe;
         
-        // ✅ NEW LOGIC: Extract Album Selection Invites automatically
-        const receivedInvites = mySelections.filter(sel => sel.clientMobile !== syncUser?.mobile && (sel.familyMembers || []).some(f => f.mobile === syncUser?.mobile));
-        const sentInvites = mySelections.filter(sel => sel.clientMobile === syncUser?.mobile && (sel.familyMembers || []).length > 0);
+        // ✅ Extract Album Selection Invites automatically
+        const receivedInvites = mySelections.filter(sel => sel.clientMobile !== syncUser?.mobile && (sel.familyMembers || []).some(f => f.mobile === syncUser?.mobile));
+        const sentInvitesList = mySelections.filter(sel => sel.clientMobile === syncUser?.mobile && (sel.familyMembers || []).length > 0);
         
-        const displayedInvites = sharedTabFilter === 'RECEIVED' ? receivedInvites : sentInvites;
+        const displayedInvites = sharedTabFilter === 'RECEIVED' ? receivedInvites : sentInvitesList;
 
         return (
             <div className="folders-view" style={{ paddingBottom: '80px' }}>
@@ -1296,13 +1299,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <p>Manage access to premium content & album collabs.</p>
                 </div>
                 
-                {/* 🎛️ NEW: TOGGLE BUTTONS (Count updated dynamically) */}
+                {/* 🎛️ TOGGLE BUTTONS */}
                 <div style={{ display: 'flex', gap: '10px', padding: '20px 20px 0 20px' }}>
                     <button onClick={() => setSharedTabFilter('RECEIVED')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'RECEIVED' ? '#8e44ad' : '#1a1a2e', color: sharedTabFilter === 'RECEIVED' ? '#fff' : '#888' }}>
                         📥 Received ({sharedWithMe.length + receivedInvites.length})
                     </button>
                     <button onClick={() => setSharedTabFilter('SENT')} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: sharedTabFilter === 'SENT' ? '#3498db' : '#1a1a2e', color: sharedTabFilter === 'SENT' ? '#fff' : '#888' }}>
-                        📤 Shared By Me ({sharedByMe.length + sentInvites.length})
+                        📤 Shared By Me ({sharedByMe.length + sentInvitesList.length})
                     </button>
                 </div>
 
@@ -1317,34 +1320,47 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '16px' }}>Album Collaboration</h3>
                                     <p style={{ color: '#f1c40f', margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold' }}>{sel.folderName}</p>
                                     
-                                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '15px', lineHeight: '1.4' }}>
+                                    {/* ✅ Cleaned UI for Invited Members List */}
+                                    <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#ccc', marginBottom: '20px', lineHeight: '1.4' }}>
                                         {sharedTabFilter === 'RECEIVED' 
                                             ? `Invited by: ${sel.clientMobile}` 
                                             : <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <span style={{ color: '#fff' }}>Invited Members:</span>
-                                                {sel.familyMembers.map((f, i) => (
-                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.1)', padding: '5px 8px', borderRadius: '5px' }}>
-                                                        <span><strong style={{color: '#f1c40f'}}>{f.nickname}</strong> ({f.mobile})</span>
-                                                        <a 
-                                                            href={`https://wa.me/91${f.mobile}?text=Hi%20${f.nickname},%20I%20have%20securely%20shared%20the%20"${sel.folderName}"%20album%20with%20you.%20For%20privacy,%20please%20login%20using%20this%20mobile%20number%20(${f.mobile})%20at%20${WEBSITE_URL}%20to%20view%20and%20vote!%20📸`} 
-                                                            target="_blank" rel="noreferrer"
-                                                            style={{ background: '#25D366', color: '#fff', padding: '4px 8px', borderRadius: '4px', textDecoration: 'none', fontWeight: 'bold', fontSize: '10px' }}
-                                                            onClick={(e) => e.stopPropagation()} 
-                                                        >
-                                                            WhatsApp 💬
-                                                        </a>
-                                                    </div>
-                                                ))}
+                                                <span style={{ color: '#fff', borderBottom: '1px solid #555', paddingBottom: '5px' }}>Invited Members:</span>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
+                                                    {sel.familyMembers.map((f, i) => (
+                                                        <span key={i} style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: '#fff' }}>
+                                                            <strong style={{color: '#f1c40f'}}>{f.nickname || 'Family'}</strong> ({f.mobile})
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>}
                                     </div>
                                     
-                                    <button onClick={() => { 
-                                        setCurrentTab('SELECTIONS'); 
-                                        setActiveSelectionProject(sel); 
-                                        setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); 
-                                    }} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '10px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                        {sharedTabFilter === 'RECEIVED' ? 'View & Vote ❤️' : 'Open Selection Folder'}
-                                    </button>
+                                    {/* ✅ Stacked Buttons Layout */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        <button onClick={() => { 
+                                            setCurrentTab('SELECTIONS'); 
+                                            setActiveSelectionProject(sel); 
+                                            setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); 
+                                        }} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            {sharedTabFilter === 'RECEIVED' ? 'View & Vote ❤️' : 'Open Selection Folder'}
+                                        </button>
+
+                                        {/* ✅ Single WhatsApp Reminder Button (Only for Sender) */}
+                                        {sharedTabFilter === 'SENT' && (
+                                            <button onClick={() => {
+                                                const text = `Hi Family! I have securely shared the "${sel.folderName}" album with you. \n\n🔒 *Security Note:* To view the photos, you must log in using the exact mobile number I invited you with.\n\nClick here to login and vote:`;
+                                                if (navigator.share) {
+                                                    navigator.share({ title: 'Secure Album Invite', text: text, url: FRONTEND_URL });
+                                                } else {
+                                                    navigator.clipboard.writeText(`${text} ${FRONTEND_URL}`);
+                                                    alert("Secure invite message copied! Paste it in your Family WhatsApp group.");
+                                                }
+                                            }} style={{ background: '#25D366', color: '#fff', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                                💬 Share Secure Link in WhatsApp
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -1393,7 +1409,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         )) : null}
 
                         {/* NO DATA STATE */}
-                        {displayedList.length === 0 && displayedInvites.length === 0 && (
+                        {displayedList.length === 0 && sentInvitesList.length === 0 && receivedInvites.length === 0 && (
                             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#888', width: '100%', gridColumn: '1 / -1' }}>
                                 <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
                                 <h3>No Media Here</h3>
