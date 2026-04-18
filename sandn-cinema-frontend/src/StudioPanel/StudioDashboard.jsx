@@ -1255,10 +1255,34 @@ const StudioDashboard = ({ user, onLogout }) => {
                                             <tr key={i}>
                                                 <td>
                                                     <strong>{sel.folderName}</strong>
-                                                    <div style={{fontSize:'10px', color:'#777', marginTop:'3px'}}>{new Date(sel.createdAt).toLocaleDateString()}</div>
+                                                    <div style={{fontSize:'10px', color:'#777', marginTop:'3px'}}>Created: {new Date(sel.createdAt).toLocaleDateString()}</div>
+                                                    
+                                                    {/* ✅ NEW: SHOW DELIVERY DATE & EDIT BUTTON IF COMPLETED */}
+                                                    {sel.status === 'Completed' && sel.expectedDeliveryDate && (
+                                                        <div style={{fontSize:'11px', color:'#27ae60', marginTop:'8px', fontWeight:'bold', background: '#e8f8f5', padding: '5px', borderRadius: '4px', display: 'inline-block'}}>
+                                                            🚚 Delivery: {new Date(sel.expectedDeliveryDate).toLocaleDateString()}
+                                                            <span onClick={() => {
+                                                                const days = window.prompt("Update Expected Delivery (in DAYS from today):", "25");
+                                                                if (days && !isNaN(days)) {
+                                                                    axios.post(`${API_BASE}/update-album-delivery-date`, { projectId: sel._id, newDaysToAdd: days }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }}).then(() => { alert("✅ Date Updated & Reminders Reset!"); fetchStudioSelections(); });
+                                                                }
+                                                            }} style={{cursor:'pointer', marginLeft:'10px', color:'#3498db', textDecoration: 'underline'}}>✏️ Edit</span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
-                                                    {sel.clientMobile}
+                                                    <span style={{fontWeight: 'bold'}}>{sel.clientMobile}</span>
+                                                    
+                                                    {/* ✅ NEW: FAMILY COLLAB BADGE (Shows Nicknames) */}
+                                                    {sel.familyMembers && sel.familyMembers.length > 0 && (
+                                                        <div style={{marginTop: '8px', background: '#fcf3cf', border: '1px dashed #f39c12', padding: '6px', borderRadius: '6px', fontSize: '10px', color: '#d35400'}}>
+                                                            <strong style={{fontSize: '11px'}}>👨‍👩‍👧‍👦 Family Collab Active</strong><br/>
+                                                            {sel.familyMembers.length} Members Invited:
+                                                            <div style={{marginTop: '3px', color: '#555', fontWeight: 'bold'}}>
+                                                                {sel.familyMembers.map(f => f.nickname || f.mobile).join(', ')}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <span style={{background: sel.status === 'Completed' ? '#2ecc71' : (sel.status === 'Pending' ? '#f1c40f' : '#3498db'), color: '#fff', padding: '3px 8px', borderRadius: '15px', fontSize: '11px', fontWeight: 'bold'}}>
@@ -1271,9 +1295,9 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     <strong style={{color: sel.extraAmountToPay > 0 ? '#e74c3c' : '#2ecc71'}}>₹{sel.extraAmountToPay || 0}</strong>
                                                     {sel.extraAmountToPay > 0 && <div style={{fontSize:'10px', color: sel.isPaid ? '#2ecc71' : '#e74c3c'}}>{sel.isPaid ? 'Paid' : 'Unpaid'}</div>}
                                                 </td>
-                                                <td>
-                                                    <button style={{background:'#34495e', color:'white', border:'none', padding:'5px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', marginRight:'5px'}}>View Client UI</button>
-                                                    {sel.status === 'Completed' && <button style={{background:'#2ecc71', color:'white', border:'none', padding:'5px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>Download Zip</button>}
+                                                <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                    <button style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>View Client UI</button>
+                                                    {sel.status === 'Completed' && <button style={{background:'#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>Download Zip</button>}
                                                 </td>
                                             </tr>
                                         );
