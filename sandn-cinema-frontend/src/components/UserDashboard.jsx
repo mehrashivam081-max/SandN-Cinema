@@ -72,6 +72,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const touchRef = useRef({ isLong: false, timer: null }); // 👈 For long-press detection
     const [familyShareForm, setFamilyShareForm] = useState({ mobile: '', hours: '24' });
 
+    // ✅ NEW: STATES FOR COLLAB OVERVIEW & MERGE FOLDER
+    const [selectionSubView, setSelectionSubView] = useState('OVERVIEW'); // OVERVIEW, MY_SELECTION, MEMBER_VIEW, MERGED_VIEW
+    const [viewingMember, setViewingMember] = useState(null);
+    const [showMergeModal, setShowMergeModal] = useState(false);
+    const [membersToMerge, setMembersToMerge] = useState([]);
+
     // ✅ WALLET MODAL & GLOBAL CHARGES STATES
     const [showWalletModal, setShowWalletModal] = useState(false);
     const [walletTab, setWalletTab] = useState('BUY'); // 'BUY' or 'FREE'
@@ -137,11 +143,20 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } else if (showMissedImages) {
             setShowMissedImages(false);
         } else if (showSelectionReview) {
-            setShowSelectionReview(false);
+            setShowSelectionReview(false);
+        } else if (showMergeModal) {
+            setShowMergeModal(false);
         } else if (activeSelectionProject) {
-            setActiveSelectionProject(null);
-            setSelectionDraft([]);
-            setCurrentTab('HOME');
+            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
+            if (!isFamilyMember && selectionSubView !== 'OVERVIEW' && activeSelectionProject.status !== 'Completed') {
+                setSelectionSubView('OVERVIEW');
+                setViewingMember(null);
+            } else {
+                setActiveSelectionProject(null);
+                setSelectionDraft([]);
+                setCurrentTab('HOME');
+                setSelectionSubView('OVERVIEW');
+            }
         } else if (viewProposalBooking) {
             setViewProposalBooking(null);
         } else if (showEmergencyModal) {
@@ -892,391 +907,483 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     const renderSelectionsTab = () => {
-        // SCENARIO 1: Viewing the Grid for a specific project (3-PHASE ENGINE)
-        if (activeSelectionProject && !showSelectionReview) {
-            
-            // ✅ NEW: Extract Family Member Status & Check if they already submitted
-            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
-            let currentFamilyMember = null;
-            if (isFamilyMember && activeSelectionProject.familyMembers) {
-                currentFamilyMember = activeSelectionProject.familyMembers.find(f => f.mobile === syncUser?.mobile);
-            }
-            const hasFamilySubmitted = currentFamilyMember?.hasSubmitted || false;
+        if (!activeSelectionProject) return null;
 
-            // 🛑 IF FAMILY MEMBER HAS ALREADY SUBMITTED, SHOW READ-ONLY "THANK YOU" UI
-            if (isFamilyMember && hasFamilySubmitted) {
-                const myVotedImages = activeSelectionProject.images.filter(img => img.selectedBy && img.selectedBy.includes(syncUser?.mobile));
-                
-                // Read-Only Long Press Helper
-                const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
-                const movePress = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
-                const endPress = () => { clearTimeout(touchRef.current.timer); }; // No click action, only view
-                
-                return (
-                    <div className="folders-view" style={{ paddingBottom: '100px' }}>
-                        <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                            <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
-                                <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                                <h3 style={{color: '#fff', margin: 0}}>Selection Submitted</h3>
-                            </div>
+        const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
+        let currentFamilyMember = null;
+        if (isFamilyMember && activeSelectionProject.familyMembers) {
+            currentFamilyMember = activeSelectionProject.familyMembers.find(f => f.mobile === syncUser?.mobile);
+        }
+        const hasFamilySubmitted = currentFamilyMember?.hasSubmitted || false;
+        const isMainProjectCompleted = activeSelectionProject.status === 'Completed';
+        const isInviteExpired = currentFamilyMember?.expiryDate && new Date(currentFamilyMember.expiryDate) < new Date();
 
-                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
-                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Thank You, {currentFamilyMember?.nickname}!</h3>
-                                <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>
-                                    Your votes have been successfully sent to the main client.
-                                </p>
-                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You voted for <strong>{myVotedImages.length}</strong> photos. Your selection is now locked.</p>
-                            </div>
-                        </div>
+        // Helper for Long Press Preview (Read-Only)
+        const startPressRO = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
+        const movePressRO = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
+        const endPressRO = () => { clearTimeout(touchRef.current.timer); };
 
-                        <div className="ud-grid-vip" style={{ padding: '15px' }}>
-                            {myVotedImages.length > 0 ? myVotedImages.map((img, idx) => (
-                                <div key={idx} 
-                                    onPointerDown={(e) => startPress(e, img.url)}
-                                    onPointerMove={movePress}
-                                    onPointerUp={endPress}
-                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                    className="gallery-item-vip" 
-                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #2ecc71', cursor: 'zoom-in' }}>
-                                    
-                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} />
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#2ecc71', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>❤️</span>
-                                    </div>
-                                    <div style={{ position: 'absolute', bottom: '5px', left: 0, width: '100%', textAlign: 'center', color: '#fff', fontSize: '9px', background: 'rgba(0,0,0,0.5)', padding: '2px 0' }}>Hold to view</div>
-                                </div>
-                            )) : <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>You didn't select any photos.</p>}
-                        </div>
-                    </div>
-                );
-            }
-
-            // 🛑 IF MAIN CLIENT HAS ALREADY SUBMITTED FINAL SELECTION, SHOW READ-ONLY UI
-            if (!isFamilyMember && activeSelectionProject.status === 'Completed') {
-                const finalSelectedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
-                
-                // Read-Only Long Press Helper
-                const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
-                const movePress = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
-                const endPress = () => { clearTimeout(touchRef.current.timer); }; // No click action
-                
-                return (
-                    <div className="folders-view" style={{ paddingBottom: '100px' }}>
-                        <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                            <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
-                                <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                                <h3 style={{color: '#fff', margin: 0}}>Album in Production 🚚</h3>
-                            </div>
-
-                            <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px 15px 10px 15px', borderRadius: '10px', textAlign: 'center' }}>
-                                <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Final Selection Sent!</h3>
-                                <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>
-                                    Expected Delivery: {activeSelectionProject.expectedDeliveryDate ? new Date(activeSelectionProject.expectedDeliveryDate).toLocaleDateString() : 'Updating soon...'}
-                                </p>
-                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#7f8c8d' }}>You finalized <strong>{finalSelectedImages.length}</strong> photos. The studio is processing your album.</p>
-                            </div>
-                        </div>
-
-                        <div className="ud-grid-vip" style={{ padding: '15px' }}>
-                            {finalSelectedImages.map((img, idx) => (
-                                <div key={idx} 
-                                    onPointerDown={(e) => startPress(e, img.url)}
-                                    onPointerMove={movePress}
-                                    onPointerUp={endPress}
-                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                    className="gallery-item-vip" 
-                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #3498db', cursor: 'zoom-in' }}>
-                                    
-                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} />
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#3498db', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>
-                                    </div>
-                                    <div style={{ position: 'absolute', bottom: '5px', left: 0, width: '100%', textAlign: 'center', color: '#fff', fontSize: '9px', background: 'rgba(0,0,0,0.5)', padding: '2px 0' }}>Hold to view</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            }
-
-            // --- REGULAR LOGIC STARTS HERE FOR ACTIVE SELECTION (Not Completed Yet) ---
-            const currentPhase = activeSelectionProject.currentPhase || 1;
-            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
-            
-            let displayedImages = [];
-            let missedImages = [];
-
-            if (currentPhase === 1) {
-                displayedImages = activeSelectionProject.images;
-            } else {
-                displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
-                missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
-            }
-
-            // 👇 SMART Helper for Long Press Preview (Ignores Scrolling)
-            const startPress = (e, url) => {
-                touchRef.current.isLong = false;
-                touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
-                touchRef.current.timer = setTimeout(() => {
-                    touchRef.current.isLong = true;
-                    setPreviewMedia(url); // Opens Full Screen Preview
-                }, 500); 
-            };
-            const movePress = (e) => {
-                const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
-                if (Math.abs(currentY - touchRef.current.startY) > 15) {
-                    clearTimeout(touchRef.current.timer); // Cancel preview if user is scrolling
-                }
-            };
-            const endPress = (actionFn) => {
-                clearTimeout(touchRef.current.timer);
-                if (!touchRef.current.isLong) {
-                    actionFn(); // Do normal click if not held long enough
-                }
-            };
-            
+        // 🛑 1. SESSION MISSED (Family Member)
+        if (isFamilyMember && !hasFamilySubmitted && (isInviteExpired || isMainProjectCompleted)) {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
-                    {/* ✅ STICKY TOP SECTION: Header + Info + Missed Images Button */}
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setShowMissedImages(false); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>{isFamilyMember ? 'Family Selection' : `Phase ${currentPhase} Selection`}</h3>
+                        <div className="folder-header-nav" style={{background: '#e74c3c', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>Session Closed</h3>
                         </div>
-
-                        <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                                <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
-                                <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
-                            </div>
+                        <div style={{ padding: '20px', background: '#fdedec', border: '1px solid #e74c3c', margin: '20px', borderRadius: '10px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '40px', marginBottom: '10px' }}>⏳</div>
+                            <h3 style={{ margin: '0 0 10px 0', color: '#c0392b' }}>Oops! Session Missed.</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#555', lineHeight: '1.5' }}>
+                                {isMainProjectCompleted ? "The main client has already finalized the album and sent it to the studio." : "Your invitation link has expired."}
+                            </p>
                         </div>
-
-                        {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
-                        {currentPhase > 1 && (
-                            <div style={{ padding: '0 15px' }}>
-                                <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                    ♻️ View & Add Missed Images ({missedImages.length})
-                                </button>
-                            </div>
-                        )}
                     </div>
-
-                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
-                        {displayedImages.map((img, idx) => {
-                            const isSelected = selectionDraft.includes(img.url);
-                            
-                            // ✅ NEW: Family Member Vote Logic (Get nicknames of voters)
-                            let voterNames = [];
-                            if (!isFamilyMember && img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
-                                img.selectedBy.forEach(voterMobile => {
-                                    if (voterMobile !== activeSelectionProject.clientMobile) {
-                                        const fm = activeSelectionProject.familyMembers.find(f => f.mobile === voterMobile);
-                                        if (fm && fm.nickname) {
-                                            voterNames.push(fm.nickname);
-                                        }
-                                    }
-                                });
-                            }
-
-                            return (
-                                <div key={idx} 
-                                    onPointerDown={(e) => startPress(e, img.url)}
-                                    onPointerMove={movePress}
-                                    onPointerUp={() => endPress(() => {
-                                        // Ask for confirmation if trying to remove in Phase 2 or 3
-                                        if (currentPhase > 1 && isSelected) {
-                                            setImageToRemove(img.url);
-                                        } else {
-                                            handleSelectionToggle(img.url);
-                                        }
-                                    })}
-                                    onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                    className="gallery-item-vip" 
-                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
-                                >
-                                    <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                    
-                                    {/* Checkmark Badge */}
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                                        {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                                    </div>
-
-                                    {/* ✅ NEW: FAMILY VOTE BADGE (Live Heart Counter) */}
-                                    {voterNames.length > 0 && (
-                                        <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', zIndex: 5, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            ❤️ {voterNames.join(', ')}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-
-                        {/* ✅ IMAGE REMOVAL CONFIRMATION MODAL */}
-                        {imageToRemove && (
-                            <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-                                <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-                                    <div style={{fontSize: '40px', marginBottom: '10px'}}>🗑️</div>
-                                    <h3 style={{ color: '#e74c3c', margin: '0 0 10px 0' }}>Remove Image?</h3>
-                                    <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Are you sure you want to discard this image from your final album? You can still recover it from the 'Missed Images' section.</p>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button onClick={() => setImageToRemove(null)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
-                                        <button onClick={() => { handleSelectionToggle(imageToRemove); setImageToRemove(null); }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e74c3c', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Remove</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1', padding: '20px'}}>No images available.</p>}
-                    </div>
-
-                    {/* ✅ STICKY BOTTOM BAR FOR ACTIONS (HIDE IF COMPLETED) */}
-                    {true && (
-                        <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
-                        <div>
-                            <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
-                            {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
-                        </div>
-                        <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
-                            Preview Phase {currentPhase} ➡️
-                        </button>
-                    </div>
-                )}
-                    {/* ✅ RECOVER MISSED IMAGES MODAL (With Multi-Select & Long Press) */}
-                    {showMissedImages && (
-                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
-                                <button onClick={() => { setShowMissedImages(false); setMissedSelection([]); }} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
-                            </div>
-                            <div style={{ padding: '15px', background: '#fff', margin: '15px', borderRadius: '8px', color: '#555', fontSize: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                <strong>Tap</strong> to select multiple images. <strong>Press and hold</strong> to view full preview.
-                            </div>
-                            <div className="ud-grid-vip" style={{ padding: '0 15px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
-                                {missedImages.map((img, idx) => {
-                                    const isMissedSelected = missedSelection.includes(img.url);
-                                    return (
-                                        <div key={idx} 
-                                            onPointerDown={(e) => startPress(e, img.url)}
-                                            onPointerMove={movePress}
-                                            onPointerUp={() => endPress(() => {
-                                                setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
-                                            })}
-                                            onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                            className="gallery-item-vip" 
-                                            style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isMissedSelected ? '3px solid #e67e22' : '1px solid #ddd', cursor: 'pointer' }}
-                                        >
-                                            <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isMissedSelected ? 1 : 0.5 }} />
-                                            <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isMissedSelected ? '#e67e22' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {isMissedSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
-                            </div>
-
-                            {/* Bottom Sticky Bar for Missed Images */}
-                            {missedSelection.length > 0 && (
-                                <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', padding: '15px', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', zIndex: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{fontWeight: 'bold', color: '#e67e22'}}>{missedSelection.length} Selected</span>
-                                    <button onClick={() => setShowMissedRestoreConfirm(true)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(230, 126, 34, 0.4)' }}>
-                                        Restore Images
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ✅ MISSED IMAGES RESTORE CONFIRMATION MODAL */}
-                    {showMissedRestoreConfirm && (
-                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-                            <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-                                <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
-                                <h3 style={{ color: '#e67e22', margin: '0 0 10px 0' }}>Restore {missedSelection.length} Images?</h3>
-                                <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>These images will be added back to your active album selection.</p>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <button onClick={() => setShowMissedRestoreConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
-                                    <button onClick={() => { 
-                                        setSelectionDraft(prev => [...prev, ...missedSelection]); 
-                                        setMissedSelection([]); 
-                                        setShowMissedRestoreConfirm(false); 
-                                        setShowMissedImages(false); 
-                                        alert("✅ Images restored successfully!");
-                                    }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Restore</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
 
-        // SCENARIO 2: Review & Finalize Form
-        if (showSelectionReview && activeSelectionProject) {
-            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
-            // ✅ Force Family Members to stop at Phase 2
-            const effectiveTotalPhases = isFamilyMember ? Math.min(2, activeSelectionProject.totalPhases) : activeSelectionProject.totalPhases;
+        // 🛑 2. THANK YOU READ-ONLY (Family Member)
+        if (isFamilyMember && hasFamilySubmitted) {
+            const myVotedImages = activeSelectionProject.images.filter(img => img.selectedBy && img.selectedBy.includes(syncUser?.mobile));
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>Selection Submitted</h3>
+                        </div>
+                        <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                            <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Thank You, {currentFamilyMember?.nickname}!</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>Your votes have been sent to the main client.</p>
+                        </div>
+                    </div>
+                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                        {myVotedImages.map((img, idx) => (
+                            <div key={idx} onPointerDown={(e) => startPressRO(e, img.url)} onPointerMove={movePressRO} onPointerUp={endPressRO} onPointerLeave={() => clearTimeout(touchRef.current.timer)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #2ecc71', cursor: 'zoom-in' }}>
+                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#2ecc71', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                    <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>❤️</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
 
-            const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
-            const extraImages = Math.max(0, selectionDraft.length - totalAllowed);
-            const extraSheets = activeSelectionProject.imagesPerSheet > 0 ? Math.ceil(extraImages / activeSelectionProject.imagesPerSheet) : 0;
-            const extraCost = extraSheets * (activeSelectionProject.costPerExtraSheet || 0);
-            const isFinalPhase = activeSelectionProject.currentPhase >= effectiveTotalPhases;
+        // 🛑 3. MAIN CLIENT COMPLETED READ-ONLY
+        if (!isFamilyMember && isMainProjectCompleted) {
+            const finalSelectedImages = activeSelectionProject.images.filter(img => img.status === 'selected');
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>Album in Production 🚚</h3>
+                        </div>
+                        <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px', borderRadius: '10px', textAlign: 'center' }}>
+                            <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Final Selection Sent!</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>Expected Delivery: {activeSelectionProject.expectedDeliveryDate ? new Date(activeSelectionProject.expectedDeliveryDate).toLocaleDateString() : 'Updating soon...'}</p>
+                        </div>
+                    </div>
+                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                        {finalSelectedImages.map((img, idx) => (
+                            <div key={idx} onPointerDown={(e) => startPressRO(e, img.url)} onPointerMove={movePressRO} onPointerUp={endPressRO} onPointerLeave={() => clearTimeout(touchRef.current.timer)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '3px solid #3498db', cursor: 'zoom-in' }}>
+                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#3498db', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                    <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // 📂 4. MAIN CLIENT - FOLDER OVERVIEW
+        if (!isFamilyMember && selectionSubView === 'OVERVIEW') {
+            const familyMembers = activeSelectionProject.familyMembers || [];
+            const completedMembers = familyMembers.filter(fm => fm.hasSubmitted);
 
             return (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
-                    <div style={{ background: '#1a1a2e', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
-                        <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>Review & Finalize</h2>
-                        <button onClick={() => setShowSelectionReview(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px' }}>✖</button>
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>{activeSelectionProject.folderName}</h3>
+                        </div>
                     </div>
 
                     <div style={{ padding: '20px' }}>
-                        <div style={{ background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
-                            <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Summary (Phase {activeSelectionProject.currentPhase})</h3>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
-                                <span style={{color: '#7f8c8d'}}>Total Selected</span>
-                                <strong style={{color: '#3498db', fontSize: '16px'}}>{selectionDraft.length} Photos</strong>
+                        <h3 style={{color: '#333', marginBottom: '15px'}}>Main Folders</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '30px' }}>
+                            {/* YOUR SELECTION */}
+                            <div onClick={() => setSelectionSubView('MY_SELECTION')} style={{ background: '#2c3e50', padding: '20px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.1)', border: '2px solid #3498db' }}>
+                                <div style={{fontSize: '40px', marginBottom: '10px'}}>👑</div>
+                                <h4 style={{color: '#fff', margin: 0}}>Your Selection</h4>
+                                <p style={{color: '#3498db', fontSize: '11px', margin: '5px 0 0 0'}}>Phase {activeSelectionProject.currentPhase}</p>
                             </div>
                             
-                            {totalAllowed > 0 && (
-                                <>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
-                                        <span style={{color: '#7f8c8d'}}>Free Allowance</span>
-                                        <strong style={{color: '#2ecc71'}}>{totalAllowed} Photos</strong>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
-                                        <span style={{color: '#7f8c8d'}}>Extra Sheets Required</span>
-                                        <strong style={{color: extraSheets > 0 ? '#e74c3c' : '#2ecc71'}}>{extraSheets} Sheets</strong>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', background: '#fdf2e9', padding: '15px', borderRadius: '10px' }}>
-                                        <span style={{color: '#d35400', fontWeight: 'bold'}}>Estimated Extra Charge</span>
-                                        <strong style={{color: '#d35400', fontSize: '18px'}}>₹{extraCost}</strong>
-                                    </div>
-                                </>
+                            {/* MERGED FOLDER */}
+                            <div onClick={() => setSelectionSubView('MERGED_VIEW')} style={{ background: '#1a1a2e', padding: '20px', borderRadius: '15px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.1)', border: '2px solid #f1c40f' }}>
+                                <div style={{fontSize: '40px', marginBottom: '10px'}}>🗂️</div>
+                                <h4 style={{color: '#fff', margin: 0}}>Merged Folder</h4>
+                                <p style={{color: '#f1c40f', fontSize: '11px', margin: '5px 0 0 0'}}>{(activeSelectionProject.mergedImages || []).length} Items</p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 style={{color: '#333', margin: 0, fontSize: '16px'}}>Family Members</h3>
+                            {completedMembers.length > 0 && (
+                                <button onClick={() => { setMembersToMerge(completedMembers.map(m => m.mobile)); setShowMergeModal(true); }} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px', boxShadow: '0 4px 10px rgba(230, 126, 34, 0.3)' }}>
+                                    🔄 Merge Folders
+                                </button>
                             )}
                         </div>
 
-                        {isFinalPhase && (
-                            <div style={{ background: '#fdedec', border: '1px dashed #e74c3c', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
-                                <h4 style={{ color: '#c0392b', margin: '0 0 5px 0' }}>⚠️ Final Submission Warning</h4>
-                                <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be permanently removed. A PDF receipt will be generated. You must pay the extra charge directly to the studio.</p>
-                            </div>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {familyMembers.map((fm, idx) => (
+                                <div key={idx} onClick={() => {
+                                    if (fm.hasSubmitted) { setViewingMember(fm); setSelectionSubView('MEMBER_VIEW'); }
+                                }} style={{ background: '#fff', padding: '15px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: fm.hasSubmitted ? '4px solid #2ecc71' : '4px solid #f1c40f', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', cursor: fm.hasSubmitted ? 'pointer' : 'default', opacity: fm.hasSubmitted ? 1 : 0.7 }}>
+                                    <div>
+                                        <h4 style={{ margin: '0 0 5px 0', color: '#2c3e50', fontSize: '15px' }}>📁 {fm.nickname}</h4>
+                                        <span style={{ fontSize: '11px', color: '#7f8c8d' }}>{fm.mobile}</span>
+                                    </div>
+                                    <span style={{ background: fm.hasSubmitted ? 'rgba(46, 204, 113, 0.1)' : 'rgba(241, 196, 15, 0.1)', color: fm.hasSubmitted ? '#27ae60' : '#f39c12', padding: '4px 8px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold' }}>
+                                        {fm.hasSubmitted ? '✅ Completed' : '⏳ Pending'}
+                                    </span>
+                                </div>
+                            ))}
+                            {familyMembers.length === 0 && <p style={{color: '#888', fontSize: '13px', textAlign: 'center', marginTop: '20px'}}>No family members invited yet.</p>}
+                        </div>
+                    </div>
 
-                        <button 
-                            onClick={() => submitPhaseSelection(isFinalPhase)}
-                            disabled={loading || selectionDraft.length === 0}
-                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
-                        >
-                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
-                        </button>
+                    {/* MERGE MODAL */}
+                    {showMergeModal && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                            <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                                <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Merge Folders</h3>
+                                <p style={{ fontSize: '13px', color: '#555', marginBottom: '20px' }}>Select members to merge. Duplicates will be removed automatically.</p>
+                                
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', maxHeight: '150px', overflowY: 'auto' }}>
+                                    {completedMembers.map((fm, idx) => (
+                                        <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#333', padding: '10px', background: '#f9f9f9', borderRadius: '8px' }}>
+                                            <input type="checkbox" checked={membersToMerge.includes(fm.mobile)} onChange={(e) => {
+                                                if (e.target.checked) setMembersToMerge([...membersToMerge, fm.mobile]);
+                                                else setMembersToMerge(membersToMerge.filter(m => m !== fm.mobile));
+                                            }} style={{ width: '18px', height: '18px', accentColor: '#e67e22' }} />
+                                            📁 {fm.nickname}
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button onClick={() => setShowMergeModal(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                    <button onClick={async () => {
+                                        if(membersToMerge.length === 0) return alert("Select at least one member!");
+                                        setLoading(true);
+                                        try {
+                                            // Deduplication Logic
+                                            let mergedSet = new Set(activeSelectionProject.mergedImages || []);
+                                            activeSelectionProject.images.forEach(img => {
+                                                if (img.selectedBy && img.selectedBy.some(m => membersToMerge.includes(m))) mergedSet.add(img.url);
+                                            });
+                                            const finalMergedArray = Array.from(mergedSet);
+                                            
+                                            // Save to DB
+                                            await axios.post(`${API_BASE}/save-merged-selection`, { projectId: activeSelectionProject._id, mergedImages: finalMergedArray }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+                                            
+                                            setActiveSelectionProject({...activeSelectionProject, mergedImages: finalMergedArray});
+                                            setShowMergeModal(false);
+                                            alert("✅ Folders merged successfully into 'Merged Folder'!");
+                                        } catch(e) { alert("Merge failed. Try again."); } 
+                                        finally { setLoading(false); }
+                                    }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>{loading ? '...' : 'Merge Selected'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // 👁️ 5. MAIN CLIENT - VIEWING A SPECIFIC MEMBER'S FOLDER
+        if (!isFamilyMember && selectionSubView === 'MEMBER_VIEW' && viewingMember) {
+            const memberImages = activeSelectionProject.images.filter(img => img.selectedBy && img.selectedBy.includes(viewingMember.mobile));
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#3498db', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => setSelectionSubView('OVERVIEW')} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                            <h3 style={{color: '#fff', margin: 0}}>📁 {viewingMember.nickname}</h3>
+                        </div>
+                        <p style={{textAlign: 'center', fontSize: '13px', color: '#555', margin: '15px 0 0 0', fontWeight: 'bold'}}>Total Selected: {memberImages.length}</p>
+                    </div>
+                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                        {memberImages.map((img, idx) => (
+                            <div key={idx} onPointerDown={(e) => startPressRO(e, img.url)} onPointerMove={movePressRO} onPointerUp={endPressRO} onPointerLeave={() => clearTimeout(touchRef.current.timer)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '2px solid #3498db', cursor: 'zoom-in' }}>
+                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: '#3498db', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <span style={{ color: '#fff', fontSize: '12px' }}>❤️</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
         }
 
-        // SCENARIO 3: Main List handled by Home Tab Now
-        return null;
+        // 🗂️ 6. MAIN CLIENT - VIEWING THE MERGED FOLDER
+        if (!isFamilyMember && selectionSubView === 'MERGED_VIEW') {
+            const mergedImages = activeSelectionProject.mergedImages || [];
+            return (
+                <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                    <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                        <div className="folder-header-nav" style={{background: '#f1c40f', margin: 0, borderRadius: 0}}>
+                            <button onClick={() => setSelectionSubView('OVERVIEW')} className="back-btn" style={{color:'#000'}}>⬅ Back</button>
+                            <h3 style={{color: '#000', margin: 0}}>🗂️ Merged Folder</h3>
+                        </div>
+                        <div style={{ padding: '15px' }}>
+                            <p style={{textAlign: 'center', fontSize: '13px', color: '#555', margin: '0 0 15px 0'}}>This folder contains {mergedImages.length} deduplicated images from your family.</p>
+                            {mergedImages.length > 0 && (
+                                <button onClick={() => {
+                                    const newDraft = new Set([...selectionDraft, ...mergedImages]);
+                                    setSelectionDraft(Array.from(newDraft));
+                                    alert("✅ All merged images have been imported to 'Your Selection'!");
+                                    setSelectionSubView('MY_SELECTION');
+                                }} style={{ width: '100%', background: '#2ecc71', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(46, 204, 113, 0.3)' }}>
+                                    📥 Import All to 'Your Selection'
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                        {mergedImages.map((url, idx) => (
+                            <div key={idx} onPointerDown={(e) => startPressRO(e, url)} onPointerMove={movePressRO} onPointerUp={endPressRO} onPointerLeave={() => clearTimeout(touchRef.current.timer)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: '2px solid #f1c40f', cursor: 'zoom-in' }}>
+                                <img src={getCleanUrl(url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                        ))}
+                        {mergedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No images merged yet.</p>}
+                    </div>
+                </div>
+            );
+        }
+
+        // 👑 7. ACTIVE GRID (Main Client's "MY_SELECTION" OR Family Member's Active Phase)
+        const currentPhase = activeSelectionProject.currentPhase || 1;
+        const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
+        
+        let displayedImages = [];
+        let missedImages = [];
+
+        if (currentPhase === 1) {
+            displayedImages = activeSelectionProject.images;
+        } else {
+            displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
+            missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
+        }
+
+        // Active Long Press Helpers
+        const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
+        const movePress = (e) => { const currentY = e.clientY || (e.touches && e.touches[0].clientY) || 0; if (Math.abs(currentY - touchRef.current.startY) > 15) { clearTimeout(touchRef.current.timer); } };
+        const endPress = (actionFn) => { clearTimeout(touchRef.current.timer); if (!touchRef.current.isLong) actionFn(); };
+        
+        return (
+            <div className="folders-view" style={{ paddingBottom: '100px' }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                    <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
+                        <button onClick={() => { 
+                            if(isFamilyMember) { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); }
+                            else setSelectionSubView('OVERVIEW'); 
+                        }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                        <h3 style={{color: '#fff', margin: 0}}>{isFamilyMember ? 'Family Selection' : `Your Selection (Ph ${currentPhase})`}</h3>
+                    </div>
+
+                    <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                        <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
+                            <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
+                            <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                        </div>
+                    </div>
+
+                    {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
+                    {currentPhase > 1 && (
+                        <div style={{ padding: '0 15px' }}>
+                            <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                ♻️ View & Add Missed Images ({missedImages.length})
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="ud-grid-vip" style={{ padding: '15px' }}>
+                    {displayedImages.map((img, idx) => {
+                        const isSelected = selectionDraft.includes(img.url);
+                        
+                        let voterNames = [];
+                        if (!isFamilyMember && img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
+                            img.selectedBy.forEach(voterMobile => {
+                                if (voterMobile !== activeSelectionProject.clientMobile) {
+                                    const fm = activeSelectionProject.familyMembers.find(f => f.mobile === voterMobile);
+                                    if (fm && fm.nickname) voterNames.push(fm.nickname);
+                                }
+                            });
+                        }
+
+                        return (
+                            <div key={idx} 
+                                onPointerDown={(e) => startPress(e, img.url)}
+                                onPointerMove={movePress}
+                                onPointerUp={() => endPress(() => {
+                                    if (currentPhase > 1 && isSelected) setImageToRemove(img.url);
+                                    else handleSelectionToggle(img.url);
+                                })}
+                                onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                className="gallery-item-vip" 
+                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
+                            >
+                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
+                                
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                    {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                </div>
+
+                                {voterNames.length > 0 && (
+                                    <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', zIndex: 5, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        ❤️ {voterNames.join(', ')}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
+                    <div>
+                        <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
+                        {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
+                    </div>
+                    <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
+                        Preview Phase {currentPhase} ➡️
+                    </button>
+                </div>
+
+                {/* MODALS: REMOVE CONFIRM, MISSED IMAGES, RECOVER CONFIRM, REVIEW/FINALIZE */}
+                {/* Image Removal Confirm */}
+                {imageToRemove && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                        <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                            <div style={{fontSize: '40px', marginBottom: '10px'}}>🗑️</div>
+                            <h3 style={{ color: '#e74c3c', margin: '0 0 10px 0' }}>Remove Image?</h3>
+                            <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Are you sure you want to discard this image? You can still recover it from 'Missed Images'.</p>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={() => setImageToRemove(null)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                <button onClick={() => { handleSelectionToggle(imageToRemove); setImageToRemove(null); }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e74c3c', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Missed Images Grid */}
+                {showMissedImages && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ background: '#e67e22', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                            <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>♻️ Recover Images</h2>
+                            <button onClick={() => { setShowMissedImages(false); setMissedSelection([]); }} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <div className="ud-grid-vip" style={{ padding: '15px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
+                            {missedImages.map((img, idx) => {
+                                const isMissedSelected = missedSelection.includes(img.url);
+                                return (
+                                    <div key={idx} onPointerDown={(e) => startPress(e, img.url)} onPointerMove={movePress} onPointerUp={() => endPress(() => {
+                                            setMissedSelection(prev => prev.includes(img.url) ? prev.filter(i => i !== img.url) : [...prev, img.url]);
+                                        })} onPointerLeave={() => clearTimeout(touchRef.current.timer)} className="gallery-item-vip" style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isMissedSelected ? '3px solid #e67e22' : '1px solid #ddd', cursor: 'pointer' }}>
+                                        <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isMissedSelected ? 1 : 0.5 }} />
+                                        <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isMissedSelected ? '#e67e22' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {isMissedSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {missedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', color: '#888', gridColumn: '1 / -1'}}>No missed images available!</p>}
+                        </div>
+                        {missedSelection.length > 0 && (
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: '#fff', padding: '15px', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', zIndex: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{fontWeight: 'bold', color: '#e67e22'}}>{missedSelection.length} Selected</span>
+                                <button onClick={() => setShowMissedRestoreConfirm(true)} style={{ background: '#e67e22', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Restore Images</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Restore Confirmation Modal */}
+                {showMissedRestoreConfirm && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                        <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '350px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                            <div style={{fontSize: '40px', marginBottom: '10px'}}>♻️</div>
+                            <h3 style={{ color: '#e67e22', margin: '0 0 10px 0' }}>Restore {missedSelection.length} Images?</h3>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                                <button onClick={() => setShowMissedRestoreConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#eee', color: '#333', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+                                <button onClick={() => { setSelectionDraft(prev => [...prev, ...missedSelection]); setMissedSelection([]); setShowMissedRestoreConfirm(false); setShowMissedImages(false); alert("✅ Images restored!"); }} style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#e67e22', color: '#fff', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>Yes, Restore</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Review & Finalize Phase Modal */}
+                {showSelectionReview && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#f5f6fa', zIndex: 999999, overflowY: 'auto' }}>
+                        <div style={{ background: '#1a1a2e', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 }}>
+                            <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>Review & Finalize</h2>
+                            <button onClick={() => setShowSelectionReview(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: '24px' }}>✖</button>
+                        </div>
+                        <div style={{ padding: '20px' }}>
+                            <div style={{ background: '#fff', padding: '20px', borderRadius: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', marginBottom: '20px' }}>
+                                <h3 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>Summary (Phase {currentPhase})</h3>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}>
+                                    <span style={{color: '#7f8c8d'}}>Total Selected</span>
+                                    <strong style={{color: '#3498db', fontSize: '16px'}}>{selectionDraft.length} Photos</strong>
+                                </div>
+                                {totalAllowed > 0 && (() => {
+                                    const extraImages = Math.max(0, selectionDraft.length - totalAllowed);
+                                    const extraSheets = activeSelectionProject.imagesPerSheet > 0 ? Math.ceil(extraImages / activeSelectionProject.imagesPerSheet) : 0;
+                                    const extraCost = extraSheets * (activeSelectionProject.costPerExtraSheet || 0);
+                                    return (
+                                        <>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}><span style={{color: '#7f8c8d'}}>Free Allowance</span><strong style={{color: '#2ecc71'}}>{totalAllowed} Photos</strong></div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #eee', paddingBottom: '10px', marginBottom: '10px' }}><span style={{color: '#7f8c8d'}}>Extra Sheets Required</span><strong style={{color: extraSheets > 0 ? '#e74c3c' : '#2ecc71'}}>{extraSheets} Sheets</strong></div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', background: '#fdf2e9', padding: '15px', borderRadius: '10px' }}><span style={{color: '#d35400', fontWeight: 'bold'}}>Estimated Extra Charge</span><strong style={{color: '#d35400', fontSize: '18px'}}>₹{extraCost}</strong></div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                            
+                            {(() => {
+                                const effectiveTotalPhases = isFamilyMember ? Math.min(2, activeSelectionProject.totalPhases) : activeSelectionProject.totalPhases;
+                                const isFinalPhase = currentPhase >= effectiveTotalPhases;
+                                return (
+                                    <>
+                                        {isFinalPhase && (
+                                            <div style={{ background: '#fdedec', border: '1px dashed #e74c3c', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+                                                <h4 style={{ color: '#c0392b', margin: '0 0 5px 0' }}>⚠️ Final Submission Warning</h4>
+                                                <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be permanently removed.</p>
+                                            </div>
+                                        )}
+                                        <button onClick={() => submitPhaseSelection(isFinalPhase)} disabled={loading || selectionDraft.length === 0} style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
+                                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
+                                        </button>
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     };
 
    // 👇 NAYA FUNCTION (SHARED TAB KE LIYE - CLEAN UI & WHATSAPP REMINDER) 👇
