@@ -977,6 +977,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <div className="ud-grid-vip" style={{ padding: '15px' }}>
                         {displayedImages.map((img, idx) => {
                             const isSelected = isCompleted ? true : selectionDraft.includes(img.url);
+                            
+                            // ✅ NEW: Family Member Vote Logic (Get nicknames of voters)
+                            let voterNames = [];
+                            if (img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
+                                img.selectedBy.forEach(voterMobile => {
+                                    // Exclude main client's own mobile (they know what they picked)
+                                    if (voterMobile !== activeSelectionProject.clientMobile) {
+                                        const fm = activeSelectionProject.familyMembers.find(f => f.mobile === voterMobile);
+                                        if (fm && fm.nickname) {
+                                            voterNames.push(fm.nickname);
+                                        }
+                                    }
+                                });
+                            }
+
                             return (
                                 <div key={idx} 
                                     onPointerDown={(e) => startPress(e, img.url)}
@@ -996,9 +1011,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: isCompleted ? 'zoom-in' : 'pointer' }}
                                 >
                                     <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    
+                                    {/* Checkmark Badge */}
+                                    <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
                                         {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
                                     </div>
+
+                                    {/* ✅ NEW: FAMILY VOTE BADGE (Live Heart Counter) */}
+                                    {voterNames.length > 0 && (
+                                        <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', zIndex: 5, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            ❤️ {voterNames.join(', ')}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
