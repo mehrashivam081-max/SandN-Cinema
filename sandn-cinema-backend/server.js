@@ -2760,10 +2760,22 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
 // 4. Update Selection Phase & Finalize Engine (CRASH-PROOF & EMAIL ENABLED)
 app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
     try {
-        const { projectId, selectedImages, isFinal, isFamilyMember, userMobile } = req.body; 
+        const { projectId, selectedImages, isFinal, isFamilyMember, userMobile, isDraftOnly } = req.body; 
         
         const selection = await AlbumSelection.findById(projectId).lean();
         if (!selection) return res.json({ success: false, message: "Project not found" });
+
+        // ✅ AUTO-SAVE DRAFT LOGIC (For Step-by-Step Wizard Navigation)
+        if (isDraftOnly) {
+            // Sirf selected images ko mark karo, baaki active rahenge. Phase change mat karo.
+            const updatedImages = selection.images.map(img => {
+                if (selectedImages.includes(img.url)) img.status = 'selected';
+                else img.status = 'active'; 
+                return img;
+            });
+            await AlbumSelection.updateOne({ _id: projectId }, { $set: { images: updatedImages } }, { strict: false });
+            return res.json({ success: true, message: "Draft Auto-Saved." });
+        }
 
         // ✅ NEW: IF FAMILY MEMBER IS VOTING (They don't affect main project status)
         if (isFamilyMember && userMobile) {
