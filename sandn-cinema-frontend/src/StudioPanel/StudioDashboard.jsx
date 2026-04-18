@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import './StudioDashboard.css'; 
 import useBackButton from '../hooks/useBackButton';
-import SyncPlayer from '../components/SyncPlayer'; // Path apne hisaab se set kar lenaimport SyncPlayer from '../components/SyncPlayer'; // Path apne hisaab se set kar lena
+import SyncPlayer from '../components/SyncPlayer';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -78,6 +80,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         totalFiles: 0, downloadedFiles: 0, progressPercent: 0, speed: '', eta: '', failedFiles: [] 
     });
     const abortControllerRef = useRef(null);
+    const [showNotifications, setShowNotifications] = useState(false); // ✅ Added Notification State
 
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -694,9 +697,6 @@ const StudioDashboard = ({ user, onLogout }) => {
     };
 
     // ✅ 2. SMART ZIP DOWNLOADER ENGINE (Auto-Resume & Progress Tracking)
-    const JSZip = require("jszip"); // MAKE SURE JSZip is installed via npm: npm install jszip
-    const FileSaver = require("file-saver"); // npm install file-saver
-
     const startSmartDownload = async (selectionProject) => {
         if (!selectionProject || !selectionProject.images) return;
         
@@ -775,7 +775,7 @@ const StudioDashboard = ({ user, onLogout }) => {
             
             // Generate ZIP
             zip.generateAsync({ type: "blob" }).then((content) => {
-                FileSaver.saveAs(content, `${selectionProject.folderName}_${selectionProject.clientMobile}_Final.zip`);
+                saveAs(content, `${selectionProject.folderName}_${selectionProject.clientMobile}_Final.zip`);
                 
                 setDownloadManager(prev => ({ ...prev, active: false }));
                 alert(`✅ Download Complete!\n${successfulDownloads} downloaded.\n${failedDownloads.length > 0 ? `⚠️ ${failedDownloads.length} files failed.` : ''}`);
@@ -1019,14 +1019,14 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     <td>{client.mobile}</td>
                                                     <td><span className="status-badge normal">{fileCount} Folders</span></td>
                                                     <td>{new Date(client.joinedDate).toLocaleDateString()}</td>
-                                                    <td>
-                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', marginRight: '5px', background: '#34495e' }} onClick={() => { setStudioRemoveMobile(client.mobile); searchUserForRemoval(client.mobile); }}>
+                                                    <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#34495e', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer' }} onClick={() => { setStudioRemoveMobile(client.mobile); searchUserForRemoval(client.mobile); }}>
                                                             📂 Manage Data
                                                         </button>
-                                                        <button onClick={() => handleMagicLogin(client.mobile)} style={{ padding: '6px 12px', fontSize: '12px', marginRight: '5px', background: '#f1c40f', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                        <button onClick={() => handleMagicLogin(client.mobile)} style={{ padding: '6px 12px', fontSize: '12px', background: '#f1c40f', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                                                             👁️ View UI
                                                         </button>
-                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }} onClick={() => handleDeleteClient(client.mobile)}>
+                                                        <button className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer' }} onClick={() => handleDeleteClient(client.mobile)}>
                                                             🗑️ Delete Client
                                                         </button>
                                                     </td>
