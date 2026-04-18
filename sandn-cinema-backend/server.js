@@ -2691,7 +2691,21 @@ app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) =>
     }
 });
 
-// 3.5 🤝 Invite Family Member to Selection Project (WITH NICKNAME)
+// 📸 API: Save Merged Selection
+app.post('/api/auth/save-merged-selection', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, mergedImages } = req.body;
+        await AlbumSelection.updateOne(
+            { _id: projectId }, 
+            { $set: { mergedImages: mergedImages } }, 
+            { strict: false }
+        );
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false });
+    }
+});
+
 app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res) => {
     try {
         const { projectId, senderMobile, familyMobile, nickname, cost } = req.body;
