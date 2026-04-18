@@ -62,8 +62,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ NEW: SMART ALBUM SELECTION STATES
     const [mySelections, setMySelections] = useState([]);
     const [activeSelectionProject, setActiveSelectionProject] = useState(null);
-    const [activeSelectionCategory, setActiveSelectionCategory] = useState('ALL'); // 👈 NEW: For folder tabs
-    const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
+    const [activeSelectionCategory, setActiveSelectionCategory] = useState('ALL'); 
+    const [wizardCategories, setWizardCategories] = useState([]); // 👈 Tracks available folders
+    const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
     const [showSelectionReview, setShowSelectionReview] = useState(false);
     const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
     const [imageToRemove, setImageToRemove] = useState(null); // 👈 NEW: Phase 2/3 Removal Confirmation State
@@ -864,13 +865,32 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setSelectionDraft(prev => prev.includes(url) ? prev.filter(item => item !== url) : [...prev, url]);
     };
 
+    // ✅ NEW: Auto-Save Draft (Without changing phase)
+    const saveDraftOnly = async () => {
+        if (!activeSelectionProject) return false;
+        try {
+            await axios.post(`${API_BASE}/update-album-selection`, {
+                projectId: activeSelectionProject._id,
+                selectedImages: selectionDraft,
+                isFinal: false,
+                isFamilyMember: activeSelectionProject.clientMobile !== syncUser?.mobile,
+                userMobile: syncUser.mobile,
+                isDraftOnly: true // Custom flag for backend to just update images array, not phase
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            return true;
+        } catch (e) {
+            console.error("Draft save error", e);
+            return false;
+        }
+    };
+
     const submitPhaseSelection = async (finalPhase = false) => {
-        if (!activeSelectionProject) return;
+        if (!activeSelectionProject) return;
 
         // ✅ Check if the current user is a Family Member (not the main client)
         const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
-        
-        let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
+        
+        let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
         
         if (isFamilyMember && finalPhase) {
             msg = `Send your selected images to the main client? You won't be able to change them later.`;
@@ -1187,17 +1207,44 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
         }
 
-        // ✅ UNIQUE FOLDERS EXTRACTION
-        const categoriesSet = new Set(['ALL']);
+        // ✅ UNIQUE FOLDERS EXTRACTION FOR TABS & WIZARD
+        const categoriesSet = new Set();
         allImagesInCurrentPhase.forEach(img => {
-            if (img.subFolder) categoriesSet.add(img.subFolder);
+            if (img.subFolder && img.subFolder !== 'Main Event') categoriesSet.add(img.subFolder);
         });
-        const categories = Array.from(categoriesSet);
+        
+        // Setup Wizard array: Real folders first, then 'ALL' as the final review stage
+        const realFolders = Array.from(categoriesSet);
+        const categories = realFolders.length > 0 ? [...realFolders, 'ALL'] : ['ALL'];
+        
+        // Keep component state in sync with categories
+        if (wizardCategories.length !== categories.length) {
+            setWizardCategories(categories);
+            if (activeSelectionCategory === 'ALL' && realFolders.length > 0) {
+                setActiveSelectionCategory(realFolders[0]); // Start at first folder automatically
+            }
+        }
 
-        // ✅ FILTER IMAGES BASED ON SELECTED CATEGORY
+        // ✅ FILTER IMAGES BASED ON SELECTED FOLDER TAB
         const displayedImages = activeSelectionCategory === 'ALL' 
             ? allImagesInCurrentPhase 
             : allImagesInCurrentPhase.filter(img => img.subFolder === activeSelectionCategory);
+
+        // Wizard Navigation Logic
+        const currentIndex = categories.indexOf(activeSelectionCategory);
+        const isLastFolder = currentIndex === categories.length - 1; // Usually 'ALL'
+        const nextFolder = !isLastFolder ? categories[currentIndex + 1] : null;
+
+        const handleNextFolder = async () => {
+            if (nextFolder) {
+                setLoading(true);
+                // Silently save progress before moving to next folder
+                await saveDraftOnly();
+                setActiveSelectionCategory(nextFolder);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setLoading(false);
+            }
+        };
 
         // Active Long Press Helpers
         const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
@@ -1205,7 +1252,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const endPress = (actionFn) => { clearTimeout(touchRef.current.timer); if (!touchRef.current.isLong) actionFn(); };
         
         return (
-            <div className="folders-view" style={{ paddingBottom: '100px' }}>
+            <div className="folders-view" style={{ paddingBottom: '120px' }}>
                 <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
                     <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
                         <button onClick={() => { 
@@ -1225,7 +1272,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
 
                     {/* ✅ FOLDER TABS (HORIZONTAL SCROLL) */}
-                    {categories.length > 2 && (
+                    {categories.length > 1 && (
                         <div style={{ display: 'flex', overflowX: 'auto', gap: '10px', padding: '0 15px 10px 15px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'none' }}>
                             {categories.map((cat, idx) => {
                                 const isActive = activeSelectionCategory === cat;
@@ -1233,7 +1280,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 return (
                                     <button 
                                         key={idx} 
-                                        onClick={() => setActiveSelectionCategory(cat)}
+                                        onClick={() => { setActiveSelectionCategory(cat); saveDraftOnly(); }}
                                         style={{
                                             whiteSpace: 'nowrap',
                                             padding: '8px 15px',
@@ -1248,7 +1295,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             transition: 'all 0.2s ease'
                                         }}
                                     >
-                                        {cat === 'ALL' ? '🌟 All Photos' : `📁 ${cat}`} ({countInCat})
+                                        {cat === 'ALL' ? '🌟 All Photos (Final Review)' : `📁 ${cat}`} ({countInCat})
                                     </button>
                                 );
                             })}
@@ -1256,7 +1303,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     )}
 
                     {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
-                    {currentPhase > 1 && (
+                    {currentPhase > 1 && activeSelectionCategory === 'ALL' && (
                         <div style={{ padding: '0 15px' }}>
                             <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '8px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
                                 ♻️ View Missed Images ({missedImages.length})
@@ -1289,11 +1336,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 })}
                                 onPointerLeave={() => clearTimeout(touchRef.current.timer)}
                                 className="gallery-item-vip" 
-                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
+                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer', transition: 'border 0.2s' }}
                             >
                                 <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
                                 
-                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, transition: 'background 0.2s' }}>
                                     {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
                                 </div>
 
@@ -1305,16 +1352,27 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             </div>
                         );
                     })}
+                    {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', gridColumn: '1/-1', color: '#888'}}>No images found in this folder.</p>}
                 </div>
 
+                {/* ✅ DYNAMIC BOTTOM ACTION BAR (WIZARD LOGIC) */}
                 <div style={{ position: 'fixed', bottom: '65px', left: 0, width: '100%', background: '#fff', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 -5px 15px rgba(0,0,0,0.1)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px', zIndex: 100 }}>
                     <div>
                         <span style={{ fontSize: '12px', color: '#7f8c8d', display: 'block' }}>Selected: <strong style={{color: '#2c3e50'}}>{selectionDraft.length}</strong></span>
                         {totalAllowed > 0 && <span style={{ fontSize: '10px', color: selectionDraft.length > totalAllowed ? '#e74c3c' : '#2ecc71', fontWeight: 'bold' }}>Free Limit: {totalAllowed}</span>}
                     </div>
-                    <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
-                        Preview Phase {currentPhase} ➡️
-                    </button>
+                    
+                    {isLastFolder ? (
+                        // If it's the 'ALL' tab (Final Review), show the Finalize button
+                        <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
+                            {isFamilyMember ? 'Send to Main Client' : `Complete Phase ${currentPhase} 🚀`}
+                        </button>
+                    ) : (
+                        // If it's a specific sub-folder, show 'Save & Next'
+                        <button onClick={handleNextFolder} disabled={loading} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}>
+                            {loading ? 'Saving...' : `Save & Next Folder ➡️`}
+                        </button>
+                    )}
                 </div>
 
                 {/* MODALS: REMOVE CONFIRM, MISSED IMAGES, RECOVER CONFIRM, REVIEW/FINALIZE */}
@@ -1418,9 +1476,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                 <p style={{ fontSize: '12px', color: '#c0392b', margin: 0 }}>Once submitted, all unselected photos will be permanently removed.</p>
                                             </div>
                                         )}
+                                        
                                         <button onClick={() => submitPhaseSelection(isFinalPhase)} disabled={loading || selectionDraft.length === 0} style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
-                                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
+                                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move to Next Phase')}
                                         </button>
+
+                                        {/* ✅ NEW: PHASE 2 PROMPT (Only shows if NOT final phase) */}
+                                        {!isFinalPhase && (
+                                             <p style={{textAlign: 'center', fontSize: '12px', color: '#888', marginTop: '15px'}}>
+                                                 Don't worry, you don't have to start Phase {currentPhase + 1} immediately. You can take a break and come back later!
+                                             </p>
+                                        )}
                                     </>
                                 );
                             })()}
