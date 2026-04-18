@@ -672,27 +672,33 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // ✅ 1. MAGIC LOGIN (View Client UI)
-    const handleMagicLogin = async (clientMobile) => {
+    // ✅ 1. MAGIC LOGIN (View Client UI) - FIXED for Unregistered Clients
+    const handleMagicLogin = (clientMobile) => {
+        // Bina DB check kiye direct fake user inject karo, taaki pending clients ka data bhi dikh sake
+        const fakeUserObj = { 
+            name: 'Client Preview', 
+            mobile: clientMobile, 
+            role: 'USER', 
+            isMagicLogin: true 
+        };
+        const magicUrl = `${window.location.origin}/dashboard?magic=${btoa(JSON.stringify(fakeUserObj))}`;
+        window.open(magicUrl, '_blank');
+    };
+
+    // ✅ NEW: DELETE SMART SELECTION PROJECT
+    const handleDeleteSelectionProject = async (projectId) => {
+        if (!window.confirm("⚠️ Are you sure you want to completely delete this Selection Project? All client progress and links will be destroyed!")) return;
+        
         try {
-            // Hum backend se bypass token lenge taaki OTP na dena pade
-            const res = await axios.post(`${API_BASE}/search-account`, { mobile: clientMobile });
+            const res = await axios.post(`${API_BASE}/delete-selection-project`, { projectId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if (res.data.success) {
-                const fakeUserObj = { 
-                    name: res.data.data.name || 'Client', 
-                    mobile: clientMobile, 
-                    role: 'USER', 
-                    isMagicLogin: true // Flag to tell system this is studio viewing it
-                };
-                
-                // Create a temporary link that automatically logs in
-                const magicUrl = `${window.location.origin}/dashboard?magic=${btoa(JSON.stringify(fakeUserObj))}`;
-                window.open(magicUrl, '_blank');
+                alert("✅ Project deleted successfully!");
+                fetchStudioSelections();
             } else {
-                alert("Client data not found.");
+                alert("❌ Failed to delete: " + res.data.message);
             }
         } catch (e) {
-            alert("Failed to initiate magic login.");
+            alert("Error deleting project. Make sure backend API is added.");
         }
     };
 
@@ -1460,13 +1466,16 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                     {sel.extraAmountToPay > 0 && <div style={{fontSize:'10px', color: sel.isPaid ? '#2ecc71' : '#e74c3c'}}>{sel.isPaid ? 'Paid' : 'Unpaid'}</div>}
                                                 </td>
                                                 <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                    <button onClick={() => handleMagicLogin(sel.clientMobile)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer'}}>View Client UI</button>
-                                                    {sel.status === 'Completed' && (
-                                                        <button onClick={() => startSmartDownload(sel)} disabled={downloadManager.active && downloadManager.projectId === sel._id} style={{background: (downloadManager.active && downloadManager.projectId === sel._id) ? '#bdc3c7' : '#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>
-                                                            {downloadManager.active && downloadManager.projectId === sel._id ? 'Downloading...' : 'Download Original Zip'}
-                                                        </button>
-                                                    )}
-                                                </td>
+                                                    <button onClick={() => handleMagicLogin(sel.clientMobile)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>👁️ View Client UI</button>
+                                                    
+                                                    <button onClick={() => handleDeleteSelectionProject(sel._id)} style={{background:'#e74c3c', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>🗑️ Delete Project</button>
+                                                    
+                                                    {sel.status === 'Completed' && (
+                                                        <button onClick={() => startSmartDownload(sel)} disabled={downloadManager.active && downloadManager.projectId === sel._id} style={{background: (downloadManager.active && downloadManager.projectId === sel._id) ? '#bdc3c7' : '#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>
+                                                            {downloadManager.active && downloadManager.projectId === sel._id ? 'Downloading...' : '📥 Download ZIP'}
+                                                        </button>
+                                                    )}
+                                                </td>
                                             </tr>
                                         );
                                     })}
