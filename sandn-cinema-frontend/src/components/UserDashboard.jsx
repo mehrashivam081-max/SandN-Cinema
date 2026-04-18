@@ -60,8 +60,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [adLoading, setAdLoading] = useState(false);
 
     // ✅ NEW: SMART ALBUM SELECTION STATES
-    const [mySelections, setMySelections] = useState([]);
-    const [activeSelectionProject, setActiveSelectionProject] = useState(null);
+    const [mySelections, setMySelections] = useState([]);
+    const [activeSelectionProject, setActiveSelectionProject] = useState(null);
+    const [activeSelectionCategory, setActiveSelectionCategory] = useState('ALL'); // 👈 NEW: For folder tabs
     const [selectionDraft, setSelectionDraft] = useState([]); // Selected URLs
     const [showSelectionReview, setShowSelectionReview] = useState(false);
     const [showMissedImages, setShowMissedImages] = useState(false); // 👈 Missed Images State
@@ -1176,15 +1177,27 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const currentPhase = activeSelectionProject.currentPhase || 1;
         const totalAllowed = (activeSelectionProject.sheetLimit || 0) * (activeSelectionProject.imagesPerSheet || 0);
         
-        let displayedImages = [];
+        let allImagesInCurrentPhase = [];
         let missedImages = [];
 
         if (currentPhase === 1) {
-            displayedImages = activeSelectionProject.images;
+            allImagesInCurrentPhase = activeSelectionProject.images;
         } else {
-            displayedImages = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
+            allImagesInCurrentPhase = activeSelectionProject.images.filter(img => selectionDraft.includes(img.url));
             missedImages = activeSelectionProject.images.filter(img => !selectionDraft.includes(img.url));
         }
+
+        // ✅ UNIQUE FOLDERS EXTRACTION
+        const categoriesSet = new Set(['ALL']);
+        allImagesInCurrentPhase.forEach(img => {
+            if (img.subFolder) categoriesSet.add(img.subFolder);
+        });
+        const categories = Array.from(categoriesSet);
+
+        // ✅ FILTER IMAGES BASED ON SELECTED CATEGORY
+        const displayedImages = activeSelectionCategory === 'ALL' 
+            ? allImagesInCurrentPhase 
+            : allImagesInCurrentPhase.filter(img => img.subFolder === activeSelectionCategory);
 
         // Active Long Press Helpers
         const startPress = (e, url) => { touchRef.current.isLong = false; touchRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY) || 0; touchRef.current.timer = setTimeout(() => { touchRef.current.isLong = true; setPreviewMedia(url); }, 500); };
@@ -1193,28 +1206,60 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         
         return (
             <div className="folders-view" style={{ paddingBottom: '100px' }}>
-                <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
                     <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
                         <button onClick={() => { 
-                            if(isFamilyMember) { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); }
-                            else setSelectionSubView('OVERVIEW'); 
+                            if(isFamilyMember) { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); setActiveSelectionCategory('ALL'); }
+                            else { setSelectionSubView('OVERVIEW'); setActiveSelectionCategory('ALL'); }
                         }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                        <h3 style={{color: '#fff', margin: 0}}>{isFamilyMember ? 'Family Selection' : `Your Selection (Ph ${currentPhase})`}</h3>
+                        <h3 style={{color: '#fff', margin: 0, fontSize: '15px'}}>{isFamilyMember ? 'Family Selection' : `Phase ${currentPhase} Selection`}</h3>
                     </div>
 
-                    <div style={{ padding: '15px', background: '#fff', margin: '15px 15px 10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                        <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#2c3e50', fontWeight: 'bold' }}>{activeSelectionProject.folderName}</p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d' }}>
-                            <span>{currentPhase === 1 ? "Select your best shots." : "Filter down your final selections."}</span>
-                            <strong style={{color: '#8e44ad'}}>{selectionDraft.length} Selected</strong>
+                    <div style={{ padding: '10px 15px', background: '#fff', margin: '10px 15px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <strong style={{fontSize: '14px', color: '#2c3e50'}}>{activeSelectionProject.folderName}</strong>
+                            <div style={{ background: '#f5eef8', color: '#8e44ad', padding: '4px 10px', borderRadius: '15px', fontSize: '11px', fontWeight: 'bold' }}>
+                                {selectionDraft.length} Selected
+                            </div>
                         </div>
                     </div>
+
+                    {/* ✅ FOLDER TABS (HORIZONTAL SCROLL) */}
+                    {categories.length > 2 && (
+                        <div style={{ display: 'flex', overflowX: 'auto', gap: '10px', padding: '0 15px 10px 15px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'none' }}>
+                            {categories.map((cat, idx) => {
+                                const isActive = activeSelectionCategory === cat;
+                                const countInCat = cat === 'ALL' ? allImagesInCurrentPhase.length : allImagesInCurrentPhase.filter(i => i.subFolder === cat).length;
+                                return (
+                                    <button 
+                                        key={idx} 
+                                        onClick={() => setActiveSelectionCategory(cat)}
+                                        style={{
+                                            whiteSpace: 'nowrap',
+                                            padding: '8px 15px',
+                                            borderRadius: '20px',
+                                            border: 'none',
+                                            fontSize: '12px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            background: isActive ? '#3498db' : '#e0e0e0',
+                                            color: isActive ? '#fff' : '#555',
+                                            boxShadow: isActive ? '0 4px 10px rgba(52, 152, 219, 0.3)' : 'none',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                    >
+                                        {cat === 'ALL' ? '🌟 All Photos' : `📁 ${cat}`} ({countInCat})
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {/* ✅ ADD MISSED IMAGES BUTTON (Only Phase 2 & 3) */}
                     {currentPhase > 1 && (
                         <div style={{ padding: '0 15px' }}>
-                            <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                ♻️ View & Add Missed Images ({missedImages.length})
+                            <button onClick={() => setShowMissedImages(true)} style={{ width: '100%', background: '#fdf2e9', color: '#e67e22', border: '1px dashed #e67e22', padding: '8px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                                ♻️ View Missed Images ({missedImages.length})
                             </button>
                         </div>
                     )}
