@@ -857,10 +857,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         let msg = `Move to Phase ${activeSelectionProject.currentPhase + 1}? Only selected images will be carried forward.`;
         
         if (isFamilyMember && finalPhase) {
-            msg = `Send your selected images to the main client? You won't be able to change them later.`;
-        } else if (finalPhase) {
+            msg = `Send your selected images to the main client? You won't be able to change them later.`;
+        } else if (!isFamilyMember && finalPhase) {
             msg = `⚠️ WARNING: This is the Final Preview!\n\nUnselected images will be permanently removed from your album (kept in 7-day backup).\nAre you ready to submit your final selection to the studio?`;
-        }
+        }
         
         if (!window.confirm(msg)) return;
 
@@ -1064,14 +1064,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                     <div className="ud-grid-vip" style={{ padding: '15px' }}>
                         {displayedImages.map((img, idx) => {
-                            const isSelected = isCompleted ? true : selectionDraft.includes(img.url);
+                            const isSelected = selectionDraft.includes(img.url);
                             
                             // ✅ NEW: Family Member Vote Logic (Get nicknames of voters)
                             let voterNames = [];
-                            // Ensure the user viewing is the Main Client, and there are votes, and family members exist
                             if (!isFamilyMember && img.selectedBy && img.selectedBy.length > 0 && activeSelectionProject.familyMembers) {
                                 img.selectedBy.forEach(voterMobile => {
-                                    // Exclude main client's own mobile (they know what they picked)
                                     if (voterMobile !== activeSelectionProject.clientMobile) {
                                         const fm = activeSelectionProject.familyMembers.find(f => f.mobile === voterMobile);
                                         if (fm && fm.nickname) {
@@ -1086,8 +1084,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     onPointerDown={(e) => startPress(e, img.url)}
                                     onPointerMove={movePress}
                                     onPointerUp={() => endPress(() => {
-                                        if(isCompleted) return; // 🚫 DISABLE CLICK IF COMPLETED (Read Only)
-                                        
                                         // Ask for confirmation if trying to remove in Phase 2 or 3
                                         if (currentPhase > 1 && isSelected) {
                                             setImageToRemove(img.url);
@@ -1097,7 +1093,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     })}
                                     onPointerLeave={() => clearTimeout(touchRef.current.timer)}
                                     className="gallery-item-vip" 
-                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: isCompleted ? 'zoom-in' : 'pointer' }}
+                                    style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: 'pointer' }}
                                 >
                                     <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
                                     
@@ -1267,13 +1263,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             </div>
                         )}
 
-                        <button 
-                            onClick={() => submitPhaseSelection(isFinalPhase)}
-                            disabled={loading || selectionDraft.length === 0}
-                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
-                        >
-                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
-                        </button>
+                        <button 
+                            onClick={() => submitPhaseSelection(isFinalPhase)}
+                            disabled={loading || selectionDraft.length === 0}
+                            style={{ width: '100%', padding: '15px', borderRadius: '12px', background: isFinalPhase ? '#e74c3c' : '#8e44ad', color: '#fff', fontSize: '16px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}
+                        >
+                            {loading ? 'Processing...' : (isFinalPhase ? (isFamilyMember ? '🚀 Send to Main Client' : '🚀 Finalize & Send to Studio') : '➡️ Lock Selection & Move Next')}
+                        </button>
                     </div>
                 </div>
             );
@@ -1387,20 +1383,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     </p>
                                     <p style={{ margin: '0 0 10px 0', color: '#e74c3c', fontSize: '11px', fontWeight: 'bold' }}>⏳ Expires: {new Date(item.expiryDate).toLocaleString()}</p>
                                     
-                                    {/* ✅ Single WhatsApp Reminder Button (Only for Sender) */}
-                                        {sharedTabFilter === 'SENT' && (
-                                            <button onClick={() => {
-                                                const text = `Hi Family! I have securely shared the "${sel.folderName}" album with you. \n\n🔒 *Security Note:* To view the photos, you must log in using the exact mobile number I invited you with.\n\nClick here to login and vote:`;
-                                                if (navigator.share) {
-                                                    navigator.share({ title: 'Secure Album Invite', text: text, url: WEBSITE_URL });
-                                                } else {
-                                                    navigator.clipboard.writeText(`${text} ${WEBSITE_URL}`);
-                                                    alert("Secure invite message copied! Paste it in your Family WhatsApp group.");
-                                                }
-                                            }} style={{ background: '#25D366', color: '#fff', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                                💬 Share Secure Link in WhatsApp
-                                            </button>
-                                        )}
+                                    {sharedTabFilter === 'SENT' && (
+                                        <button onClick={() => handleRevokeAccess(item._id)} style={{ width: '100%', background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '8px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+                                            ❌ Revoke Access
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )) : null}
