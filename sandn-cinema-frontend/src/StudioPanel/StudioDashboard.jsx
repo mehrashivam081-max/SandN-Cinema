@@ -683,7 +683,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         setPreviewProject(project); // Set the project to show in modal
     };
 
-    // ✅ NEW: DELETE SMART SELECTION PROJECT
+    // ✅ NEW: DELETE SMART SELECTION PROJECT (Single Correct Version)
     const handleDeleteSelectionProject = async (projectId) => {
         if (!window.confirm("⚠️ WARNING: Are you absolutely sure you want to delete this Selection Project? All data and client progress will be permanently lost!")) return;
         
@@ -695,7 +695,6 @@ const StudioDashboard = ({ user, onLogout }) => {
             
             if (res.data.success) {
                 alert("✅ Project deleted successfully!");
-                // Remove it directly from UI for instant effect without waiting for fetch
                 setMySelections(prev => prev.filter(sel => sel._id !== projectId)); 
             } else {
                 alert("❌ Failed to delete: " + res.data.message);
@@ -703,22 +702,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         } catch (e) {
             console.error("Delete Error:", e);
             alert(`Error deleting project: ${e.response?.data?.message || e.message}`);
-        }
-    };
-    // ✅ NEW: DELETE SMART SELECTION PROJECT
-    const handleDeleteSelectionProject = async (projectId) => {
-        if (!window.confirm("⚠️ Are you sure you want to completely delete this Selection Project? All client progress and links will be destroyed!")) return;
-        
-        try {
-            const res = await axios.post(`${API_BASE}/delete-selection-project`, { projectId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
-            if (res.data.success) {
-                alert("✅ Project deleted successfully!");
-                fetchStudioSelections();
-            } else {
-                alert("❌ Failed to delete: " + res.data.message);
-            }
-        } catch (e) {
-            alert("Error deleting project. Make sure backend API is added.");
         }
     };
 
