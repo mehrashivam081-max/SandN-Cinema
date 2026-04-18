@@ -3000,6 +3000,81 @@ setInterval(checkAndSendReminders, 43200000);
 // Run once immediately on server start just to catch up
 setTimeout(checkAndSendReminders, 10000);
 
+// =====================================================================
+// 🚀 NEW STUDIO DASHBOARD APIs (DATA MANAGEMENT & DELIVERY DATES)
+// =====================================================================
+
+// 1️⃣ 🚚 Update Expected Delivery Date for Album
+app.post('/api/auth/update-album-delivery-date', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, newDaysToAdd } = req.body;
+        
+        // Aaj ki date se 'newDaysToAdd' din aage ki date set karega
+        const deliveryDate = new Date();
+        deliveryDate.setDate(deliveryDate.getDate() + parseInt(newDaysToAdd));
+
+        await AlbumSelection.findByIdAndUpdate(projectId, {
+            expectedDeliveryDate: deliveryDate
+        });
+
+        res.json({ success: true, message: "Delivery date updated successfully" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Server Error updating date" });
+    }
+});
+
+// 2️⃣ 🗑️ Advanced Delete: Specific File / Sub-Folder / Entire Folder
+app.post('/api/auth/delete-specific-data', authenticateToken, async (req, res) => {
+    try {
+        const { mobile, folderName, subFolderName, fileUrl } = req.body;
+        
+        const user = await User.findOne({ mobile });
+        if (!user) return res.json({ success: false, message: "Client not found in database." });
+
+        let updatedData = user.uploadedData || [];
+
+        if (fileUrl) {
+            // Delete a SPECIFIC FILE only
+            updatedData = updatedData.map(folder => {
+                if (folder.folderName === folderName) {
+                    if (subFolderName) {
+                        folder.subFolders = folder.subFolders.map(sub => {
+                            if (sub.name === subFolderName) {
+                                sub.files = sub.files.filter(f => f !== fileUrl);
+                            }
+                            return sub;
+                        });
+                    } else {
+                        folder.files = folder.files.filter(f => f !== fileUrl);
+                    }
+                }
+                return folder;
+            });
+        } else if (subFolderName) {
+            // Delete an ENTIRE SUB-FOLDER (Date Folder)
+            updatedData = updatedData.map(folder => {
+                if (folder.folderName === folderName) {
+                    folder.subFolders = folder.subFolders.filter(sub => sub.name !== subFolderName);
+                }
+                return folder;
+            });
+        } else {
+            // Delete the ENTIRE MAIN FOLDER
+            updatedData = updatedData.filter(folder => folder.folderName !== folderName);
+        }
+
+        // Save back to DB
+        user.uploadedData = updatedData;
+        await user.save();
+
+        res.json({ success: true, updatedData: user.uploadedData, message: "Data deleted successfully!" });
+    } catch (error) {
+        console.error("Delete Error:", error);
+        res.status(500).json({ success: false, message: "Server error while deleting data." });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
