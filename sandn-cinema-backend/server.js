@@ -2760,24 +2760,26 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
 // 4. Update Selection Phase & Finalize Engine (CRASH-PROOF & EMAIL ENABLED)
 app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
     try {
-        // ✅ ADDED 'currentPhase' to destructuring
         const { projectId, selectedImages, isFinal, isFamilyMember, userMobile, isDraftOnly, currentPhase } = req.body; 
         
         const selection = await AlbumSelection.findById(projectId).lean();
         if (!selection) return res.json({ success: false, message: "Project not found" });
 
-        // ✅ NEW: EXPLICIT PHASE CHANGE LOGIC (For "Edit Selection" & "Start Now" buttons)
-        if (currentPhase !== undefined && !selectedImages) {
+        // 🛡️ SAFE ARRAYS: Prevents 500 Internal Server Errors
+        const safeImages = Array.isArray(selection.images) ? selection.images : [];
+        const safeSelectedImages = Array.isArray(selectedImages) ? selectedImages : [];
+
+        // ✅ EXPLICIT PHASE CHANGE LOGIC (For "Edit Selection" & "Start Now" buttons)
+        // Check if selectedImages is completely missing from req.body
+        if (currentPhase !== undefined && req.body.selectedImages === undefined) {
             await AlbumSelection.updateOne({ _id: projectId }, { $set: { currentPhase: currentPhase } }, { strict: false });
             return res.json({ success: true, message: `Phase successfully updated to ${currentPhase}` });
         }
 
         // ✅ AUTO-SAVE DRAFT LOGIC (For Step-by-Step Wizard Navigation)
         if (isDraftOnly) {
-            if (!selectedImages) return res.json({ success: true }); // Safety check
-            // Sirf selected images ko mark karo, baaki active rahenge. Phase change mat karo.
-            const updatedImages = selection.images.map(img => {
-                if (selectedImages.includes(img.url)) img.status = 'selected';
+            const updatedImages = safeImages.map(img => {
+                if (safeSelectedImages.includes(img.url)) img.status = 'selected';
                 else img.status = 'active'; 
                 return img;
             });
@@ -2785,12 +2787,12 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
             return res.json({ success: true, message: "Draft Auto-Saved." });
         }
 
-        // ✅ NEW: IF FAMILY MEMBER IS VOTING (They don't affect main project status)
+        // ✅ IF FAMILY MEMBER IS VOTING
         if (isFamilyMember && userMobile) {
-            selection.images.forEach(img => {
+            safeImages.forEach(img => {
                 if (!img.selectedBy) img.selectedBy = [];
                 // Add vote if selected
-                if (selectedImages.includes(img.url)) {
+                if (safeSelectedImages.includes(img.url)) {
                     if (!img.selectedBy.includes(userMobile)) img.selectedBy.push(userMobile);
                 } else {
                     // Remove vote if deselected
@@ -2806,7 +2808,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
 
             await AlbumSelection.updateOne(
                 { _id: projectId }, 
-                { $set: { images: selection.images, familyMembers: selection.familyMembers } }, 
+                { $set: { images: safeImages, familyMembers: selection.familyMembers } }, 
                 { strict: false }
             );
             
@@ -2821,9 +2823,9 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
         sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
         // 1. Update image statuses safely
-        const updatedImages = selection.images.map(img => {
+        const updatedImages = safeImages.map(img => {
             let newStatus = isFinal ? 'rejected' : 'active';
-            if (selectedImages.includes(img.url)) {
+            if (safeSelectedImages.includes(img.url)) {
                 newStatus = 'selected';
             }
             return {
@@ -2840,7 +2842,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
         // 2. 💰 If Final Phase, Calculate any extra charges
         if (isFinal) {
             const totalAllowed = (selection.sheetLimit || 0) * (selection.imagesPerSheet || 0);
-            const extraImages = Math.max(0, selectedImages.length - totalAllowed);
+            const extraImages = Math.max(0, safeSelectedImages.length - totalAllowed);
             const extraSheets = selection.imagesPerSheet > 0 ? Math.ceil(extraImages / selection.imagesPerSheet) : 0;
             extraAmountToPay = extraSheets * (selection.costPerExtraSheet || 0);
 
@@ -2877,7 +2879,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                     <div style="font-family: Arial, sans-serif; padding: 20px; background: #fdfdfd; border: 1px solid #ddd; border-radius: 8px;">
                         <h2 style="color: #2b5876;">Selection Completed! 🎉</h2>
                         <p style="color: #444;">Your client has finalized their photo selections for <strong>${selection.folderName}</strong>.</p>
-                        <p style="color: #444;">Total Selected: <strong>${selectedImages.length}</strong> photos.</p>
+                        <p style="color: #444;">Total Selected: <strong>${safeSelectedImages.length}</strong> photos.</p>
                         ${extraAmountToPay > 0 ? `<p style="color: #e74c3c;">Note: The client selected extra sheets resulting in an additional charge of <strong>₹${extraAmountToPay}</strong>.</p>` : ''}
                         <div style="margin-top: 25px;">
                             <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details in Dashboard</a>
@@ -2892,7 +2894,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
                         <h2 style="color: #2ecc71;">Selection Submitted! ✅</h2>
                         <p style="color: #444;">Thank you for finalizing your photos for <strong>${selection.folderName}</strong>.</p>
-                        <p style="color: #444;">You selected <strong>${selectedImages.length}</strong> photos.</p>
+                        <p style="color: #444;">You selected <strong>${safeSelectedImages.length}</strong> photos.</p>
                         ${extraAmountToPay > 0 ? `<p style="color: #e74c3c;">You have an estimated extra charge of <strong>₹${extraAmountToPay}</strong> for additional sheets. The studio will contact you regarding this.</p>` : ''}
                         <p style="color: #666; font-size: 13px; margin-top: 20px;">The studio has been notified and will begin processing your album.</p>
                     </div>`;
@@ -2906,7 +2908,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                         <h2 style="color: #8e44ad;">Phase ${selection.currentPhase} Complete! 📸</h2>
                         <p style="color: #444;">You have successfully saved your progress for <strong>${selection.folderName}</strong>.</p>
                         <p style="color: #444;">${nextPhaseMsg}</p>
-                        <p style="color: #666; font-size: 13px;">So far, you have shortlisted <strong>${selectedImages.length}</strong> photos.</p>
+                        <p style="color: #666; font-size: 13px;">So far, you have shortlisted <strong>${safeSelectedImages.length}</strong> photos.</p>
                         <div style="margin-top: 25px;">
                             <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Continue Selection</a>
                         </div>
