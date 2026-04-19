@@ -6,7 +6,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'sandn_cinema_super_secret_key_2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'snevio_super_secret_key_2024';
 
 // ✅ Added New Models Here
 const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan, AlbumSelection, UserSubscription } = require('./models');
@@ -615,7 +615,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
     if (type === 'undefined' || type === 'null') type = 'USER';
     if (email === 'undefined' || email === 'null') email = '';
 
-    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
+    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Snevio Photography';
     
     const iCost = (imageCost && parseInt(imageCost) >= 0) ? parseInt(imageCost) : 5;
     const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
@@ -674,7 +674,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
                     folderName: finalFolderName,
                     files: subFolderName ? [] : filePaths,
                     subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-                    isDefault: finalFolderName === 'Stranger Photography',
+                    isDefault: finalFolderName === 'Snevio Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
                     downloadCount: 0,
@@ -709,7 +709,7 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
             folderName: finalFolderName,
             files: subFolderName ? [] : filePaths,
             subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-            isDefault: finalFolderName === 'Stranger Photography',
+            isDefault: finalFolderName === 'Snevio Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
             downloadCount: 0,
@@ -893,7 +893,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
-    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Stranger Photography';
+    const finalFolderName = (folderName && folderName.trim() !== '') ? folderName.trim() : 'Snevio Photography';
 
     const iCost = (imageCost && parseInt(imageCost) >= 0) ? parseInt(imageCost) : 5;
     const vCost = (videoCost && parseInt(videoCost) >= 0) ? parseInt(videoCost) : 10;
@@ -965,7 +965,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
                     folderName: finalFolderName,
                     files: subFolderName ? [] : filePaths,
                     subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-                    isDefault: finalFolderName === 'Stranger Photography',
+                    isDefault: finalFolderName === 'Snevio Photography',
                     expiryDate: expiryDate,
                     downloadLimit: dLimit,
                     downloadCount: 0,
@@ -996,7 +996,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
             folderName: finalFolderName,
             files: subFolderName ? [] : filePaths,
             subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-            isDefault: finalFolderName === 'Stranger Photography',
+            isDefault: finalFolderName === 'Snevio Photography',
             expiryDate: expiryDate,
             downloadLimit: dLimit,
             downloadCount: 0,
