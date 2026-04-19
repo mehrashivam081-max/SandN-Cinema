@@ -2077,8 +2077,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
 
-                        {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS */}
-                        {mySelections && mySelections.length > 0 && mySelections.map((sel, idx) => (
+                        {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS (ONLY FOR MAIN CLIENT) */}
+                        {mySelections && mySelections.length > 0 && mySelections.filter(sel => sel.clientMobile === syncUser?.mobile).map((sel, idx) => (
                             <React.Fragment key={`sel-${idx}`}>
                                 <div 
                                     className="folder-card" 
