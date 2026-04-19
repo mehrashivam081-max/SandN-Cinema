@@ -234,8 +234,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         };
                     }).filter(Boolean);
 
-                    const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'stranger photography');
-                    const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'stranger photography');
+                    const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'snevio photography');
+                    const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'snevio photography');
                     
                     const finalDefaultFolder = backendDefaultFolder 
                         ? { ...DEFAULT_FOLDER, ...backendDefaultFolder, files: backendDefaultFolder.files || [], subFolders: backendDefaultFolder.subFolders || [] } 
@@ -516,8 +516,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const handleNativeShare = async () => {
         if (!selectedMedia) return;
         const shareData = {
-            title: 'SandN Cinema - Digital Memories',
-            text: 'Check out this amazing moment captured beautifully by @sandncinema! ✨📸 #SandNCinema #Photography #Cinematography',
+            title: 'Snevio - Digital Memories',
+            text: 'Check out this amazing moment captured beautifully by @snevio! ✨📸 #Snevio #Photography #Cinematography',
             url: getCleanUrl(selectedMedia.url)
         };
         try {
@@ -677,6 +677,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const itemToAdd = {
             ...service,
             startingPrice: priceToCharge, // We overwrite startingPrice with the actual price to charge
+            addedBy: service.addedBy || 'Snevio', // ✅ Fallback added here
             addedAt: Date.now()
         };
 
@@ -708,7 +709,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             });
             
             if (res.data.success) {
-                alert(`Booking Request Sent to Provider: ${service.addedBy || 'SandN Cinema'}\nAmount: ₹${priceToCharge}`);
+                alert(`Booking Request Sent to Provider: ${service.addedBy || 'Snevio'}\nAmount: ₹${priceToCharge}`);
                 setSelectedServiceModal(null);
                 setCurrentTab('BOOKINGS');
                 fetchServicesAndBookings(syncUser.mobile);
@@ -1992,9 +1993,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
                                         <div 
                                             onClick={() => setUploaderProfile({
-                                                name: activeFolder.uploadedBy || 'SandN Cinema',
+                                                name: activeFolder.uploadedBy || 'Snevio',
                                                 role: activeFolder.uploaderRole || 'Premium Studio',
-                                                email: activeFolder.uploaderEmail || 'contact@sandncinema.com'
+                                                email: activeFolder.uploaderEmail || 'contact@snevio.com'
                                             })}
                                             style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
                                         >
@@ -2003,7 +2004,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                 <span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span>
-                                                <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'SandN Cinema'}</span>
+                                                <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2' }}>{activeFolder.uploadedBy || 'Snevio'}</span>
                                             </div>
                                         </div>
 
@@ -2388,7 +2389,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                 <div>
                                                     <h3 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
                                                     <p style={{ color: '#f1c40f', margin: 0, fontWeight: 'bold', fontSize: '14px' }}>₹{item.startingPrice}</p>
-                                                    <p style={{ color: '#888', fontSize: '11px', margin: '5px 0 0 0' }}>Provider: {item.addedBy || 'SandN Cinema'}</p>
+                                                    <p style={{ color: '#888', fontSize: '11px', margin: '5px 0 0 0' }}>Provider: {item.addedBy || 'Snevio'}</p>
                                                 </div>
                                                 <button onClick={() => handleRemoveFromCart(item._id)} style={{ background: 'rgba(231,76,60,0.1)', color: '#e74c3c', border: 'none', padding: '5px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>Remove</button>
                                             </div>
@@ -2780,17 +2781,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 <li><strong>Download</strong> the photo/video first.</li>
                                 <li>Open <strong>Instagram App</strong> and create a New Post.</li>
                                 <li>Tap on <strong>Tag People</strong> ➔ <strong>Invite Collaborator</strong>.</li>
-                                <li>Search and select <strong>@sandncinema</strong>.</li>
+                                <li>Search and select <strong>@snevio</strong>.</li>
                                 <li>Paste the caption below and Post!</li>
                             </ol>
                         </div>
 
                         <div style={{ background: '#e8f8f5', border: '1px dashed #2ecc71', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
                             <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontStyle: 'italic', color: '#27ae60' }}>
-                                "Beautiful moments captured flawlessly! ✨ Thanks to @sandncinema for the amazing work. 📸❤️ #SandNCinema #Photography #Cinematography"
+                                "Beautiful moments captured flawlessly! ✨ Thanks to @snevio for the amazing work. 📸❤️ #Snevio #Photography #Cinematography"
                             </p>
                             <button onClick={() => {
-                                navigator.clipboard.writeText("Beautiful moments captured flawlessly! ✨ Thanks to @sandncinema for the amazing work. 📸❤️ #SandNCinema #Photography #Cinematography");
+                                navigator.clipboard.writeText("Beautiful moments captured flawlessly! ✨ Thanks to @snevio for the amazing work. 📸❤️ #Snevio #Photography #Cinematography");
                                 alert("Caption Copied to Clipboard!");
                             }} style={{ background: '#2ecc71', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Copy Caption</button>
                         </div>
