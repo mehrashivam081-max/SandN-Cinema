@@ -3142,6 +3142,55 @@ app.post('/api/auth/proxy-download', async (req, res) => {
     }
 });
 
+// ==========================================
+// 🎁 SECURE DAILY LOGIN REWARD (MIDNIGHT IST RESET)
+// ==========================================
+app.post('/api/auth/claim-daily-login', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [], currentStreak: 0 };
+
+        // ✅ Get Current Date strictly in Indian Standard Time (IST)
+        // Format YYYY-MM-DD ensures exact matching (e.g. "2026-04-19")
+        const options = { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const todayIST = new Intl.DateTimeFormat('en-CA', options).format(new Date());
+
+        // 🛑 If user already claimed today in IST, return false silently
+        if (wallet.lastRewardDate === todayIST) {
+            return res.json({ success: false, message: "Already claimed today." });
+        }
+
+        // 🎁 Add Coin, Update Date & Streak
+        wallet.coins += 1;
+        wallet.lastRewardDate = todayIST;
+        wallet.currentStreak = (wallet.currentStreak || 0) + 1;
+
+        const historyEntry = {
+            action: `Daily Login Reward (Streak: ${wallet.currentStreak})`,
+            amount: `+1 Coin`,
+            date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        // Return success to trigger animation on frontend
+        res.json({ success: true, wallet, streak: wallet.currentStreak });
+    } catch (e) {
+        console.error("Daily Reward Error:", e);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
