@@ -278,46 +278,37 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             fetchRealTimeData(false); // false means silent load (no loader screen)
         }, 30000); // 30 seconds
         
-        // 3. Daily Reward Logic (Only runs once on mount)
-        const currentUserData = userData || user || JSON.parse(sessionStorage.getItem('user')) || {};
-        const rewardResult = calculateDailyReward({ ...currentUserData, wallet });
-        
-        // ✅ NEW: Check if already claimed today
-        const todayStr = new Date().toDateString(); // Result: "Fri Apr 17 2026"
-        const rewardKey = `claimed_reward_${currentUserData.mobile}_${todayStr}`;
-
-        if (rewardResult.rewardAdded && !localStorage.getItem(rewardKey)) {
-            localStorage.setItem(rewardKey, 'true'); // 🔒 Lock it for today!
-
-            // ✅ REAL API CALL: Database mein permanently 1 Coin add karo
-            axios.post(`${API_BASE}/add-coins`, {
-                mobile: currentUserData.mobile,
-                amount: 1,
-                reason: `Daily Login Reward (Streak: ${rewardResult.currentStreak})`
-            }).then(res => {
-                if(res.data.success) {
+        // 3. 🛡️ SECURE DAILY REWARD LOGIC (Backend Verifies Everything)
+        const checkDailyReward = async () => {
+            const activeUser = user || JSON.parse(sessionStorage.getItem('user'));
+            if (!activeUser || !activeUser.mobile) return;
+            
+            try {
+                const res = await axios.post(`${API_BASE}/claim-daily-login`, { mobile: activeUser.mobile });
+                
+                // If Backend says success: true, it means it's the first login of the day!
+                if (res.data.success) {
                     setWallet(res.data.wallet); 
-                    setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: rewardResult.currentStreak });
+                    setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: res.data.streak });
                     
                     // 🪄 MAGIC ANIMATION
-                    const coinBadge = document.querySelector('.ud-coin-badge-vip');
-                    if(coinBadge) {
-                        coinBadge.classList.add('coin-bump-animation');
-                        setTimeout(() => coinBadge.classList.remove('coin-bump-animation'), 2000);
-                    }
+                    setTimeout(() => {
+                        const coinBadge = document.querySelector('.ud-coin-badge-vip');
+                        if (coinBadge) {
+                            coinBadge.classList.add('coin-bump-animation');
+                            setTimeout(() => coinBadge.classList.remove('coin-bump-animation'), 2000);
+                        }
+                    }, 500); 
+                    
                     setTimeout(() => setRewardPopup({ show: false }), 4000);
                 }
-            }).catch(err => {
-                console.log("Daily reward sync failed", err);
-                localStorage.removeItem(rewardKey); // Unlock if API fails so it can try again
-            });
-            
-        } else if (rewardResult.streakReset && rewardResult.currentStreak === 1 && !localStorage.getItem(rewardKey)) {
-            localStorage.setItem(rewardKey, 'true'); // 🔒 Lock it for today!
-            setRewardPopup({ show: true, type: 'MISSED', coins: 0, streak: 1 });
-            setWallet({...wallet, currentStreak: 1});
-            setTimeout(() => setRewardPopup({ show: false }), 4000);
-        }
+            } catch(e) { 
+                console.log("Daily reward check silently failed."); 
+            }
+        };
+
+        // Fire the check ONCE when Dashboard loads
+        checkDailyReward();
 
         // Cleanup interval on unmount
         return () => clearInterval(refreshInterval);
