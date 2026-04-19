@@ -234,11 +234,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         };
                     }).filter(Boolean);
 
-                    const customFolders = fetchedFolders.filter(f => f && f.folderName && f.folderName.trim().toLowerCase() !== 'snevio photography');
-                    const backendDefaultFolder = fetchedFolders.find(f => f && f.folderName && f.folderName.trim().toLowerCase() === 'snevio photography');
+                    // 1. वो फोल्डर्स निकालो जो न तो 'Stranger' हैं और न ही 'Snevio' (यानी क्लाइंट के अपने फोल्डर्स)
+                    const customFolders = fetchedFolders.filter(f => {
+                        const name = f?.folderName?.trim().toLowerCase();
+                        return name !== 'snevio photography' && name !== 'stranger photography';
+                    });
+
+                    // 2. डेटाबेस में अगर 'Snevio' या 'Stranger' नाम का कोई भी फोल्डर है, तो उसका डेटा निकालो
+                    const existingDefaultData = fetchedFolders.find(f => {
+                        const name = f?.folderName?.trim().toLowerCase();
+                        return name === 'snevio photography' || name === 'stranger photography';
+                    });
                     
-                    const finalDefaultFolder = backendDefaultFolder 
-                        ? { ...DEFAULT_FOLDER, ...backendDefaultFolder, files: backendDefaultFolder.files || [], subFolders: backendDefaultFolder.subFolders || [] } 
+                    // 3. हमेशा 'Snevio Photography' ही दिखाओ, भले ही डेटाबेस में नाम 'Stranger' हो
+                    const finalDefaultFolder = existingDefaultData 
+                        ? { ...DEFAULT_FOLDER, ...existingDefaultData, folderName: 'Snevio Photography' } 
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
