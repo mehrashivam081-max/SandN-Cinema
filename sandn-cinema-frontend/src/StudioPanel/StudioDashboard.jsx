@@ -757,15 +757,33 @@ const StudioDashboard = ({ user, onLogout }) => {
             const fileName = imgUrl.split('/').pop().split('?')[0] || `image_${i + 1}.jpg`;
 
             try {
-                const fileStartTime = Date.now();
-                const response = await axios.get(imgUrl, { 
-                    responseType: 'blob', 
-                    signal: abortControllerRef.current.signal 
-                });
+                // ✅ Try direct download with CORS fallback
+                let blob;
+                try {
+                    const response = await axios.get(imgUrl, { 
+                        responseType: 'blob', 
+                        signal: abortControllerRef.current.signal,
+                        // Fix generic CORS issues by pretending we accept anything
+                        headers: { 'Accept': 'image/*,video/*,*/*' }
+                    });
+                    blob = response.data;
+                } catch (fetchError) {
+                    // Fallback 1: If direct Axios fails (often due to CORS), try native fetch
+                    console.warn(`Axios failed for ${fileName}, trying native fetch...`);
+                    const nativeResponse = await fetch(imgUrl, { mode: 'cors' });
+                    if (!nativeResponse.ok) throw new Error(`HTTP error! status: ${nativeResponse.status}`);
+                    blob = await nativeResponse.blob();
+                }
                 
-                const blob = response.data;
                 totalDownloadedBytes += blob.size;
-                mainFolder.file(fileName, blob);
+                
+                // ✅ CRITICAL FIX: Ensure folders are created inside the ZIP correctly
+                // Check if subFolder exists, else use root
+                const folderPath = selectedImages[i].subFolder && selectedImages[i].subFolder !== 'Main Event' 
+                    ? `${selectedImages[i].subFolder}/` 
+                    : '';
+                
+                mainFolder.file(`${folderPath}${fileName}`, blob);
                 successfulDownloads++;
 
                 // Speed & ETA Math
@@ -837,7 +855,14 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     const getCleanUrl = (filePath) => {
         if (!filePath) return '';
-        if (filePath.startsWith('http')) return filePath; 
+        if (filePath.startsWith('http')) {
+            // ✅ FIX: Force Cloudinary to serve files as attachments (fl_attachment) to bypass CORS issues
+            if (filePath.includes('cloudinary.com') && !filePath.includes('fl_attachment')) {
+                const parts = filePath.split('/upload/');
+                return `${parts[0]}/upload/fl_attachment/${parts[1]}`;
+            }
+            return filePath; 
+        } 
         return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
     };
 
