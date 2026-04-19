@@ -757,8 +757,6 @@ const StudioDashboard = ({ user, onLogout }) => {
             const fileName = imgUrl.split('/').pop().split('?')[0] || `image_${i + 1}.jpg`;
 
             try {
-                const fileStartTime = Date.now();
-                
                 // 🚀 SUPER FIX: Call our own Backend Proxy to bypass all CORS/CSP issues!
                 const response = await axios.post(`${API_BASE}/proxy-download`, 
                     { fileUrl: imgUrl }, 
@@ -772,45 +770,32 @@ const StudioDashboard = ({ user, onLogout }) => {
                 
                 totalDownloadedBytes += blob.size;
                 
-                // ✅ Ensure folders are created inside the ZIP correctly
-                const folderPath = selectedImages[i].subFolder && selectedImages[i].subFolder !== 'Main Event' 
+                // ✅ FIX: Renamed to 'zipSubFolder' to prevent declaration collision!
+                const zipSubFolder = selectedImages[i].subFolder && selectedImages[i].subFolder !== 'Main Event' 
                     ? `${selectedImages[i].subFolder}/` 
                     : '';
                 
-                mainFolder.file(`${folderPath}${fileName}`, blob);
+                mainFolder.file(`${zipSubFolder}${fileName}`, blob);
                 successfulDownloads++;
 
-                // Speed & ETA Math
-                const timeElapsed = (Date.now() - startTime) / 1000; // in seconds
-                
-                totalDownloadedBytes += blob.size;
-                
-                // ✅ CRITICAL FIX: Ensure folders are created inside the ZIP correctly
-                // Check if subFolder exists, else use root
-                const folderPath = selectedImages[i].subFolder && selectedImages[i].subFolder !== 'Main Event' 
-                    ? `${selectedImages[i].subFolder}/` 
-                    : '';
-                
-                mainFolder.file(`${folderPath}${fileName}`, blob);
-                successfulDownloads++;
+                // Let's scope the math variables tightly to avoid any redeclaration issues
+                {
+                    const elapsedSecs = (Date.now() - startTime) / 1000; 
+                    const currentSpeedBps = totalDownloadedBytes / elapsedSecs;
+                    const currentSpeedMbps = (currentSpeedBps / (1024 * 1024)).toFixed(2);
+                    
+                    const averageSize = totalDownloadedBytes / successfulDownloads;
+                    const bytesLeft = averageSize * (selectedImages.length - successfulDownloads);
+                    const secondsLeft = bytesLeft / currentSpeedBps;
 
-                // Speed & ETA Math
-                const timeElapsed = (Date.now() - startTime) / 1000; // in seconds
-                const speedBps = totalDownloadedBytes / timeElapsed;
-                const speedMbps = (speedBps / (1024 * 1024)).toFixed(2);
-                
-                // Estimate remaining size based on average size so far
-                const avgSize = totalDownloadedBytes / successfulDownloads;
-                const remainingBytes = avgSize * (selectedImages.length - successfulDownloads);
-                const etaSeconds = remainingBytes / speedBps;
-
-                setDownloadManager(prev => ({
-                    ...prev,
-                    downloadedFiles: successfulDownloads,
-                    progressPercent: Math.round((successfulDownloads / selectedImages.length) * 100),
-                    speed: `${speedMbps} MB/s`,
-                    eta: etaSeconds > 60 ? `${Math.floor(etaSeconds/60)}m left` : `${Math.floor(etaSeconds)}s left`
-                }));
+                    setDownloadManager(prev => ({
+                        ...prev,
+                        downloadedFiles: successfulDownloads,
+                        progressPercent: Math.round((successfulDownloads / selectedImages.length) * 100),
+                        speed: `${currentSpeedMbps} MB/s`,
+                        eta: secondsLeft > 60 ? `${Math.floor(secondsLeft/60)}m left` : `${Math.floor(secondsLeft)}s left`
+                    }));
+                }
 
             } catch (err) {
                 if (axios.isCancel(err)) {
