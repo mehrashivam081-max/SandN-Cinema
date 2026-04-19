@@ -2760,13 +2760,21 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
 // 4. Update Selection Phase & Finalize Engine (CRASH-PROOF & EMAIL ENABLED)
 app.post('/api/auth/update-album-selection', authenticateToken, async (req, res) => {
     try {
-        const { projectId, selectedImages, isFinal, isFamilyMember, userMobile, isDraftOnly } = req.body; 
+        // ✅ ADDED 'currentPhase' to destructuring
+        const { projectId, selectedImages, isFinal, isFamilyMember, userMobile, isDraftOnly, currentPhase } = req.body; 
         
         const selection = await AlbumSelection.findById(projectId).lean();
         if (!selection) return res.json({ success: false, message: "Project not found" });
 
+        // ✅ NEW: EXPLICIT PHASE CHANGE LOGIC (For "Edit Selection" & "Start Now" buttons)
+        if (currentPhase !== undefined && !selectedImages) {
+            await AlbumSelection.updateOne({ _id: projectId }, { $set: { currentPhase: currentPhase } }, { strict: false });
+            return res.json({ success: true, message: `Phase successfully updated to ${currentPhase}` });
+        }
+
         // ✅ AUTO-SAVE DRAFT LOGIC (For Step-by-Step Wizard Navigation)
         if (isDraftOnly) {
+            if (!selectedImages) return res.json({ success: true }); // Safety check
             // Sirf selected images ko mark karo, baaki active rahenge. Phase change mat karo.
             const updatedImages = selection.images.map(img => {
                 if (selectedImages.includes(img.url)) img.status = 'selected';
