@@ -757,23 +757,31 @@ const StudioDashboard = ({ user, onLogout }) => {
             const fileName = imgUrl.split('/').pop().split('?')[0] || `image_${i + 1}.jpg`;
 
             try {
-                // ✅ Try direct download with CORS fallback
-                let blob;
-                try {
-                    const response = await axios.get(imgUrl, { 
-                        responseType: 'blob', 
-                        signal: abortControllerRef.current.signal,
-                        // Fix generic CORS issues by pretending we accept anything
-                        headers: { 'Accept': 'image/*,video/*,*/*' }
-                    });
-                    blob = response.data;
-                } catch (fetchError) {
-                    // Fallback 1: If direct Axios fails (often due to CORS), try native fetch
-                    console.warn(`Axios failed for ${fileName}, trying native fetch...`);
-                    const nativeResponse = await fetch(imgUrl, { mode: 'cors' });
-                    if (!nativeResponse.ok) throw new Error(`HTTP error! status: ${nativeResponse.status}`);
-                    blob = await nativeResponse.blob();
-                }
+                const fileStartTime = Date.now();
+                
+                // 🚀 SUPER FIX: Call our own Backend Proxy to bypass all CORS/CSP issues!
+                const response = await axios.post(`${API_BASE}/proxy-download`, 
+                    { fileUrl: imgUrl }, 
+                    { 
+                        responseType: 'blob', // We still want a blob back to put in the ZIP
+                        signal: abortControllerRef.current.signal 
+                    }
+                );
+                
+                const blob = response.data;
+                
+                totalDownloadedBytes += blob.size;
+                
+                // ✅ Ensure folders are created inside the ZIP correctly
+                const folderPath = selectedImages[i].subFolder && selectedImages[i].subFolder !== 'Main Event' 
+                    ? `${selectedImages[i].subFolder}/` 
+                    : '';
+                
+                mainFolder.file(`${folderPath}${fileName}`, blob);
+                successfulDownloads++;
+
+                // Speed & ETA Math
+                const timeElapsed = (Date.now() - startTime) / 1000; // in seconds
                 
                 totalDownloadedBytes += blob.size;
                 
