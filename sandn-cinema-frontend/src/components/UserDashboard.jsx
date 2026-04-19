@@ -1582,7 +1582,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         <button onClick={() => { 
                                             setCurrentTab('SELECTIONS'); 
                                             setActiveSelectionProject(sel); 
-                                            setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); 
+                                            // ✅ ISOLATION LOGIC: Check if viewing as family member or main client
+                                            const isFam = sel.clientMobile !== syncUser?.mobile;
+                                            const initialDraft = sel.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
+                                            setSelectionDraft(initialDraft); 
                                         }} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                                             {sharedTabFilter === 'RECEIVED' ? 'View & Vote ❤️' : 'Open Selection Folder'}
                                         </button>
@@ -2077,12 +2080,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
                     <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
 
-                        {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS (ONLY FOR MAIN CLIENT) */}
-                        {mySelections && mySelections.length > 0 && mySelections.filter(sel => sel.clientMobile === syncUser?.mobile).map((sel, idx) => (
+                        {/* ✨ VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS */}
+                        {mySelections && mySelections.length > 0 && mySelections.map((sel, idx) => (
                             <React.Fragment key={`sel-${idx}`}>
                                 <div 
                                     className="folder-card" 
-                                    onClick={() => { setCurrentTab('SELECTIONS'); setActiveSelectionProject(sel); setSelectionDraft(sel.images.filter(img => img.status === 'selected').map(i => i.url)); }}
+                                    onClick={() => { 
+                                        setCurrentTab('SELECTIONS'); 
+                                        setActiveSelectionProject(sel); 
+                                        // ✅ ISOLATION LOGIC: Check if viewing as family member or main client
+                                        const isFam = sel.clientMobile !== syncUser?.mobile;
+                                        const initialDraft = sel.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
+                                        setSelectionDraft(initialDraft); 
+                                    }}
                                     style={{ background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.4)', animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                                 >
                                     <div className="folder-icon" style={{background: 'rgba(255,255,255,0.2)'}}>📸</div>
