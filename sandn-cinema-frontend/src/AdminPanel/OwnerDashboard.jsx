@@ -158,7 +158,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
             sessionStorage.removeItem('user'); 
             localStorage.removeItem('user');
             if (onLogout) onLogout();
-            else window.location.href = "/SandN-Cinema/"; 
+            else window.location.href = "/Snevio/"; // Updated Redirect Path
         };
         window.addEventListener('offline', handleOffline);
         return () => window.removeEventListener('offline', handleOffline);
@@ -641,7 +641,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
-        let baseFolder = activeFolderName.trim() || 'Stranger Photography';
+        let baseFolder = activeFolderName.trim() || 'Snevio Photography';
         let targetSubFolder = '';
         if (useDateFolder && !isFeed) {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
@@ -1829,7 +1829,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             
                                             {(!formData.folderName || formData.folderName.trim() === '') && (
                                                 <div style={{ marginTop: '8px', fontSize: '12px', color: '#e67e22', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    <span>⚠️</span> Default folder "Stranger Photography" will be used.
+                                                    <span>⚠️</span> Default folder "Snevio Photography" will be used.
                                                 </div>
                                             )}
 
