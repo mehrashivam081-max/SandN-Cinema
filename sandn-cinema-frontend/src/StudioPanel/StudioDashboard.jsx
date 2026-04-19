@@ -435,7 +435,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         const currentFiles = isFeed ? feedFiles : files;
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
-        let baseFolder = folderName.trim() || 'Stranger Photography';
+        let baseFolder = folderName.trim() || 'Snevio Photography';
         let targetSubFolder = '';
         if (useDateFolder && !isFeed) {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
@@ -1578,7 +1578,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                             <div style={{background: '#fffdf5', border: '1px solid #f1c40f', padding: '20px', borderRadius: '10px', marginBottom: '25px'}}>
                                 <h3 style={{color: '#d4ac0d', marginTop: 0}}>Grow Your Audience</h3>
                                 <p style={{color:'#555', fontSize: '14px', lineHeight: '1.5'}}>
-                                    Upload your best shots (images or short 1-min clips) here. These will be randomly featured on SandN Cinema's main public trending page!
+                                    Upload your best shots (images or short 1-min clips) here. These will be randomly featured on Snevio's main public trending page!
                                 </p>
                             </div>
                             
