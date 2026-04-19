@@ -1398,17 +1398,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     </div>
                     
                     {isFinalPhase ? (
-                        // ✅ FINAL PHASE: Submit directly without Review Modal
+                        // ✅ PHASE 3 (FINAL PHASE): Submit directly without Review Modal (Kyunki upar hi billing dikh rahi hai)
                         <button onClick={() => submitPhaseSelection(true)} disabled={loading || selectionDraft.length === 0} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(231, 76, 60, 0.4)' }}>
-                            {loading ? 'Processing...' : (isFamilyMember ? '🚀 Send to Client' : '🚀 Finalize & Send to Studio')}
+                            {loading ? 'Processing...' : (isFamilyMember ? '🚀 Send to Client' : '🚀 Finalize & Send')}
                         </button>
                     ) : isLastFolder ? (
-                        // ✅ ALL TAB (Review Phase 1/2) -> Show Confirmation Modal
+                        // ✅ PHASE 1 & 2 (ALL TAB): Show "Preview" Button first
                         <button onClick={() => setShowSelectionReview(true)} style={{ background: '#8e44ad', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(142, 68, 173, 0.4)' }}>
-                            {`Complete Phase ${currentPhase} ✅`}
+                            {`Preview Phase ${currentPhase} ➡️`}
                         </button>
                     ) : (
-                        // ✅ SPECIFIC FOLDER -> Save & Next
+                        // ✅ SPECIFIC FOLDER: Save & Next
                         <button onClick={handleNextFolder} disabled={loading} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}>
                             {loading ? 'Saving...' : `Save & Next Folder ➡️`}
                         </button>
