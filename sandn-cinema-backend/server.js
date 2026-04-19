@@ -3114,6 +3114,34 @@ app.post('/api/auth/delete-selection-project', authenticateToken, async (req, re
     }
 });
 
+// ==========================================
+// 📥 SECURE DOWNLOAD PROXY (Bypasses CORS & CSP)
+// ==========================================
+app.post('/api/auth/proxy-download', async (req, res) => {
+    try {
+        const { fileUrl } = req.body;
+        if (!fileUrl) return res.status(400).json({ success: false, message: "No URL provided" });
+
+        // Stream the file directly from Cloudinary (or any cloud) to the client
+        const response = await axios({
+            url: fileUrl,
+            method: 'GET',
+            responseType: 'stream' // Very important for handling large files efficiently
+        });
+
+        // Set headers so the browser knows it's a file download
+        res.setHeader('Content-Disposition', `attachment; filename="snevio_media_${Date.now()}.jpg"`);
+        res.setHeader('Content-Type', response.headers['content-type']);
+        
+        // Pipe the stream
+        response.data.pipe(res);
+        
+    } catch (error) {
+        console.error("Proxy Download Error:", error.message);
+        res.status(500).json({ success: false, message: "Failed to proxy download." });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
