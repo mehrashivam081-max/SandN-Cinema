@@ -604,11 +604,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setLoading(false);
     };
 
-    // 🚀 LIVE DOWNLOAD
+    // 🚀 LIVE DOWNLOAD (FIXED FOR CORS & CINEMATIC MEDIA)
     const handleDownload = async (filePath) => {
+        // 1. Prevent downloading Cinematic YT videos (They are stream-only)
+        if (isCinematic(filePath)) {
+            alert("⚠️ Premium Cinematic videos can only be watched inside the app. Direct download is not available.");
+            return;
+        }
+
         setDownloadingFile(filePath);
         setDownloadProgress(0);
-        setDownloadSpeed('Calculating...');
+        setDownloadSpeed('Connecting to server...');
         setDownloadETA('...');
 
         const url = getCleanUrl(filePath);
@@ -617,45 +623,53 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         let lastTime = startTime;
 
         try {
-            const response = await axios({
-                url, method: 'GET', responseType: 'blob', 
-                onDownloadProgress: (progressEvent) => {
-                    const { loaded, total } = progressEvent;
-                    if(total) {
-                        const percentCompleted = Math.round((loaded * 100) / total);
-                        setDownloadProgress(percentCompleted);
+            // 🔥 SUPER FIX: Use our Backend Proxy to bypass all CORS issues
+            const response = await axios.post(`${API_BASE}/proxy-download`, 
+                { fileUrl: url },
+                {
+                    responseType: 'blob', 
+                    onDownloadProgress: (progressEvent) => {
+                        const { loaded, total } = progressEvent;
+                        if(total) {
+                            const percentCompleted = Math.round((loaded * 100) / total);
+                            setDownloadProgress(percentCompleted);
 
-                        const currentTime = Date.now();
-                        const timeElapsedLimit = (currentTime - lastTime) / 1000; 
+                            const currentTime = Date.now();
+                            const timeElapsedLimit = (currentTime - lastTime) / 1000; 
 
-                        if (timeElapsedLimit > 0.5) {
-                            const bytesLoadedSinceLast = loaded - lastLoadedBytes;
-                            const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
-                            const speedKbps = speedBps / 1024;
-                            const speedMbps = speedKbps / 1024;
+                            if (timeElapsedLimit > 0.5) {
+                                const bytesLoadedSinceLast = loaded - lastLoadedBytes;
+                                const speedBps = bytesLoadedSinceLast / timeElapsedLimit;
+                                const speedKbps = speedBps / 1024;
+                                const speedMbps = speedKbps / 1024;
 
-                            if (speedMbps >= 1) setDownloadSpeed(`${speedMbps.toFixed(2)} MB/s`);
-                            else setDownloadSpeed(`${speedKbps.toFixed(2)} KB/s`);
+                                if (speedMbps >= 1) setDownloadSpeed(`${speedMbps.toFixed(2)} MB/s`);
+                                else setDownloadSpeed(`${speedKbps.toFixed(2)} KB/s`);
 
-                            const bytesRemaining = total - loaded;
-                            const etaSeconds = bytesRemaining / speedBps;
+                                const bytesRemaining = total - loaded;
+                                const etaSeconds = bytesRemaining / speedBps;
 
-                            if (etaSeconds > 60) setDownloadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                            else if (etaSeconds > 0) setDownloadETA(`${Math.floor(etaSeconds)}s left`);
-                            else setDownloadETA(`Almost done...`);
+                                if (etaSeconds > 60) setDownloadETA(`${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
+                                else if (etaSeconds > 0) setDownloadETA(`${Math.floor(etaSeconds)}s left`);
+                                else setDownloadETA(`Almost done...`);
 
-                            lastLoadedBytes = loaded;
-                            lastTime = currentTime;
+                                lastLoadedBytes = loaded;
+                                lastTime = currentTime;
+                            }
                         }
                     }
                 }
-            });
+            );
 
+            // Process and save the blob
             const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = urlBlob;
-            const fileName = filePath.substring(filePath.lastIndexOf('/') + 1) || 'SandN_Cinema_Media';
+            
+            // Extract a proper filename, removing any query parameters
+            const fileName = filePath.substring(filePath.lastIndexOf('/') + 1).split('?')[0] || 'Snevio_Premium_Media';
             link.setAttribute('download', fileName);
+            
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -663,6 +677,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             setDownloadingFile(null);
             
+            // Sync Download Count
             if (activeFolder && activeFolder.downloadLimit > 0) {
                 const newCount = (activeFolder.downloadCount || 0) + 1;
                 setActiveFolder({ ...activeFolder, downloadCount: newCount });
@@ -672,7 +687,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         } catch (error) {
             console.error("Download failed", error);
-            alert("Download Failed. Try again.");
+            alert("Download Failed. Server might be busy. Try again.");
             setDownloadingFile(null);
         }
     };
