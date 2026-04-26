@@ -6,6 +6,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const { Storage } = require('megajs'); // ✅ NEW: Mega Cloud Import
 const JWT_SECRET = process.env.JWT_SECRET || 'snevio_super_secret_key_2024';
 
 // ✅ Added New Models Here
@@ -32,9 +33,9 @@ const Service = mongoose.models.Service || mongoose.model('Service', serviceSche
 
 // ✅ NEW: Storage Configuration Model for Multiple Clouds
 const storageConfigSchema = new mongoose.Schema({
-    nickname: { type: String, required: true },
-    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM'], required: true },
-    isActive: { type: Boolean, default: false },
+    nickname: { type: String, required: true },
+    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM', 'MEGA'], required: true }, // ✅ NEW: 'MEGA' Added
+    isActive: { type: Boolean, default: false },
     maxLimitGB: { type: Number, default: 5 },
     usedStorageGB: { type: Number, default: 0 },
     credentials: { cloudName: String, apiKey: String, apiSecret: String, region: String, bucketName: String },
@@ -857,10 +858,37 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             };
             
             const result = await s3.upload(uploadParams).promise();
-            uploadedUrl = result.Location;
+            uploadedUrl = result.Location;
+        } else if (activeCloud.provider === 'MEGA') {
+            // ✅ MEGA CLOUD UPLOAD WITH DEBUGGING
+            console.log("🔍 Checking Mega Credentials -> Email:", activeCloud.credentials.apiKey);
+            
+            try {
+                console.log("🚀 Logging into Mega.nz...");
+                const megaStorage = await new Storage({
+                    email: activeCloud.credentials.apiKey,
+                    password: activeCloud.credentials.apiSecret
+                }).ready;
+
+                console.log("✅ Mega Login Success! Storage Ready.");
+
+                const fileBuffer = fs.readFileSync(filePath);
+                console.log(`☁️ Uploading [${req.file.originalname}] to Mega...`);
+                
+                const megaFile = await megaStorage.upload(req.file.originalname, fileBuffer).complete;
+                console.log("✅ Upload to Mega Complete. Generating Link...");
+                
+                uploadedUrl = await megaFile.link();
+                console.log("🔗 File Link Generated:", uploadedUrl);
+                
+            } catch (megaErr) {
+                console.error("❌ MEGA UPLOAD ERROR:", megaErr);
+                fs.unlinkSync(filePath); // Error aane par temp file delete karna zaroori hai
+                return res.status(500).json({ success: false, message: "Mega Upload Failed: " + megaErr.message });
+            }
         }
 
-        // 3. Update Global Cloud Storage Counter safely
+        // 3. Update Global Cloud Storage Counter safely
         activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
         await activeCloud.save();
 
