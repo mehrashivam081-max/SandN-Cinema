@@ -3235,6 +3235,77 @@ app.post('/api/auth/claim-daily-login', async (req, res) => {
     }
 });
 
+// 🔥 DANGER ZONE: Specific Cloud Data Wipe (ID Based)
+app.delete('/api/auth/wipe-cloud/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { adminPassword } = req.body;
+
+    // 1. सुरक्षा जाँच: अपना मास्टर पासवर्ड यहाँ सेट करें
+    const MASTER_PASSWORD = "shivam@9111"; // ⚠️ इसे अपनी पसंद के पासवर्ड से बदलें
+
+    if (adminPassword !== MASTER_PASSWORD) {
+        return res.status(403).json({ success: false, message: "🚨 ग़लत पासवर्ड! डेटा सुरक्षित है।" });
+    }
+
+    try {
+        // 2. ID से उस खास क्लाउड की सेटिंग्स निकालें
+        const targetCloud = await StorageConfig.findById(id);
+        if (!targetCloud) return res.status(404).json({ success: false, message: "Cloud account नहीं मिला।" });
+
+        console.log(`⚠️ Wiping all data from: ${targetCloud.nickname} (${targetCloud.provider})`);
+
+        // 3. S3 Compatible Providers (AWS, Storj, R2, Backblaze) के लिए डिलीट लॉजिक
+        if (['AWS_S3', 'STORJ', 'CLOUDFLARE_R2', 'BACKBLAZE'].includes(targetCloud.provider)) {
+            const s3 = new AWS.S3({
+                accessKeyId: targetCloud.credentials.apiKey,
+                secretAccessKey: targetCloud.credentials.apiSecret,
+                endpoint: (targetCloud.provider === 'STORJ') ? 'https://gateway.storjshare.io' : (targetCloud.provider === 'CLOUDFLARE_R2' || targetCloud.provider === 'BACKBLAZE' ? targetCloud.credentials.cloudName : undefined)
+            });
+
+            // A. Bucket के अंदर की फाइल्स की लिस्ट निकालें
+            const listParams = { Bucket: targetCloud.credentials.bucketName };
+            const listedObjects = await s3.listObjectsV2(listParams).promise();
+
+            if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+                // अगर फाइल्स नहीं हैं, तो सिर्फ काउंटर 0 कर दें
+                targetCloud.usedStorageGB = 0;
+                await targetCloud.save();
+                return res.json({ success: true, message: "Cloud पहले से ही खाली है! काउंटर रिसेट कर दिया गया है।" });
+            }
+
+            // B. सारी फाइल्स को एक साथ (Batch Delete) उड़ाएं
+            const deleteParams = {
+                Bucket: targetCloud.credentials.bucketName,
+                Delete: {
+                    Objects: listedObjects.Contents.map(({ Key }) => ({ Key }))
+                }
+            };
+
+            await s3.deleteObjects(deleteParams).promise();
+
+            // C. डेटाबेस में उस क्लाउड का 'Used Space' 0 कर दें
+            targetCloud.usedStorageGB = 0;
+            await targetCloud.save();
+
+            return res.json({ success: true, message: `💣 सफलता! ${targetCloud.nickname} की सारी फाइल्स डिलीट कर दी गई हैं और स्पेस रिसेट हो गया है।` });
+        }
+
+        // 4. ImgBB और Mega के लिए चेतावनी (चूंकि उनकी API बल्क डिलीट सपोर्ट नहीं करती)
+        if (targetCloud.provider === 'IMGBB' || targetCloud.provider === 'MEGA') {
+            return res.status(400).json({ 
+                success: false, 
+                message: `${targetCloud.provider} अभी API के ज़रिए 'Bulk Wipe' सपोर्ट नहीं करता। कृपया उनके डैशबोर्ड से मैन्युअली डिलीट करें।` 
+            });
+        }
+
+        res.status(400).json({ success: false, message: "इस प्रोवाइडर के लिए ऑटो-वाइप उपलब्ध नहीं है।" });
+
+    } catch (error) {
+        console.error("WIPE ERROR:", error);
+        res.status(500).json({ success: false, message: "Wipe प्रक्रिया फेल हो गई: " + error.message });
+    }
+});
+
 // --- START SERVER ---
 app.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
