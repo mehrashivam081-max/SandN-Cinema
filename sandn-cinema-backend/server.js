@@ -34,7 +34,7 @@ const Service = mongoose.models.Service || mongoose.model('Service', serviceSche
 // ✅ NEW: Storage Configuration Model for Multiple Clouds
 const storageConfigSchema = new mongoose.Schema({
     nickname: { type: String, required: true },
-    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM', 'MEGA'], required: true }, // ✅ NEW: 'MEGA' Added
+    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM', 'MEGA', 'STORJ'], required: true },
     isActive: { type: Boolean, default: false },
     maxLimitGB: { type: Number, default: 5 },
     usedStorageGB: { type: Number, default: 0 },
@@ -840,14 +840,14 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             const result = await cloudinary.uploader.upload(filePath, { resource_type: 'auto' });
             uploadedUrl = result.secure_url;
             
-        } else if (activeCloud.provider === 'AWS_S3' || activeCloud.provider === 'CLOUDFLARE_R2') {
-            const s3 = new AWS.S3({
-                accessKeyId: activeCloud.credentials.apiKey,
-                secretAccessKey: activeCloud.credentials.apiSecret,
-                region: activeCloud.credentials.region,
-                // R2 requires a custom endpoint, AWS doesn't
-                endpoint: activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined
-            });
+        } else if (activeCloud.provider === 'AWS_S3' || activeCloud.provider === 'CLOUDFLARE_R2' || activeCloud.provider === 'STORJ') {
+            const s3 = new AWS.S3({
+                accessKeyId: activeCloud.credentials.apiKey,
+                secretAccessKey: activeCloud.credentials.apiSecret,
+                region: activeCloud.credentials.region || 'us-east-1',
+                // R2 and STORJ require a custom endpoint
+                endpoint: activeCloud.provider === 'STORJ' ? 'https://gateway.storjshare.io' : (activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined)
+            });
             
             const fileStream = fs.createReadStream(filePath);
             const uploadParams = {
