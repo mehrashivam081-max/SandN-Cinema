@@ -368,6 +368,38 @@ const OwnerDashboard = ({ user, onLogout }) => {
         } catch (e) { alert("Failed to remove storage config."); }
     };
 
+    // ✏️ EDIT CLOUD CONFIG
+    const handleEditCloud = (acc) => {
+        setStorageForm({
+            nickname: acc.nickname,
+            provider: acc.provider,
+            maxLimitGB: acc.maxLimitGB,
+            setAsActive: acc.isActive,
+            credentials: { ...acc.credentials }
+        });
+        document.getElementById('storage-form-top')?.scrollIntoView({ behavior: 'smooth' });
+        alert("Cloud details form में भर दी गई हैं। बदलाव करके 'Link Storage' दबाएं।");
+    };
+
+    // 💣 WIPE ALL DATA FROM SPECIFIC CLOUD
+    const handleWipeSpecificCloud = async (accountId, nickname) => {
+        const pass = prompt(`DANGER! ${nickname} का सारा डेटा (Photos/Videos) हमेशा के लिए डिलीट हो जाएगा।\n\nConfirm करने के लिए Admin Password डालें:`);
+        if (!pass) return;
+
+        if (window.confirm(`क्या आप वाकई ${nickname} की हर एक फाइल को जड़ से मिटाना चाहते हैं? यह वापस नहीं आएगा!`)) {
+            try {
+                const res = await axios.delete(`${API_BASE}/wipe-cloud/${accountId}`, { 
+                    data: { adminPassword: pass },
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+                alert("Success: " + res.data.message);
+                fetchStorageConfigs();
+            } catch (err) {
+                alert("Error: " + (err.response?.data?.message || "Wipe failed"));
+            }
+        }
+    };
+
     // 🏷️ SUBSCRIPTION PLANS API CALLS
     const fetchSubPlans = async () => {
         try {
@@ -2391,7 +2423,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             ) : (
                                                 <div style={{ flex: 1, textAlign: 'center', padding: '8px', background: 'rgba(46,204,113,0.1)', color: '#27ae60', borderRadius: '5px', fontSize: '12px', fontWeight: 'bold', border: '1px solid #2ecc71' }}>Receiving Data</div>
                                             )}
-                                            <button onClick={() => handleDeleteStorage(acc._id)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>🗑️ Unlink</button>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                <button onClick={() => handleEditCloud(acc)} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>✏️ Edit Config</button>
+                                                <button onClick={() => handleWipeSpecificCloud(acc._id, acc.nickname)} style={{ background: '#000', color: '#e74c3c', border: '1px solid #e74c3c', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>💣 Wipe All Data</button>
+                                                <button onClick={() => handleDeleteStorage(acc._id)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>🗑️ Unlink Cloud</button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -2399,7 +2435,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
 
                         {/* ADD NEW ACCOUNT FORM */}
-                        <div className="update-creation-container" style={{ maxWidth: '600px', margin: '0' }}>
+                        <div id="storage-form-top" className="update-creation-container" style={{ maxWidth: '600px', margin: '0' }}>
                             <h3 style={{ marginTop: 0, color: '#27ae60' }}>➕ Link New Cloud Account</h3>
                             <form onSubmit={handleAddStorage} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                 <div>
@@ -2416,7 +2452,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <option value="CLOUDFLARE_R2">Cloudflare R2</option>
                                             <option value="MEGA">Mega.nz (20GB Free)</option>
                                             <option value="STORJ">Storj Cloud (25GB Free)</option>
-                                            <option value="IMGBB">ImgBB (Unlimited Free Photos)</option>
+                                            <option value="IMGBB">Infinite Image Cloud (Unlimited Photos)</option>
                                         </select>
                                     </div>
                                     <div style={{flex: 1}}>
