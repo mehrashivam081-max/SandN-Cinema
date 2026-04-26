@@ -136,6 +136,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     // ☁️ NEW: CLOUD STORAGE MANAGER STATES
     const [storageAccounts, setStorageAccounts] = useState([]);
+    const [editingStorageId, setEditingStorageId] = useState(null); // ✅ Tracking ID
     const [storageForm, setStorageForm] = useState({
         nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
         credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
@@ -342,7 +343,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (e) e.preventDefault();
         setLoading(true);
         try {
-            const res = await axios.post(`${API_BASE}/add-storage`, storageForm, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            let res;
+            if (editingStorageId) {
+                // ✅ अगर ID है, तो अपडेट करो
+                res = await axios.post(`${API_BASE}/update-storage`, { ...storageForm, id: editingStorageId }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            } else {
+                // 🆕 वरना नया बनाओ
+                res = await axios.post(`${API_BASE}/add-storage`, storageForm, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            }
+
+            if (res.data.success) {
+                alert(editingStorageId ? "☁️ Storage Updated!" : "☁️ Storage Linked!");
+                setEditingStorageId(null); // Reset
+                setStorageForm({ nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false, credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' } });
+                fetchStorageConfigs();
+            }
             if (res.data.success) {
                 alert("☁️ Storage Account Linked Successfully!");
                 setStorageForm({ nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false, credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' } });
@@ -370,6 +385,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
     // ✏️ EDIT CLOUD CONFIG
     const handleEditCloud = (acc) => {
+        setEditingStorageId(acc._id); // ✅ यहाँ ID सेव करें
         setStorageForm({
             nickname: acc.nickname,
             provider: acc.provider,
@@ -378,7 +394,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
             credentials: { ...acc.credentials }
         });
         document.getElementById('storage-form-top')?.scrollIntoView({ behavior: 'smooth' });
-        alert("Cloud details form में भर दी गई हैं। बदलाव करके 'Link Storage' दबाएं।");
     };
 
     // 💣 WIPE ALL DATA FROM SPECIFIC CLOUD
