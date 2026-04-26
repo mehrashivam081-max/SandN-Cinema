@@ -2479,6 +2479,26 @@ app.post('/api/auth/add-storage', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/auth/update-storage', authenticateToken, async (req, res) => {
+    try {
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+
+        const { id, nickname, provider, maxLimitGB, credentials, setAsActive } = req.body;
+        
+        if (setAsActive) {
+            await StorageConfig.updateMany({ _id: { $ne: id } }, { isActive: false });
+        }
+
+        await StorageConfig.findByIdAndUpdate(id, {
+            nickname, provider, maxLimitGB, credentials, isActive: setAsActive
+        });
+
+        res.json({ success: true, message: 'Storage Updated Successfully!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Update failed." });
+    }
+});
+
 app.get('/api/auth/list-storage', authenticateToken, async (req, res) => {
     try {
         if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
