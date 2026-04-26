@@ -2414,6 +2414,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <option value="CLOUDINARY">Cloudinary (Free Tier)</option>
                                             <option value="AWS_S3">Amazon AWS S3</option>
                                             <option value="CLOUDFLARE_R2">Cloudflare R2</option>
+                                            <option value="MEGA">Mega.nz (20GB Free)</option>
                                         </select>
                                     </div>
                                     <div style={{flex: 1}}>
