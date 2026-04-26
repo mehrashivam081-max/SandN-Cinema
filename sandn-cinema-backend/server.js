@@ -34,7 +34,7 @@ const Service = mongoose.models.Service || mongoose.model('Service', serviceSche
 // ✅ NEW: Storage Configuration Model for Multiple Clouds
 const storageConfigSchema = new mongoose.Schema({
     nickname: { type: String, required: true },
-    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM', 'MEGA', 'STORJ'], required: true },
+    provider: { type: String, enum: ['CLOUDINARY', 'AWS_S3', 'CLOUDFLARE_R2', 'CUSTOM', 'MEGA', 'STORJ', 'IMGBB'], required: true },
     isActive: { type: Boolean, default: false },
     maxLimitGB: { type: Number, default: 5 },
     usedStorageGB: { type: Number, default: 0 },
@@ -882,12 +882,28 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                 console.log("🔗 File Link Generated:", uploadedUrl);
                 
             } catch (megaErr) {
-                console.error("❌ MEGA UPLOAD ERROR:", megaErr);
-                fs.unlinkSync(filePath); // Error aane par temp file delete karna zaroori hai
-                return res.status(500).json({ success: false, message: "Mega Upload Failed: " + megaErr.message });
-            }
-        }
-
+                console.error("❌ MEGA UPLOAD ERROR:", megaErr);
+                fs.unlinkSync(filePath); 
+                return res.status(500).json({ success: false, message: "Mega Upload Failed: " + megaErr.message });
+            }
+        } else if (activeCloud.provider === 'IMGBB') {
+            // ✅ IMGBB UNLIMITED PHOTO UPLOAD
+            console.log("🚀 Uploading to ImgBB...");
+            const fileBuffer = fs.readFileSync(filePath);
+            const base64Image = fileBuffer.toString('base64');
+            
+            try {
+                const imgbbRes = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({
+                    image: base64Image
+                }));
+                uploadedUrl = imgbbRes.data.data.url;
+                console.log("✅ ImgBB Upload Success:", uploadedUrl);
+            } catch (imgErr) {
+                console.error("❌ IMGBB UPLOAD ERROR:", imgErr.response ? imgErr.response.data : imgErr.message);
+                fs.unlinkSync(filePath);
+                return res.status(500).json({ success: false, message: "ImgBB Upload Failed" });
+            }
+        }
         // 3. Update Global Cloud Storage Counter safely
         activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
         await activeCloud.save();
