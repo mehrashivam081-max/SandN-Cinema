@@ -2737,8 +2737,33 @@ app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) 
         const selections = await AlbumSelection.find({ studioMobile: req.user.mobile }).sort({ createdAt: -1 });
         res.json({ success: true, data: selections });
     } catch (e) {
-        res.status(500).json({ success: false, message: "Failed to fetch selection projects." });
+        console.error("Selection Update Error:", e);
+        res.status(500).json({ success: false, message: "Server error during selection update.", error: e.message });
     }
+});
+
+// 🔄 MOVE IMAGE BETWEEN ALBUMS (SPLIT LOGIC)
+app.post('/api/auth/move-image-album', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, imageUrl, targetAlbum } = req.body; // targetAlbum: 'Album 1' or 'Album 2'
+
+        const project = await AlbumSelection.findById(projectId);
+        if (!project) return res.status(404).json({ success: false, message: "Project not found" });
+
+        // Image dhoondo aur uska tag badal do
+        const updatedImages = project.images.map(img => {
+            if (img.url === imageUrl) {
+                return { ...img, albumTag: targetAlbum }; 
+            }
+            return img;
+        });
+
+        await AlbumSelection.updateOne({ _id: projectId }, { $set: { images: updatedImages } }, { strict: false });
+
+        res.json({ success: true, message: `Moved to ${targetAlbum}` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 });
 
 // 3. Fetch Selections (For User Dashboard - UPDATED FOR FAMILY COLLAB & NICKNAME)
