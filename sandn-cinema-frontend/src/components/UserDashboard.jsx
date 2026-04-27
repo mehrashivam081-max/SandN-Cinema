@@ -940,11 +940,32 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             console.error("Submission Error:", e);
             alert("Server Error: Failed to save your selection. Please try again."); 
         } finally {
-            setLoading(false);
-        }
-    };
+            setLoading(false);
+        }
+    };
 
-    const renderSelectionsTab = () => {
+    // 🔄 HANDLE SHIFT IMAGE BETWEEN ALBUMS
+    const handleShiftImage = async (e, projectId, imageUrl, currentTag) => {
+        e.stopPropagation(); // Stop clicking the image underneath
+        const nextAlbum = currentTag === 'Album 2' ? 'Album 1' : 'Album 2';
+        try {
+            const res = await axios.post(`${API_BASE}/move-image-album`, {
+                projectId, imageUrl, targetAlbum: nextAlbum
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            
+            if(res.data.success) {
+                // Local Update for instant UI change
+                setActiveSelectionProject(prev => ({
+                    ...prev,
+                    images: prev.images.map(img => img.url === imageUrl ? { ...img, albumTag: nextAlbum } : img)
+                }));
+            }
+        } catch (err) {
+            alert("Shift failed. Please check connection.");
+        }
+    };
+
+    const renderSelectionsTab = () => {
         if (!activeSelectionProject) return null;
 
         const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
@@ -1373,36 +1394,60 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     const fm = activeSelectionProject.familyMembers.find(f => f.mobile === voterMobile);
                                     if (fm && fm.nickname) voterNames.push(fm.nickname);
                                 }
-                            });
-                        }
+                            });
+                        }
 
-                        return (
-                            <div key={idx} 
-                                onPointerDown={(e) => startPress(e, img.url)}
-                                onPointerMove={movePress}
-                                onPointerUp={() => endPress(() => {
-                                    // In Phase 3, images cannot be toggled here (only via missed images)
-                                    if (isFinalPhase && !isFamilyMember) return; 
-                                    if (currentPhase > 1 && isSelected) setImageToRemove(img.url);
-                                    else handleSelectionToggle(img.url);
-                                })}
-                                onPointerLeave={() => clearTimeout(touchRef.current.timer)}
-                                className="gallery-item-vip" 
-                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #2ecc71' : '1px solid #ddd', cursor: (isFinalPhase && !isFamilyMember) ? 'zoom-in' : 'pointer', transition: 'border 0.2s' }}
-                            >
-                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
-                                
-                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: isSelected ? '#2ecc71' : 'rgba(255,255,255,0.5)', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, transition: 'background 0.2s' }}>
-                                    {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
-                                </div>
+                        const currentAlbum = img.albumTag || 'Album 1';
+                        const borderColor = isSelected ? (currentAlbum === 'Album 2' ? '#f39c12' : '#3498db') : '#ddd';
+                        const bgColor = isSelected ? (currentAlbum === 'Album 2' ? '#f39c12' : '#3498db') : 'rgba(255,255,255,0.5)';
 
-                                {voterNames.length > 0 && (
-                                    <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', zIndex: 5, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        ❤️ {voterNames.join(', ')}
-                                    </div>
-                                )}
-                            </div>
-                        );
+                        return (
+                            <div key={idx} 
+                                onPointerDown={(e) => startPress(e, img.url)}
+                                onPointerMove={movePress}
+                                onPointerUp={() => endPress(() => {
+                                    // In Phase 3, images cannot be toggled here (only via missed images)
+                                    if (isFinalPhase && !isFamilyMember) return; 
+                                    if (currentPhase > 1 && isSelected) setImageToRemove(img.url);
+                                    else handleSelectionToggle(img.url);
+                                })}
+                                onPointerLeave={() => clearTimeout(touchRef.current.timer)}
+                                className="gallery-item-vip" 
+                                style={{ position: 'relative', height: '150px', background: '#000', borderRadius: '12px', overflow: 'hidden', border: `3px solid ${borderColor}`, cursor: (isFinalPhase && !isFamilyMember) ? 'zoom-in' : 'pointer', transition: 'border 0.2s' }}
+                            >
+                                <img src={getCleanUrl(img.url)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isSelected ? 1 : 0.7 }} />
+                                
+                                {/* Checkmark Top Right */}
+                                <div style={{ position: 'absolute', top: '10px', right: '10px', width: '25px', height: '25px', borderRadius: '50%', background: bgColor, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, transition: 'background 0.2s' }}>
+                                    {isSelected && <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>✓</span>}
+                                </div>
+
+                                {/* 🏷️ ALBUM TAG LABEL Top Left */}
+                                {isSelected && (
+                                    <div style={{ position: 'absolute', top: '10px', left: '10px', background: bgColor, color: '#fff', padding: '2px 8px', fontSize: '10px', borderRadius: '4px', fontWeight: 'bold', zIndex: 10, boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}>
+                                        {currentAlbum}
+                                    </div>
+                                )}
+
+                                {/* 🔄 SHIFT BUTTON Bottom Right */}
+                                {isSelected && (
+                                    <button 
+                                        onPointerDown={(e) => e.stopPropagation()} 
+                                        onClick={(e) => handleShiftImage(e, activeSelectionProject._id, img.url, currentAlbum)}
+                                        style={{ position: 'absolute', bottom: voterNames.length > 0 ? '35px' : '10px', right: '10px', background: '#fff', border: 'none', width: '30px', height: '30px', borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', zIndex: 15 }}
+                                        title="Shift to other Album"
+                                    >
+                                        🔄
+                                    </button>
+                                )}
+
+                                {voterNames.length > 0 && (
+                                    <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(0,0,0,0.7)', color: '#f1c40f', padding: '4px 8px', borderRadius: '8px', fontSize: '10px', fontWeight: 'bold', zIndex: 5, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        ❤️ {voterNames.join(', ')}
+                                    </div>
+                                )}
+                            </div>
+                        );
                     })}
                     {displayedImages.length === 0 && <p style={{textAlign: 'center', width: '100%', gridColumn: '1/-1', color: '#888'}}>No images found in this folder.</p>}
                 </div>
