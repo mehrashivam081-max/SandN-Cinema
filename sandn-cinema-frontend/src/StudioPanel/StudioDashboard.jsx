@@ -25,11 +25,13 @@ const StudioDashboard = ({ user, onLogout }) => {
     const [openDropdown, setOpenDropdown] = useState(null);
 
     // ✅ NEW: LONG MEDIA (CINEMATIC) UPLOAD STATES
-    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '', freeHours: '0', monthlyPrice: '', yearlyPrice: '' });
-    const [longMediaFile, setLongMediaFile] = useState(null);
-    const [longMediaPreview, setLongMediaPreview] = useState('');
-    const [isLongUploading, setIsLongUploading] = useState(false);
-
+    const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '', freeHours: '0', monthlyPrice: '', yearlyPrice: '' });
+    const [longMediaFile, setLongMediaFile] = useState(null);
+    const [longMediaPreview, setLongMediaPreview] = useState('');
+    const [isLongUploading, setIsLongUploading] = useState(false);
+    
+    // 🔥 NEW: AUDIO vs VIDEO TOGGLE & 500MB CHECKER
+    const [uploadMode, setUploadMode] = useState('AUDIO'); // Default 'AUDIO' rakhna safe hai
     // --- DATA STATES ---
     const [studioProfile, setStudioProfile] = useState(user);
     const [clientMobile, setClientMobile] = useState('');
@@ -2513,21 +2515,69 @@ const StudioDashboard = ({ user, onLogout }) => {
                             </div>
 
                             {/* RIGHT COLUMN: PREVIEW & UPLOAD ACTION */}
-                            <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, background: '#f8f9fa', border: '1px dashed #bdc3c7' }}>
-                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📺 Original Media (.mp4)</h3>
-                                
-                                {!longMediaPreview ? (
-                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ecf0f1', borderRadius: '10px', cursor: 'pointer', border: '2px dashed #95a5a6' }} onClick={() => document.getElementById('long-video-upload').click()}>
-                                        <span style={{ fontSize: '40px' }}>📁</span>
-                                        <p style={{ margin: '10px 0 0 0', fontWeight: 'bold', color: '#34495e' }}>Select Original Video with Audio</p>
-                                        <input id="long-video-upload" type="file" accept="video/mp4,video/mov" style={{ display: 'none' }} onChange={(e) => { const file = e.target.files[0]; if(file) { setLongMediaFile(file); setLongMediaPreview(URL.createObjectURL(file)); } }}/>
-                                    </div>
-                                ) : (
-                                    <div style={{ position: 'relative', width: '100%', borderRadius: '10px', overflow: 'hidden', background: '#000', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
-                                        <video src={longMediaPreview} controls style={{ width: '100%', height: 'auto', maxHeight: '250px', display: 'block' }} />
-                                        <button onClick={() => { setLongMediaFile(null); setLongMediaPreview(''); }} style={{ position: 'absolute', top: '10px', right: '10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }} disabled={isLongUploading}>✖ Remove</button>
-                                    </div>
-                                )}
+                            <div className="update-creation-container" style={{ flex: '1 1 350px', margin: 0, background: '#f8f9fa', border: '1px dashed #bdc3c7' }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📺 Media Upload Mode</h3>
+                                
+                                {/* 🔥 NEW: The Smart Toggle Switch */}
+                                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', background: '#fff', padding: '5px', borderRadius: '8px', border: '1px solid #ccc' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setUploadMode('AUDIO'); setLongMediaFile(null); setLongMediaPreview(''); document.getElementById('long-video-upload').value = ''; }} 
+                                        style={{ flex: 1, padding: '10px', borderRadius: '5px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: uploadMode === 'AUDIO' ? '#2ecc71' : 'transparent', color: uploadMode === 'AUDIO' ? '#fff' : '#777', transition: '0.3s' }}
+                                    >
+                                        🎵 Upload Audio Only (.mp3)
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setUploadMode('VIDEO'); setLongMediaFile(null); setLongMediaPreview(''); document.getElementById('long-video-upload').value = ''; }} 
+                                        style={{ flex: 1, padding: '10px', borderRadius: '5px', border: 'none', fontWeight: 'bold', cursor: 'pointer', background: uploadMode === 'VIDEO' ? '#e74c3c' : 'transparent', color: uploadMode === 'VIDEO' ? '#fff' : '#777', transition: '0.3s' }}
+                                    >
+                                        🎥 Upload Video (Max 500MB)
+                                    </button>
+                                </div>
+
+                                {!longMediaPreview ? (
+                                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ecf0f1', borderRadius: '10px', cursor: 'pointer', border: '2px dashed #95a5a6' }} onClick={() => document.getElementById('long-video-upload').click()}>
+                                        <span style={{ fontSize: '40px' }}>{uploadMode === 'AUDIO' ? '🎵' : '📁'}</span>
+                                        <p style={{ margin: '10px 0 0 0', fontWeight: 'bold', color: '#34495e', textAlign: 'center' }}>
+                                            {uploadMode === 'AUDIO' ? 'Select Extracted Audio (.mp3, .wav)' : 'Select Original Video with Audio'}
+                                        </p>
+                                        
+                                        {/* 🛑 500MB CRASH PROTECTOR LOGIC HERE */}
+                                        <input 
+                                            id="long-video-upload" 
+                                            type="file" 
+                                            accept={uploadMode === 'AUDIO' ? "audio/*" : "video/mp4,video/mov"} 
+                                            style={{ display: 'none' }} 
+                                            onChange={(e) => { 
+                                                const file = e.target.files[0]; 
+                                                if(file) { 
+                                                    // 500MB Check (500 * 1024 * 1024 bytes = 524288000 bytes)
+                                                    if (uploadMode === 'VIDEO' && file.size > 524288000) {
+                                                        alert("🚨 WARNING: Video is larger than 500MB! Your server will crash.\n\nPlease switch to 'Upload Audio Only' mode and provide the MP3 file instead.");
+                                                        e.target.value = ''; 
+                                                        return;
+                                                    }
+                                                    setLongMediaFile(file); 
+                                                    setLongMediaPreview(URL.createObjectURL(file)); 
+                                                } 
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div style={{ position: 'relative', width: '100%', borderRadius: '10px', overflow: 'hidden', background: '#000', boxShadow: '0 5px 15px rgba(0,0,0,0.2)' }}>
+                                        {uploadMode === 'VIDEO' ? (
+                                            <video src={longMediaPreview} controls style={{ width: '100%', height: 'auto', maxHeight: '250px', display: 'block' }} />
+                                        ) : (
+                                            <div style={{ height: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#2ecc71', background: '#1a1a2e' }}>
+                                                <span style={{ fontSize: '30px' }}>🎧</span>
+                                                <p style={{ marginTop: '10px', fontWeight: 'bold', fontSize: '14px' }}>Audio Selected ({ (longMediaFile.size / (1024 * 1024)).toFixed(2) } MB)</p>
+                                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#aaa' }}>Ready for lightning fast upload! ⚡</p>
+                                            </div>
+                                        )}
+                                        <button onClick={() => { setLongMediaFile(null); setLongMediaPreview(''); document.getElementById('long-video-upload').value = ''; }} style={{ position: 'absolute', top: '10px', right: '10px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '5px', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', zIndex: 10 }} disabled={isLongUploading}>✖ Remove</button>
+                                    </div>
+                                )}
 
                                 {/* PROGRESS & ACTION BUTTON */}
                                 {isLongUploading && (
