@@ -1,0 +1,42 @@
+:root {
+    /* Core Defaults */
+    --font-main: 'Poppins', sans-serif;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-round: 50px;
+    
+    /* Common Colors */
+    --white: #ffffff;
+    --black: #000000;
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --shadow-light: 0 4px 15px rgba(0,0,0,0.2);
+    --shadow-deep: 0 10px 40px rgba(0,0,0,0.6);
+}
+
+/* 🔴 RED THEME (Cinematic) */
+.theme-red {
+    --bg-body: radial-gradient(circle at center, #1a0505 0%, #000000 100%);
+    --primary: #e50914;  /* Netflix Red */
+    --primary-hover: #ff1f1f;
+    --accent: #ff4d4d;
+    --card-bg: rgba(30, 0, 0, 0.85);
+    --text-main: #ffffff;
+    --text-muted: #b3b3b3;
+    --glow-color: rgba(229, 9, 20, 0.6);
+    --gradient-main: linear-gradient(135deg, #e50914, #8b0000);
+}
+
+/* 🔵 BLUE THEME (Glossy) */
+.theme-blue {
+    --bg-body: radial-gradient(circle at center, #050a1a 0%, #000000 100%);
+    --primary: #007bff; /* Royal Blue */
+    --primary-hover: #3395ff;
+    --accent: #00c6ff;
+    --card-bg: rgba(0, 10, 30, 0.85);
+    --text-main: #ffffff;
+    --text-muted: #a0a0a0;
+    --glow-color: rgba(0, 123, 255, 0.6);
+    --gradient-main: linear-gradient(135deg, #007bff, #004494);
+}

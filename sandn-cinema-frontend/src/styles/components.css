@@ -1,0 +1,88 @@
+/* --- Header Styles --- */
+.app-header {
+    background: var(--card-bg);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.app-title { font-size: 1.5rem; color: var(--text-light); font-weight: 800; }
+.highlight { color: var(--primary); }
+.theme-btn { 
+    background: transparent; color: var(--text-light); 
+    border: 1px solid var(--border-color); padding: 5px 12px; 
+    border-radius: 20px; font-size: 0.8rem; margin-right: 10px;
+}
+.user-info { display: flex; align-items: center; gap: 10px; }
+.logout-btn { background: transparent; color: #ff4d4d; border: 1px solid #ff4d4d; padding: 5px 10px; border-radius: 5px; }
+
+/* --- Auth & Cards --- */
+.auth-wrapper { display: flex; justify-content: center; align-items: center; min-height: 80vh; padding: 20px; }
+.auth-card { 
+    background: var(--card-bg); padding: 30px; border-radius: var(--radius-lg); 
+    width: 100%; max-width: 400px; box-shadow: var(--shadow-heavy); 
+    border: 1px solid var(--border-color); text-align: center;
+}
+.tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); }
+.tabs button { 
+    flex: 1; padding: 10px; background: transparent; color: var(--text-muted); 
+    font-weight: bold; border-bottom: 2px solid transparent; 
+}
+.tabs button.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+
+/* --- Modals (Booking/Feed) --- */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85); z-index: 1000;
+    display: flex; justify-content: center; align-items: center;
+    backdrop-filter: blur(5px);
+}
+.modal-card {
+    background: var(--card-bg); width: 90%; max-width: 500px;
+    padding: 20px; border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-heavy);
+}
+.modal-card.full-screen { height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.close-btn { background: transparent; color: var(--text-muted); font-size: 1.5rem; }
+
+/* --- Inputs in Modals --- */
+.input-field {
+    width: 100%; padding: 12px; margin-bottom: 15px;
+    background: rgba(0,0,0,0.2); border: 1px solid var(--border-color);
+    color: white; border-radius: var(--radius-sm);
+}
+
+/* --- Magnet UI Elements --- */
+.left-panel, .right-panel { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.arrow-box { margin-bottom: 20px; }
+.arrow-anim { width: 40px; animation: bounce 2s infinite; }
+.search-card { 
+    background: var(--gradient-btn); padding: 25px; border-radius: 15px; 
+    color: white; box-shadow: 0 0 20px var(--primary); border: 2px solid rgba(255,255,255,0.2);
+}
+.nav-grid { 
+    display: flex; gap: 15px; align-items: center; justify-content: center;
+    margin-top: 30px; width: 100%;
+}
+.nav-btn {
+    border: none; color: white; font-weight: bold;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s;
+}
+.nav-btn:active { transform: scale(0.9); }
+.nav-btn.trend { background: linear-gradient(to right, #ff8c00, #ff4500); padding: 12px 24px; border-radius: 30px; }
+.nav-btn.viral { background: linear-gradient(to right, #800080, #b22222); padding: 12px 24px; border-radius: 30px; }
+.nav-btn.book-main {
+    width: 90px; height: 90px; border-radius: 50%;
+    background: white; color: var(--primary);
+    border: 4px solid var(--primary); font-size: 1rem; font-weight: 900;
+    box-shadow: 0 0 25px var(--primary);
+    margin-top: -30px; /* Slight overlap effect */
+}
+
+@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }

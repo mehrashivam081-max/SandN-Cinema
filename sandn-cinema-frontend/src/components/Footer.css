@@ -1,0 +1,115 @@
+.app-footer {
+    background: var(--card-bg, #0f172a);
+    border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.05));
+    padding: 50px 20px 20px;
+    color: var(--text-main, #e2e8f0);
+    margin-top: 50px; /* Thoda space upar se */
+    font-family: 'Inter', sans-serif;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 40px;
+}
+
+/* Brand Section */
+.footer-brand {
+    max-width: 350px;
+}
+
+.footer-logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.footer-logo-icon {
+    height: 28px;
+    width: 28px;
+    filter: grayscale(20%); /* Footer mein logo thoda subtle accha lagta hai */
+}
+
+.footer-logo-text {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+}
+
+.footer-tagline {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #94a3b8;
+}
+
+/* Links Section */
+.footer-links {
+    display: flex;
+    gap: 60px;
+}
+
+.link-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.link-group h3 {
+    font-size: 1.1rem;
+    color: #ffffff;
+    margin: 0 0 5px 0;
+    font-weight: 600;
+}
+
+.link-group a {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.link-group a:hover {
+    color: #ff7e5f; /* Snevio gradient ka orange color */
+    transform: translateX(3px); /* Hover par halka sa right move hoga */
+}
+
+/* Bottom Copyright Section */
+.footer-bottom {
+    max-width: 1200px;
+    margin: 40px auto 0;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.developer-tag {
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .footer-content {
+        flex-direction: column;
+    }
+    
+    .footer-links {
+        flex-direction: column;
+        gap: 30px;
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+}

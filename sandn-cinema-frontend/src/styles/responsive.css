@@ -1,0 +1,55 @@
+/* --- MOBILE FIRST (Default) --- */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    padding-bottom: 100px;
+}
+
+.magnet-visual {
+    width: 180px;
+    margin: 30px 0;
+    filter: drop-shadow(0 0 15px var(--accent));
+    animation: float 3s infinite ease-in-out;
+}
+
+.nav-grid {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 400px;
+}
+
+/* --- LAPTOP / DESKTOP (> 1024px) --- */
+@media (min-width: 1024px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 85vh;
+        max-width: 1200px;
+        margin: 0 auto;
+        align-items: center;
+        justify-items: center;
+    }
+
+    .magnet-visual { width: 350px; }
+    
+    .left-panel { text-align: right; padding-right: 50px; }
+    .right-panel { text-align: left; padding-left: 50px; }
+    
+    .nav-grid {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 600px;
+        max-width: none;
+    }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}

@@ -1,0 +1,383 @@
+/* src/components/UserDashboard.css */
+
+/* --- GLOBAL THEME --- */
+.ud-container-vip {
+    width: 100%;
+    min-height: 100vh;
+    background-color: #0d0d0d; /* Deep Dark Background */
+    padding-bottom: 90px; /* Space for bottom nav */
+    font-family: 'Poppins', sans-serif;
+    color: #f4f4f4;
+    overflow-x: hidden;
+}
+
+/* --- HEADER SECTION --- */
+.ud-header-vip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 25px;
+    background: rgba(15, 15, 15, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #222;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.brand-logo-vip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-logo-vip h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #fff;
+    letter-spacing: 1px;
+}
+
+.vip-badge-tag {
+    background: linear-gradient(135deg, #d4af37, #b58500); /* Gold Gradient */
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Coin Badge */
+.ud-coin-badge-vip {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #222, #111);
+    border: 2px solid #d4af37;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+}
+.coin-val-vip { font-size: 12px; font-weight: bold; color: #d4af37; line-height: 1.2; }
+.coin-label-vip { font-size: 7px; font-weight: bold; color: #aaa; letter-spacing: 0.5px; }
+
+/* --- MAIN CONTENT & FOLDERS --- */
+.user-main-content {
+    padding: 20px 25px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.welcome-banner { text-align: center; margin-bottom: 30px; }
+.welcome-banner h1 { 
+    font-size: 28px; 
+    margin: 0 0 5px 0;
+    background: linear-gradient(to right, #d4af37, #fff); 
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent; 
+}
+.welcome-banner p { margin: 0; color: #888; font-size: 13px; }
+
+/* Folders Grid */
+.folders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.folder-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.folder-card:hover {
+    border-color: #d4af37;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(212, 175, 55, 0.1);
+}
+
+.folder-icon { font-size: 40px; margin-bottom: 10px; }
+.folder-card h4 { margin: 0 0 5px; font-size: 14px; color: #fff; }
+.folder-card p { margin: 0; font-size: 12px; color: #888; }
+.default-badge {
+    position: absolute;
+    top: -10px; right: -10px;
+    background: linear-gradient(135deg, #d4af37, #f1c40f);
+    color: #000;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+/* --- GALLERY VIEW INSIDE FOLDER --- */
+.folder-header-nav { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+.back-btn { background: #222; color: #fff; border: 1px solid #444; padding: 8px 15px; border-radius: 20px; cursor: pointer; transition: 0.3s; font-size: 12px;}
+.back-btn:hover { background: #333; }
+
+/* ✅ PREMIUM FILTER BUTTONS (All / Photos / Videos) */
+.filter-group-vip { 
+    display: flex; 
+    gap: 12px; 
+    margin-bottom: 25px; 
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.filter-btn-vip {
+    padding: 8px 25px;
+    border: 1px solid #444;
+    background: rgba(26, 26, 26, 0.8);
+    border-radius: 25px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #aaa;
+    font-weight: 500;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    backdrop-filter: blur(5px);
+}
+.filter-btn-vip:hover { 
+    background: #333; 
+    color: #fff; 
+    border-color: #666;
+}
+.filter-btn-vip.active {
+    background: linear-gradient(135deg, #d4af37, #f1c40f);
+    color: #000;
+    border-color: #d4af37;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+    transform: translateY(-2px);
+}
+
+.ud-grid-vip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.gallery-item-vip {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #111;
+    border: 1px solid #333;
+    transition: transform 0.3s ease;
+}
+.gallery-item-vip:hover { transform: translateY(-5px); border-color: #555;}
+
+.gallery-media-vip { width: 100%; height: 250px; object-fit: cover; display: block; }
+.media-overlay-vip {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; transition: 0.3s;
+}
+.gallery-item-vip:hover .media-overlay-vip { opacity: 1; }
+
+.download-btn-vip {
+    background: #d4af37; color: #000;
+    padding: 10px 20px; border-radius: 25px;
+    text-decoration: none; font-weight: bold; font-size: 12px;
+    transform: translateY(20px); transition: all 0.3s ease;
+}
+.gallery-item-vip:hover .download-btn-vip { transform: translateY(0); }
+.download-btn-vip:hover { background: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.5);}
+
+
+/* --- PROFILE TAB --- */
+.profile-tab-vip { max-width: 500px; margin: 0 auto; text-align: center; }
+.profile-tab-vip h2 { margin-bottom: 20px; font-weight: 400; }
+.profile-card-vip { background: #1a1a1a; border-radius: 15px; padding: 30px; border: 1px solid #333; }
+
+.dp-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 25px; }
+.dp-circle {
+    width: 100px; height: 100px;
+    border-radius: 50%; background: #333;
+    border: 3px solid #d4af37;
+    display: flex; justify-content: center; align-items: center;
+    font-size: 40px; color: #d4af37; overflow: hidden;
+}
+.dp-circle img { width: 100%; height: 100%; object-fit: cover; }
+.dp-controls { display: flex; gap: 10px; margin-top: 15px; }
+.dp-btn { padding: 5px 15px; border-radius: 20px; font-size: 12px; cursor: pointer; border: none; font-weight: bold; }
+.dp-btn.upload { background: #3498db; color: white; }
+.dp-btn.remove { background: #e74c3c; color: white; }
+
+.profile-details { text-align: left; }
+.profile-details label { display: block; font-size: 12px; color: #888; margin-bottom: 5px; }
+.vip-input {
+    width: 100%; padding: 12px; border-radius: 8px;
+    border: 1px solid #444; background: #222;
+    color: #fff; font-size: 14px; margin-bottom: 15px; outline: none;
+    box-sizing: border-box;
+}
+.vip-input.disabled { background: #111; color: #888; border-color: #222; cursor: not-allowed; }
+
+.vip-btn-outline { width: 100%; padding: 12px; background: transparent; border: 1px solid #d4af37; color: #d4af37; border-radius: 8px; cursor: pointer; font-weight: bold; }
+.vip-btn-gold { width: 100%; padding: 12px; background: #d4af37; border: none; color: #000; border-radius: 8px; cursor: pointer; font-weight: bold; }
+.logout-btn-full { width: 100%; padding: 12px; background: rgba(231, 76, 60, 0.1); border: 1px solid #e74c3c; color: #e74c3c; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s;}
+.logout-btn-full:hover { background: #e74c3c; color: #fff;}
+
+
+/* --- HISTORY TAB --- */
+.history-tab-vip { max-width: 600px; margin: 0 auto; }
+.history-list { display: flex; flex-direction: column; gap: 10px; }
+
+
+/* --- BOTTOM NAVIGATION --- */
+.bottom-nav-bar {
+    position: fixed; bottom: 0; left: 0; width: 100%;
+    background: #111; border-top: 1px solid #222;
+    display: flex; justify-content: space-around; padding: 10px 5px;
+    z-index: 100; padding-bottom: env(safe-area-inset-bottom, 10px);
+}
+.nav-item {
+    background: transparent; border: none; color: #888;
+    display: flex; flex-direction: column; align-items: center;
+    font-size: 20px; cursor: pointer; transition: 0.3s;
+    flex: 1;
+}
+.nav-item span { font-size: 10px; margin-top: 5px; }
+.nav-item.active { color: #d4af37; }
+
+
+/* --- UTILS --- */
+.mt-20 { margin-top: 20px; }
+.tab-placeholder { text-align: center; padding: 50px; color: #888; }
+.loading-state-vip, .no-data-vip { text-align: center; padding: 50px 0; color: #888; }
+
+
+/* --- PREMIUM REWARD POPUP ANIMATIONS --- */
+.reward-popup-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.reward-popup-box {
+    background: #111;
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    border: 2px solid;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    animation: popUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    min-width: 280px;
+}
+
+.reward-popup-box.earned { border-color: #f1c40f; }
+.reward-popup-box.missed { border-color: #e74c3c; }
+
+.reward-icon {
+    font-size: 60px;
+    margin-bottom: 10px;
+    animation: bounceIcon 1s infinite alternate;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popUp { 
+    from { transform: scale(0.8) translateY(50px); opacity: 0; } 
+    to { transform: scale(1) translateY(0); opacity: 1; } 
+}
+@keyframes bounceIcon {
+    from { transform: translateY(0); }
+    to { transform: translateY(-10px); }
+}
+
+/* Responsive Fixes */
+@media (max-width: 768px) {
+    .ud-header-vip { padding: 15px 20px; }
+    .user-main-content { padding: 15px 15px; }
+    .ud-grid-vip { grid-template-columns: repeat(auto-fill, minmax(100%, 1fr)); }
+}
+
+/* ========================================================
+   📱 PREMIUM MOBILE FIX: USER DASHBOARD (APP STYLE)
+   ======================================================== */
+@media screen and (max-width: 768px) {
+    /* 1. Header Optimization - Stop Overlapping */
+    .ud-header-vip {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important; /* Split into 2 sides */
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 15px 15px !important;
+        background: rgba(15, 23, 42, 0.85) !important;
+        backdrop-filter: blur(15px) !important; /* Glassmorphism */
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
+    }
+    
+    /* Logo adjustments */
+    .brand-logo-vip {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .brand-logo-vip h2 { font-size: 16px !important; margin: 0 !important; line-height: 1.2 !important; }
+    .vip-badge-tag { font-size: 9px !important; padding: 2px 6px !important; margin-top: 2px !important; }
+
+    /* Action Icons Group (Right Side) */
+    .ud-header-vip > div:last-child {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+    
+    /* Compact Buttons */
+    .emergency-pulse-btn { padding: 6px 10px !important; font-size: 11px !important; border-radius: 20px !important; }
+    .cart-icon-wrapper { font-size: 20px !important; }
+    .ud-coin-badge-vip { padding: 4px 10px !important; border-radius: 20px !important; }
+    .coin-val-vip { font-size: 13px !important; }
+    .coin-label-vip { display: none !important; } /* Hide 'COINS+' text on mobile to save space */
+
+    /* 2. Premium Folder Cards */
+    .folder-card {
+        background: linear-gradient(145deg, #1e293b, #0f172a) !important;
+        border: 1px solid rgba(255,255,255,0.05) !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important;
+        border-radius: 20px !important;
+        padding: 25px 15px !important;
+    }
+
+    /* 3. Bottom Navigation - True App Feel */
+    .bottom-nav-bar {
+        background: rgba(15, 23, 42, 0.9) !important;
+        backdrop-filter: blur(20px) !important;
+        border-top: 1px solid rgba(255,255,255,0.1) !important;
+        padding: 10px 5px 20px 5px !important; /* Extra bottom padding for iOS swipe bar */
+        box-shadow: 0 -5px 25px rgba(0,0,0,0.5) !important;
+    }
+    
+    .nav-item {
+        opacity: 0.5 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .nav-item.active {
+        opacity: 1 !important;
+        color: #f1c40f !important;
+        transform: translateY(-4px) !important; /* Slightly pop up active icon */
+    }
+}
