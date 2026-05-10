@@ -72,7 +72,11 @@ const storage = multer.diskStorage({
         cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-')); 
     }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage: storage }); // 📂 FFmpeg और पुराने कोड के लिए (Disk)
+
+// 🔥 NAYA: Stream Storage (RAM) सिर्फ Proxy Upload के लिए (No Disk Space Used)
+const streamStorage = multer.memoryStorage();
+const uploadStream = multer({ storage: streamStorage, limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB Limit
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -826,16 +830,17 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05) => {
 };
 
 // ==============================================================
-// 🛡️ THE SECURE PROXY UPLOADER (DUAL-UPLOAD + WATERMARK ENGINE)
+// 🛡️ THE SECURE STREAM PROXY UPLOADER (ZERO DISK USAGE)
 // ==============================================================
 const AWS = require('aws-sdk');
 const cloudinary = require('cloudinary').v2;
+const { Readable } = require('stream'); // 🔥 Native Node.js Stream Module
 
-app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), async (req, res) => {
+// ⚠️ ध्यान दें: यहाँ 'upload' की जगह 'uploadStream' लगा है!
+app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
         
-        const filePath = req.file.path;
         const isImage = req.file.mimetype.startsWith('image/');
         const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
 
@@ -847,58 +852,42 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                 const used = studioData.usedStorageGB || 0;
                 
                 if (used + fileSizeGB > allocated) {
-                    fs.unlinkSync(filePath); 
-                    return res.status(403).json({ 
-                        success: false, 
-                        message: `Storage Limit Exceeded! You have used ${used.toFixed(2)}GB of your ${allocated}GB plan. Please upgrade your storage plan.` 
-                    });
+                    return res.status(403).json({ success: false, message: `Storage Limit Exceeded! You have used ${used.toFixed(2)}GB of your ${allocated}GB plan.` });
                 }
             }
         }
 
         const activeCloud = await getOrUpdateActiveStorage(fileSizeGB);
         let uploadedUrl = '';
-        let previewUrl = ''; // 🔥 NAYA: Watermarked URL ke liye
+        let previewUrl = '';
 
-        console.log(`☁️ Secure Proxy: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
+        console.log(`☁️ Secure Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
 
-        // 🔥 NAYA: Frontend se aane wale skipPreview flag ko check karega
         const skipPreview = req.body.skipPreview === 'true';
-
-        // 🎨 WATERMARK PROCESSING (Only for Images)
+        let originalBuffer = req.file.buffer; // 🔥 FIX: Direct RAM से फाइल पढ़ रहे हैं, Disk से नहीं!
         let watermarkedBuffer = null;
-        let originalBuffer = fs.readFileSync(filePath);
 
+        // 🎨 WATERMARK PROCESSING (RAM के अंदर ही)
         if (isImage && !skipPreview) {
             console.log("🎨 Processing Watermark for preview image...");
-            
-            // 1. Original image ki details nikalo
-            const image = sharp(filePath);
+            const image = sharp(originalBuffer);
             const metadata = await image.metadata();
             
-            // 2. Maximum width 800px rakho, lekin agar photo chhoti hai to uska asli size lo
             const finalWidth = Math.min(metadata.width, 800);
-            
-            // 3. Scale factor nikal kar height ko proportion me chhota karo
             const scaleFactor = finalWidth / metadata.width;
             const finalHeight = Math.round(metadata.height * scaleFactor);
-
-            // 4. Font size ko image ki width ke hisaab se dynamic banao (width ka 8%)
             const fontSize = Math.floor(finalWidth * 0.08); 
 
-            // 5. Dynamic SVG generate karo jo exactly image ki height/width par fit ho jaye
-            // 🛑 THE CRITICAL FIX: SVG string must start exactly with <svg (No spaces, no newlines allowed!)
-            const svgWatermark = `<svg width="${finalWidth}" height="${finalHeight}"><text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="${fontSize}" font-family="Arial" font-weight="bold" transform="rotate(-30 ${finalWidth/2} ${finalHeight/2})">SNEVIO PREVIEW</text></svg>`;
+            const svgWatermark = `<svg width="${finalWidth}" height="${finalHeight}"><text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="${fontSize}" font-family="Arial" font-weight="bold" transform="rotate(-30 ${finalWidth/2} ${finalHeight/2})">SNEVIO PREVIEW</text></svg>`;
 
-            // 6. Ab Resize karke us par exact size ka watermark chipkao (No Crash 100% Guaranteed)
-            watermarkedBuffer = await image
-                .resize({ width: finalWidth }) 
-                .composite([{ input: Buffer.from(svgWatermark), gravity: 'center' }])
-                .jpeg({ quality: 75 })
-                .toBuffer();
-        }
+            watermarkedBuffer = await image
+                .resize({ width: finalWidth }) 
+                .composite([{ input: Buffer.from(svgWatermark), gravity: 'center' }])
+                .jpeg({ quality: 75 })
+                .toBuffer();
+        }
 
-        // 🚀 CLOUD UPLOAD LOGIC
+        // 🚀 CLOUD UPLOAD LOGIC (BUFFER/STREAM BASED)
         if (activeCloud.provider === 'IMGBB') {
             const originalBase64 = originalBuffer.toString('base64');
             const imgbbResOriginal = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: originalBase64 }));
@@ -911,11 +900,20 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             } else {
                 previewUrl = uploadedUrl; 
             }
-            console.log("✅ ImgBB Dual-Upload Success!");
-
         } else if (activeCloud.provider === 'CLOUDINARY') {
             cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
-            const result = await cloudinary.uploader.upload(filePath, { resource_type: 'auto' });
+            
+            // 🔥 CLOUDINARY STREAM PIPE LOGIC (सबसे खतरनाक और तेज़)
+            const uploadToCloudinary = (bufferData) => {
+                return new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream({ resource_type: 'auto' }, (error, result) => {
+                        if (result) resolve(result); else reject(error);
+                    });
+                    Readable.from(bufferData).pipe(stream);
+                });
+            };
+
+            const result = await uploadToCloudinary(originalBuffer);
             uploadedUrl = result.secure_url;
             
             if (isImage && !skipPreview) {
@@ -964,14 +962,10 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             await Studio.updateOne({ mobile: req.user.mobile }, { $inc: { usedStorageGB: fileSizeGB } }, { strict: false });
         }
 
-        fs.unlinkSync(filePath);
-        
-        // 🔥 NAYA: Return both Original and Preview URLs
         res.json({ success: true, url: uploadedUrl, previewUrl: previewUrl || uploadedUrl, provider: activeCloud.provider });
 
     } catch (error) {
-        console.error("Proxy Upload Error:", error);
-        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        console.error("Stream Proxy Upload Error:", error);
         res.status(500).json({ success: false, message: "Secure upload failed." });
     }
 });
