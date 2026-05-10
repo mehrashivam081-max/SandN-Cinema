@@ -980,9 +980,8 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
     } catch (error) {
         console.error("🚨 CLOUD UPLOAD CRASHED!");
         
-        // Axios Error pakadne ka ninja tareeqa
+        // Axios Error pakadne ka ninja tareeqa (Fixed Scope Bug)
         if (error.response) {
-            console.error("👉 CLOUD PROVIDER:", activeCloud.provider);
             console.error("👉 STATUS CODE:", error.response.status);
             console.error("👉 EXACT REASON:", JSON.stringify(error.response.data, null, 2));
         } else {
