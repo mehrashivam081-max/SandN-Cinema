@@ -2487,7 +2487,7 @@ app.post('/api/auth/delete-ad', async (req, res) => {
 });
 
 // ==========================================
-// 🚀 26. AUDIO EXTRACTOR & CLOUD UPLOADER (MANUAL YT WORKFLOW)
+// 🚀 26. SMART AUDIO EXTRACTOR & DIRECT MP3 UPLOADER
 // ==========================================
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
@@ -2500,51 +2500,80 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET || 'Y0fHlu5CJbLwNPBjW-3PpPGSem0'  
 });
 
+// 🔥 SMART ROUTE: Handles both Video (Extract) and Audio (Direct Upload)
 app.post('/api/auth/upload-split-video', authenticateToken, upload.single('videoFile'), async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ success: false, message: "No video file uploaded." });
+        if (!req.file) return res.status(400).json({ success: false, message: "No media file uploaded." });
 
         const inputFilePath = req.file.path;
-        const tempDir = path.join(__dirname, 'temp');
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+        const mimeType = req.file.mimetype.toLowerCase();
 
-        const timestamp = Date.now();
-        const audioOutputPath = path.join(tempDir, `audio_${timestamp}.mp3`);
+        // 🟢 SCENARIO 1: USER UPLOADED DIRECT AUDIO (.mp3, .wav)
+        if (mimeType.startsWith('audio/')) {
+            console.log("🎵 Direct Audio Upload Detected. Skipping FFmpeg...");
+            
+            const cloudAudioRes = await cloudinary.uploader.upload(inputFilePath, {
+                resource_type: 'video', // Note: Cloudinary requires 'video' type for audio files too
+                folder: 'snevio_audio_splits'
+            });
 
-        console.log("⚙️ FFmpeg Extracting Audio...");
+            // Clean up disk immediately
+            fs.unlinkSync(inputFilePath);
 
-        // 🎵 Process: Extract Audio ONLY
-        await new Promise((resolve, reject) => {
-            ffmpeg(inputFilePath)
-                .output(audioOutputPath)
-                .noVideo() // Video hata do
-                .audioCodec('libmp3lame')
-                .on('end', resolve)
-                .on('error', reject)
-                .run();
-        });
+            console.log("🎉 Direct Audio Uploaded Successfully!");
+            return res.status(200).json({
+                success: true,
+                data: { audioCloudUrl: cloudAudioRes.secure_url }
+            });
+        }
 
-        console.log("☁️ Uploading Audio to Cloudinary...");
-        const cloudAudioRes = await cloudinary.uploader.upload(audioOutputPath, {
-            resource_type: 'video', 
-            folder: 'snevio_audio_splits'
-        });
+        // 🔵 SCENARIO 2: USER UPLOADED VIDEO (.mp4) -> EXTRACT AUDIO
+        if (mimeType.startsWith('video/')) {
+            console.log("⚙️ Video Detected! FFmpeg Extracting Audio...");
+            
+            const tempDir = path.join(__dirname, 'temp');
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-        // 🧹 Clean up temp files (Delete original video and temp audio from server)
+            const timestamp = Date.now();
+            const audioOutputPath = path.join(tempDir, `audio_${timestamp}.mp3`);
+
+            // Extract Audio Process
+            await new Promise((resolve, reject) => {
+                ffmpeg(inputFilePath)
+                    .output(audioOutputPath)
+                    .noVideo() // Remove Video Stream to save space
+                    .audioCodec('libmp3lame')
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+
+            console.log("☁️ Uploading Extracted Audio to Cloudinary...");
+            const cloudAudioRes = await cloudinary.uploader.upload(audioOutputPath, {
+                resource_type: 'video', 
+                folder: 'snevio_audio_splits'
+            });
+
+            // Clean up both original video and temp mp3 from server
+            fs.unlinkSync(inputFilePath);
+            fs.unlinkSync(audioOutputPath);
+
+            console.log("🎉 Audio Extracted & Uploaded Successfully!");
+            return res.status(200).json({
+                success: true,
+                data: { audioCloudUrl: cloudAudioRes.secure_url }
+            });
+        }
+
+        // 🔴 SCENARIO 3: INVALID FILE TYPE (Someone tried to upload a PDF or EXE)
         fs.unlinkSync(inputFilePath);
-        fs.unlinkSync(audioOutputPath);
-
-        console.log("🎉 Audio Extracted & Uploaded Successfully!");
-
-        return res.status(200).json({
-            success: true,
-            data: { audioCloudUrl: cloudAudioRes.secure_url }
-        });
+        return res.status(400).json({ success: false, message: "Invalid file format. Only Video or Audio allowed." });
 
     } catch (error) {
-        console.error("Audio Extract Error:", error);
-        if(req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        return res.status(500).json({ success: false, message: "Server Error extracting audio." });
+        console.error("Audio Processing Error:", error);
+        // Fallback cleanup if something crashes
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        return res.status(500).json({ success: false, message: "Server Error processing media." });
     }
 });
 
