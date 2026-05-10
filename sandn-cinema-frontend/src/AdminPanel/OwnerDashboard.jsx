@@ -1293,15 +1293,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
 
-    const toggleStudioApproval = async (mobile, currentStatus) => {
-        const actionText = currentStatus ? "REVOKE" : "APPROVE";
-        if (!window.confirm(`Are you sure you want to ${actionText} feed access for this Studio?`)) return;
+    // 🔥 NEW: Studio Account Approval Logic (Login Access)
+    const toggleStudioLoginAccess = async (mobile, currentStatus) => {
+        const actionText = currentStatus ? "REVOKE LOGIN ACCESS" : "APPROVE ACCOUNT";
+        if (!window.confirm(`Are you sure you want to ${actionText} for this Studio?\n\nIf approved, an email will be sent automatically.`)) return;
 
-        setAccounts(prevAccounts => prevAccounts.map(acc => acc.mobile === mobile ? { ...acc, isFeedApproved: !currentStatus } : acc));
         try {
-            const res = await axios.post(`${API_BASE}/update-studio-approval`, { mobile, isFeedApproved: !currentStatus });
-            if (!res.data.success) { fetchAccounts(); alert("Failed to update approval on server."); }
-        } catch (error) { fetchAccounts(); alert("Error connecting to server."); }
+            const res = await axios.post(`${API_BASE}/approve-studio-account`, 
+                { mobile, isApproved: !currentStatus }, 
+                { headers: { 'Authorization': `Bearer ${getValidToken()}` } }
+            );
+            
+            if (res.data.success) {
+                alert(res.data.message);
+                fetchAccounts(); // UI refresh
+            } else {
+                alert("Failed: " + res.data.message);
+            }
+        } catch (error) { 
+            alert("Error connecting to server."); 
+            console.error(error);
+        }
     };
 
     // ==========================================
@@ -2770,7 +2782,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         <div className="data-table-container" style={{ marginTop: '20px' }}>
                             <table className="admin-table">
                                 <thead>
-                                    <tr><th>Role</th><th>Name</th><th>Mobile</th><th>Feed Approval</th><th>Action</th></tr>
+                                    <tr><th>Role</th><th>Name</th><th>Mobile</th><th>Approve Login</th><th>Feed Auth</th><th>Action</th></tr>
                                 </thead>
                                 <tbody>
                                     {displayedAccounts.map((acc, index) => (
@@ -2778,12 +2790,36 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <td><span className={`status-badge ${acc.role === 'STUDIO' ? 'active' : acc.role === 'ADMIN' ? 'inactive' : 'normal'}`}>{acc.role}</span></td>
                                             <td>{acc.name || acc.studioName || acc.ownerName}</td>
                                             <td>{acc.mobile}</td>
+                                            
+                                            {/* 🔥 NAYA: Studio Login Approval Button */}
+                                            <td>
+                                                {acc.role === 'STUDIO' ? (
+                                                    <button 
+                                                        onClick={() => toggleStudioLoginAccess(acc.mobile, acc.isAccountApproved)} 
+                                                        style={{ 
+                                                            background: acc.isAccountApproved ? '#2ecc71' : '#e74c3c', 
+                                                            border: '1px solid #fff', 
+                                                            padding: '6px 12px', 
+                                                            borderRadius: '6px', 
+                                                            color: '#fff', 
+                                                            cursor: 'pointer', 
+                                                            fontWeight: 'bold',
+                                                            fontSize: '11px',
+                                                            boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                                                        }}
+                                                    >
+                                                        {acc.isAccountApproved ? '🟢 Verified' : '🔴 Unverified'}
+                                                    </button>
+                                                ) : <span style={{ color: '#ccc' }}>-</span>}
+                                            </td>
+
+                                            {/* Purana Feed Approval Button */}
                                             <td>
                                                 {acc.role === 'STUDIO' ? (
                                                     <button onClick={() => toggleStudioApproval(acc.mobile, acc.isFeedApproved)} style={{ background: acc.isFeedApproved ? '#2ecc71' : '#f1c40f', border: 'none', padding: '5px 10px', borderRadius: '5px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>{acc.isFeedApproved ? '✅ Approved' : '🔒 Pending'}</button>
                                                 ) : <span style={{ color: '#ccc' }}>-</span>}
                                             </td>
-                                            <td><button onClick={() => handleDeleteAccount(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c' }}>Delete Account</button></td>
+                                            <td><button onClick={() => handleDeleteAccount(acc.mobile, acc.role)} className="pdf-btn" style={{ padding: '6px 12px', fontSize: '12px', background: '#e74c3c', borderRadius: '6px' }}>Delete</button></td>
                                         </tr>
                                     ))}
                                 </tbody>
