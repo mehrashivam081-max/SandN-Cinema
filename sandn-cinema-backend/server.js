@@ -978,8 +978,18 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
         res.json({ success: true, url: uploadedUrl, previewUrl: previewUrl || uploadedUrl, provider: activeCloud.provider });
 
     } catch (error) {
-        console.error("Stream Proxy Upload Error:", error);
-        res.status(500).json({ success: false, message: "Secure upload failed." });
+        console.error("🚨 CLOUD UPLOAD CRASHED!");
+        
+        // Axios Error pakadne ka ninja tareeqa
+        if (error.response) {
+            console.error("👉 CLOUD PROVIDER:", activeCloud.provider);
+            console.error("👉 STATUS CODE:", error.response.status);
+            console.error("👉 EXACT REASON:", JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error("👉 SYSTEM ERROR:", error.message);
+        }
+
+        res.status(500).json({ success: false, message: "Secure upload failed. Check logs." });
     }
 });
 
