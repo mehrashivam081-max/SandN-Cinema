@@ -454,7 +454,9 @@ app.post('/api/auth/signup', async (req, res) => {
         if (type === 'studio') {
             await Studio.create({
                 mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
-                isAdhaarVerified: false, location, ...otherData
+                isAdhaarVerified: false, 
+                isAccountApproved: false, // 🔴 NAYA: Account banega par locked rahega
+                location, ...otherData
             });
         } else {
             await User.create({
@@ -587,6 +589,11 @@ app.post('/api/auth/login-otp', async (req, res) => {
         delete otpStore[identifier];
         const account = await findAccount(identifier, roleFilter); 
         if(account) {
+            // 🛑 THE BOUNCER: Check if Studio is approved
+            if (account.type === 'STUDIO' && account.data.isAccountApproved === false) {
+                return res.json({ success: false, message: "⏳ Application under review. You will receive an email once Admin approves your account." });
+            }
+
             const userObj = { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.type };
             const token = generateToken(userObj);
             res.json({ success: true, token, user: userObj });
@@ -605,6 +612,12 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const account = await findAccount(identifier, roleFilter); 
         if (account && account.data.password === password) {
+            
+            // 🛑 THE BOUNCER: Check if Studio is approved
+            if (account.type === 'STUDIO' && account.data.isAccountApproved === false) {
+                return res.json({ success: false, message: "⏳ Application under review. You will receive an email once Admin approves your account." });
+            }
+
             const userObj = { 
                 name: account.data.name || account.data.ownerName, 
                 mobile: account.data.mobile, 
@@ -1203,6 +1216,47 @@ app.post('/api/auth/search-account', async (req, res) => {
 // ==========================================
 // ✅ ADMIN SPECIFIC LOGIC
 // ==========================================
+
+// 🔥 NEW: Admin Approves Studio Account & Sends Welcome Email
+app.post('/api/auth/approve-studio-account', authenticateToken, async (req, res) => {
+    try {
+        // Sirf admin kar sakta hai
+        if (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: "Unauthorized Action" });
+        }
+
+        const targetMobile = getCleanMobile(req.body.mobile);
+        const { isApproved } = req.body; // true ya false
+
+        const studio = await Studio.findOne({ mobile: targetMobile });
+        if (!studio) return res.json({ success: false, message: "Studio account not found." });
+
+        studio.isAccountApproved = isApproved;
+        await studio.save();
+
+        // 📩 Send Welcome Email if Approved
+        if (isApproved && studio.email && !studio.email.includes('dummy_')) {
+            const htmlContent = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; border-top: 5px solid #2ecc71;">
+                    <h2 style="color: #2ecc71; text-align: center;">Account Approved! 🎉</h2>
+                    <p>Hello <strong>${studio.studioName || studio.ownerName}</strong>,</p>
+                    <p>Congratulations! Your studio partner account request on <strong>Snevio</strong> has been reviewed and approved by our team.</p>
+                    <p>You can now log in to your dashboard to manage clients, upload media, and grow your business.</p>
+                    <div style="text-align: center; margin-top: 25px;">
+                        <a href="${WEBSITE_URL}login" style="background-color: #3498db; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold;">Login to Dashboard</a>
+                    </div>
+                    <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Welcome to the Snevio Network!</p>
+                </div>
+            `;
+            sendBrevoEmail(studio.email, "Your Studio Account is Approved! - Snevio", htmlContent).catch(()=>console.log("Welcome Email Failed"));
+        }
+
+        res.json({ success: true, message: isApproved ? "Studio Account Approved! Email Sent." : "Studio Account Access Revoked." });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server error during approval." });
+    }
+});
 
 app.post('/api/auth/update-studio-approval', async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
