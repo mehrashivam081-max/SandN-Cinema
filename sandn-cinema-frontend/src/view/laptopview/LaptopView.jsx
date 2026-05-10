@@ -26,6 +26,9 @@ const LaptopView = ({
   const [menuOpen, setMenuOpen] = useState(false);
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otpMethod, setOtpMethod] = useState('mobile');
+  
+  // 🔥 Login Role Management
+  const [loginRole, setLoginRole] = useState('USER');
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); 
   const [newEmail, setNewEmail] = useState(''); 
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -96,7 +99,8 @@ const LaptopView = ({
       setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: 'USER' });
+          // 🔄 FIX: Hardcoded 'USER' replaced with loginRole state
+          const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: loginRole });
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
               alert(`OTP Sent successfully via ${methodLabel}`); 
@@ -113,7 +117,8 @@ const LaptopView = ({
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
-          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: 'USER' });
+          // 🔄 FIX: Using loginRole for dynamic role matching
+          const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: loginRole });
           if (res.data.success) {
               setIsFirstTimeUser(res.data.isNewUser);
               setSearchStep(2); 
@@ -128,12 +133,14 @@ const LaptopView = ({
           if (isFirstTimeUser) {
               if (!newEmail) return alert("Email required.");
               if (password !== confirmPassword) return alert("Passwords don't match!");
-              const res = await axios.post(`${API_BASE}/create-password`, { mobile, password, email: newEmail, roleFilter: 'USER' });
+              // 🔄 FIX: Signup role is now dynamic based on selection
+              const res = await axios.post(`${API_BASE}/create-password`, { mobile, password, email: newEmail, roleFilter: loginRole });
               if (res.data.success) { 
                   setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
               } else alert(res.data.message || "Setup Failed");
           } else {
-              const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
+              // 🔄 FIX: Login role is now dynamic (Studio/User)
+              const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: loginRole });
               if (res.data.success) { 
                   setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
               } else alert(res.data.message || "Wrong Password");
@@ -202,14 +209,39 @@ const LaptopView = ({
               background: '#ececec'
           }}>
             
-            {/* LEFT: Menu Icon & Brand Name */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: '0 0 250px' }}>
+            {/* LEFT SECTION: LOGO + LOGIN DROPDOWN */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: '0 0 380px' }}>
                 <div className="menu-icon" onClick={() => setMenuOpen(true)} style={{cursor: 'pointer'}}>
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer', margin: 0, fontSize: '24px', whiteSpace: 'nowrap'}}>
                          S N E <span className="brand-highlight">V I O</span>
                 </h1>
+
+                {/* 🚀 SIMPLE LOGIN BUTTON (No Dropdown) */}
+                <button 
+                    onClick={() => setViewState('AUTH')}
+                    style={{
+                        padding: '8px 25px', 
+                        background: '#fff', 
+                        color: '#333',
+                        border: '1px solid #8a1818', 
+                        borderRadius: '30px', 
+                        cursor: 'pointer',
+                        fontWeight: 'bold', 
+                        fontSize: '13px',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                        position: 'relative',
+                        left: '+70px',
+                        transition: '0.2s',
+                        whiteSpace: 'nowrap'
+                        
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
+                    onMouseLeave={(e) => e.target.style.background = '#fff'}
+                >
+                    Login
+                </button>
             </div>
 
             {/* CENTER: CAPSULE SEARCH BAR (Absolute Centered) */}
