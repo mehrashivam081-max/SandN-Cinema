@@ -7,6 +7,7 @@ import PaymentSuccess from './components/PaymentSuccess'; // पाथ अपन
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
+import StudioPage from './components/StudioPage'; // 👈 NAYA: Studio Trap Page
 
 // ✅ NAYE LEGAL PAGES IMPORTS
 import Terms from './pages/legal/Terms';
@@ -85,11 +86,12 @@ function App() {
       <div className="App">
         <Routes>
           {/* Main Pages */}
-          <Route path="/" element={<MainLanding />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/" element={<MainLanding />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/studio/:studioName" element={<StudioPage />} /> {/* 👈 NAYA: Studio Trap Route */}
 
-          {/* ✅ LEGAL PAGES */}
+          {/* ✅ LEGAL PAGES */}
           <Route path="/contact" element={<ContactUs />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refund" element={<Refund />} />

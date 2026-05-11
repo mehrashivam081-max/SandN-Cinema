@@ -1540,6 +1540,24 @@ const StudioDashboard = ({ user, onLogout }) => {
                     {studioProfile.isFeedApproved && (
                         <span style={{ display:'inline-block', marginTop:'10px', background:'#2ecc71', color:'#fff', fontSize:'11px', padding:'3px 8px', borderRadius:'10px', fontWeight: 'bold' }}>✓ Verified Creator</span>
                     )}
+
+                    {/* 🔥 NAYA: SHARE PORTFOLIO BUTTON 🔥 */}
+                    <button onClick={() => {
+                        // Safe URL generation replacing spaces with hyphens
+                        const safeName = encodeURIComponent((studioProfile.studioName || user.ownerName || 'studio').replace(/\s+/g, '-'));
+                        // Chuki HashRouter use ho raha hai, link me # ayega
+                        const shareLink = `https://snevio.com/#/studio/${safeName}`; 
+                        const shareText = `Hello! Check out our latest photography & cinematic portfolio on Snevio. Book your shoot with us today! ✨📷 \n\nView here: ${shareLink}`;
+                        
+                        if (navigator.share) {
+                            navigator.share({ title: 'Our Studio Portfolio', text: shareText });
+                        } else {
+                            navigator.clipboard.writeText(shareText);
+                            alert("Portfolio Link Copied! Paste & Share on WhatsApp or Instagram.");
+                        }
+                    }} style={{ width: '100%', background: '#f1c40f', color: '#000', border: 'none', padding: '8px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', marginTop: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                        🔗 Share Public Profile
+                    </button>
                 </div>
 
                 <ul className="sidebar-menu">
