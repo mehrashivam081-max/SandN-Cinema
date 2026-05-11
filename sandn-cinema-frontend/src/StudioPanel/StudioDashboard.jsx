@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import './StudioDashboard.css'; 
 import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
+import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -245,7 +246,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         portfolioUrl: user.portfolioUrl || '' 
     });
 
-    // --- 1. FETCH LOGIC & 🔥 GLOBAL AUTO-REFRESH ---
+    // --- 1. FETCH LOGIC & 🔥 REAL-TIME WEBSOCKETS ---
     useEffect(() => {
         if (user && user.mobile) {
             // Initial Fetch
@@ -255,14 +256,27 @@ const StudioDashboard = ({ user, onLogout }) => {
             fetchSubPlans(); // Fetch dynamic plans
             if (studioProfile.isFeedApproved) fetchMyFeedPosts();
 
-            // Background Auto-Refresh (Every 30 Seconds)
-            const refreshInterval = setInterval(() => {
-                console.log("🔄 Studio Auto-Refresh: Syncing data...");
+            // 🚀 SOCKET.IO REAL-TIME CONNECTION
+            const socket = io(SERVER_URL); 
+
+            // Connect hone par apna mobile number bhej kar private "Room" me jud jao
+            socket.on('connect', () => {
+                socket.emit('join_user_room', user.mobile);
+            });
+
+            // 🔥 JAB BHI BACKEND SE SIGNAL AAYE, CHUPCHAAP DATA REFRESH MARO!
+            socket.on('data_updated', (data) => {
+                console.log("⚡ Studio Real-time update received! Fetching fresh data...");
+                fetchMyProfile();
                 fetchClients();
                 fetchStudioBookings();
-            }, 30000);
+                if (studioProfile.isFeedApproved) fetchMyFeedPosts();
+            });
 
-            return () => clearInterval(refreshInterval);
+            // Cleanup Socket on unmount
+            return () => {
+                if (socket) socket.disconnect();
+            };
         }
     }, [user, studioProfile.isFeedApproved]);
 

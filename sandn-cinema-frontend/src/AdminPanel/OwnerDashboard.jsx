@@ -4,6 +4,7 @@ import './OwnerDashboard.css';
 import useBackButton from '../hooks/useBackButton';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
@@ -405,14 +406,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // 🟢 INITIAL FETCH, ADMIN SYNC & 🔥 GLOBAL AUTO-REFRESH
-    useEffect(() => {
-        // 1. Initial Load (Pehli baar page khulte hi data laao)
-        fetchAccounts();
-        fetchPlatformSettings(); 
-        fetchBookings();         
-        fetchCollabs();
-        fetchServices(); 
+    // 🟢 INITIAL FETCH, ADMIN SYNC & 🔥 REAL-TIME WEBSOCKETS
+    useEffect(() => {
+        // 1. Initial Load (Pehli baar page khulte hi data laao)
+        fetchAccounts();
+        fetchPlatformSettings(); 
+        fetchBookings();         
+        fetchCollabs();
+        fetchServices(); 
         fetchAds(); 
         fetchVacancies();
         fetchStorageConfigs(); // ☁️ Load Storage configs
@@ -428,39 +429,54 @@ const OwnerDashboard = ({ user, onLogout }) => {
         fetchAllSelections();
 
         const syncAdminData = async () => {
-            try {
-                let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
-                const res = await axios.post(`${API_BASE}/search-account`, { 
-                    mobile: activeUser?.mobile || "0000000000CODEIS*@OWNER*",
-                    roleFilter: "ADMIN"
-                });
-                if (res.data.success) {
-                    const latestData = res.data.data;
-                    setAdminProfile({
-                        name: latestData.name || 'Owner',
-                        email: latestData.email || '',
-                        password: ''
-                    });
-                    const updatedUser = { ...activeUser, name: latestData.name };
-                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
-                    localStorage.setItem('user', JSON.stringify(updatedUser));
-                }
-            } catch (e) { console.log("Sync failed", e); }
-        };
-        syncAdminData();
+            try {
+                let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
+                const res = await axios.post(`${API_BASE}/search-account`, { 
+                    mobile: activeUser?.mobile || "0000000000CODEIS*@OWNER*",
+                    roleFilter: "ADMIN"
+                });
+                if (res.data.success) {
+                    const latestData = res.data.data;
+                    setAdminProfile({
+                        name: latestData.name || 'Owner',
+                        email: latestData.email || '',
+                        password: ''
+                    });
+                    const updatedUser = { ...activeUser, name: latestData.name };
+                    sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
+                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                }
+            } catch (e) { console.log("Sync failed", e); }
+        };
+        syncAdminData();
 
-        // 2. 🔥 GLOBAL AUTO-REFRESH LOGIC (Background Polling)
-        const refreshInterval = setInterval(() => {
-            console.log("🔄 Global Auto-Refresh: Syncing data...");
-            // Hum sirf un cheezon ko auto-refresh karenge jo frequently change hoti hain (API load bachane ke liye)
-            fetchAccounts(); // Naye users aane par update hoga
-            fetchBookings(); // Nayi booking aane par emergency alert update hoga
-            fetchCollabs();  // Naye requests aane par update hoga
-        }, 30000); // 30,000 milliseconds = 30 seconds
+        // 🚀 SOCKET.IO REAL-TIME CONNECTION FOR ADMIN
+        let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
+        let socket;
 
-        // 3. Cleanup: Jab tab close ho ya logout ho toh background process band kar do
-        return () => clearInterval(refreshInterval);
-    }, [user]);
+        if (activeUser && activeUser.mobile) {
+            socket = io(SERVER_URL); 
+            socket.on('connect', () => {
+                socket.emit('join_user_room', activeUser.mobile);
+                // Admin ko 'admin_room' mein daal do taaki system-wide updates mil sakein
+                socket.emit('join_user_room', 'admin_room');
+            });
+
+            // 🔥 JAB BHI SYSTEM MEIN KUCH NAYA HO, REFRESH MARO!
+            socket.on('data_updated', (data) => {
+                console.log("⚡ Admin Real-time update received! Fetching fresh data...");
+                fetchAccounts(); 
+                fetchBookings(); 
+                fetchCollabs();  
+                fetchAllSelections();
+            });
+        }
+
+        // Cleanup Socket on unmount
+        return () => {
+            if (socket) socket.disconnect();
+        };
+    }, [user]);
 
     useEffect(() => {
         setIncomeData(prev => ({ ...prev, total: accounts.length * 1500 }));
