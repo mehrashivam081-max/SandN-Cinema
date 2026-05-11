@@ -3183,11 +3183,36 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             )}
 
                             {/* FREE COINS TAB */}
-                            {walletTab === 'FREE' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                    <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '0 0 10px 0' }}>Complete tasks to earn free coins without paying!</p>
-                                    
-                                    {/* Default AD Watch Card */}
+                            {walletTab === 'FREE' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '0 0 10px 0' }}>Complete tasks to earn free coins without paying!</p>
+
+                                    {/* 🔥 NAYA: REFER & EARN CARD 🔥 */}
+                                    <div style={{ background: 'linear-gradient(135deg, #8e44ad, #3498db)', padding: '20px', borderRadius: '15px', color: '#fff', textAlign: 'center', position: 'relative', overflow: 'hidden', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.3)' }}>
+                                        <div style={{ position: 'absolute', top: '-10px', right: '-10px', fontSize: '60px', opacity: 0.2 }}>🎁</div>
+                                        <h3 style={{ margin: '0 0 5px 0', fontSize: '18px', color: '#f1c40f' }}>Refer & Earn 50 Coins!</h3>
+                                        <p style={{ margin: '0 0 15px 0', fontSize: '12px', lineHeight: '1.4' }}>Invite your friends or clients to Snevio. They get 20 Coins instantly, and you get 50 Coins when they join!</p>
+                                        
+                                        <div style={{ background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                            <span style={{ fontSize: '12px', color: '#ccc' }}>Your Unique Code:</span>
+                                            <strong style={{ fontSize: '20px', letterSpacing: '2px', color: '#2ecc71' }}>{syncUser?.referralCode || 'SNVO9999'}</strong>
+                                        </div>
+
+                                        <button onClick={() => {
+                                            const refCode = syncUser?.referralCode || 'SNVO9999';
+                                            const shareText = `Hey! Join Snevio for premium photography & cloud storage. Use my referral code *${refCode}* while signing up to get 20 FREE Coins instantly! 🎁 \n\nSign up here: https://snevio.com/login`;
+                                            if (navigator.share) {
+                                                navigator.share({ title: 'Join Snevio', text: shareText });
+                                            } else {
+                                                navigator.clipboard.writeText(shareText);
+                                                alert("Referral Message Copied! Paste and send it to your friends on WhatsApp.");
+                                            }
+                                        }} style={{ width: '100%', background: '#f1c40f', color: '#000', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 10px rgba(241, 196, 15, 0.4)' }}>
+                                            📲 Share on WhatsApp
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Default AD Watch Card */}
                                     <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>

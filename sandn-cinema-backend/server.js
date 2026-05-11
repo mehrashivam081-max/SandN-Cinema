@@ -468,42 +468,96 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
 });
 
-// 3. Signup with OTP Verification 
+// 3. Signup with OTP Verification 
 app.post('/api/auth/signup', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
-    const { type, otp, name, studioName, password, email, location, ...otherData } = req.body;
+    const mobile = getCleanMobile(req.body.mobile); 
+    // 👇 referralCode naya add kiya hai
+    const { type, otp, name, studioName, password, email, location, referralCode, ...otherData } = req.body;
 
-    if (otpStore[`signup_${mobile}`] !== otp) {
-        return res.json({ success: false, message: "Invalid Verification OTP! Registration Failed." });
-    }
+    if (otpStore[`signup_${mobile}`] !== otp) {
+        return res.json({ success: false, message: "Invalid Verification OTP! Registration Failed." });
+    }
 
-    try {
-        const exists = await findAccount(mobile);
-        if (exists) return res.json({ success: false, message: "Mobile already registered" });
+    try {
+        const exists = await findAccount(mobile);
+        if (exists) return res.json({ success: false, message: "Mobile already registered" });
 
-        if (type === 'studio') {
-            await Studio.create({
-                mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
-                isAdhaarVerified: false, 
-                isAccountApproved: false, // 🔴 NAYA: Account banega par locked rahega
-                location, ...otherData
-            });
-        } else {
-            await User.create({
-                mobile, password, email, role: 'USER', name: name, location, ...otherData
-            });
-        }
-        
-        delete otpStore[`signup_${mobile}`]; 
+        // 🚀 REFERRAL & WALLET LOGIC STARTS HERE
+        let initialWallet = { coins: 0, history: [], currentStreak: 0 };
+        let appliedReferrer = null;
+
+        // Har naye user ke liye ek unique Code banao (e.g. AMIT5492)
+        const baseName = (name || studioName || "SNVO").substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'X');
+        const myReferralCode = `${baseName}${Math.floor(1000 + Math.random() * 9000)}`;
+
+        // Agar user ne signup karte waqt kisi aur ka code dala hai
+        if (referralCode && referralCode.trim() !== '') {
+            let referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+            let referrerType = 'USER';
+            if (!referrer) {
+                referrer = await Studio.findOne({ referralCode: referralCode.toUpperCase() });
+                referrerType = 'STUDIO';
+            }
+
+            if (referrer) {
+                appliedReferrer = referrer.mobile;
+                
+                // 🎁 Naye user ko 20 Coins Welcome Bonus do
+                initialWallet.coins = 20;
+                initialWallet.history.push({
+                    action: `Welcome Bonus! Referred by ${referrer.name || referrer.studioName}`,
+                    amount: `+20 Coins`,
+                    date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                    type: "credit"
+                });
+
+                // 💰 Purane user (Referrer) ko 50 Coins Commission do
+                let referrerWallet = referrer.wallet || { coins: 0, history: [], currentStreak: 0 };
+                referrerWallet.coins += 50;
+                referrerWallet.history.unshift({
+                    action: `Referral Bonus! ${name || studioName} joined using your code.`,
+                    amount: `+50 Coins`,
+                    date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                    type: "credit"
+                });
+
+                if (referrerType === 'USER') await User.updateOne({ _id: referrer._id }, { $set: { wallet: referrerWallet } }, { strict: false });
+                else await Studio.updateOne({ _id: referrer._id }, { $set: { wallet: referrerWallet } }, { strict: false });
+            }
+        }
+        // 🚀 REFERRAL LOGIC ENDS HERE
+
+        if (type === 'studio') {
+            await Studio.create({
+                mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
+                isAdhaarVerified: false, 
+                isAccountApproved: false, 
+                location, 
+                referralCode: myReferralCode, // 👈 Saved to DB
+                referredBy: appliedReferrer,  // 👈 Saved to DB
+                wallet: initialWallet,        // 👈 Saved to DB
+                ...otherData
+            });
+        } else {
+            await User.create({
+                mobile, password, email, role: 'USER', name: name, location, 
+                referralCode: myReferralCode, // 👈 Saved to DB
+                referredBy: appliedReferrer,  // 👈 Saved to DB
+                wallet: initialWallet,        // 👈 Saved to DB
+                ...otherData
+            });
+        }
+        
+        delete otpStore[`signup_${mobile}`]; 
 
         // ⚡ SOCKET FIRE: Admin ko batao naya account bana hai!
         const io = req.app.get('io');
         if (io) io.to('admin_room').emit('data_updated', { message: 'New user/studio registered!' });
 
-        res.json({ success: true });
+        res.json({ success: true, message: appliedReferrer ? "Signup successful with Bonus!" : "Signup successful!" });
     } catch (e) {
-        res.status(500).json({ success: false, message: e.message });
-    }
+        res.status(500).json({ success: false, message: e.message });
+    }
 });
 
 // 4. Verify OTP (For Login)
@@ -537,31 +591,85 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
 // 5. Create Password (FOR MANUAL REGISTRATIONS)
 app.post('/api/auth/create-password', async (req, res) => {
-    const identifier = getCleanMobile(req.body.mobile); 
-    const { password, email, roleFilter } = req.body;
-    try {
-        const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
-        let account = await findAccount(identifier, roleFilter);
+    const identifier = getCleanMobile(req.body.mobile); 
+    const { password, email, roleFilter, referralCode } = req.body; // 👈 NAYA: referralCode receive kiya
+    try {
+        const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
+        let account = await findAccount(identifier, roleFilter);
 
-        // ✅ SAFE UPDATE
-        if (account && account.data) {
-            const updateFields = { password };
-            if (email) updateFields.email = email;
-            
-            if (account.type === 'USER') {
-                await User.updateOne(query, { $set: updateFields }, { strict: false });
-            } else if (account.type === 'STUDIO') {
-                await Studio.updateOne(query, { $set: updateFields }, { strict: false });
-            }
-            
-            res.json({ 
-                success: true, 
-                user: { name: account.data.name || account.data.ownerName, mobile: account.data.mobile, role: account.data.role } 
-            });
-        } else {
-            res.json({ success: false, message: "Account not found in this section" });
-        }
-    } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
+        if (account && account.data) {
+            const updateFields = { password };
+            if (email) updateFields.email = email;
+
+            // 🚀 REFERRAL & WALLET LOGIC FOR FIRST TIME SETUP
+            let myWallet = account.data.wallet || { coins: 0, history: [], currentStreak: 0 };
+            
+            // Agar account ka referral code pehle se generate nahi hua hai (Kyunki admin ne add kiya tha)
+            if (!account.data.referralCode) {
+                const baseName = (account.data.name || account.data.ownerName || "SNVO").substring(0, 4).toUpperCase().replace(/[^A-Z]/g, 'X');
+                updateFields.referralCode = `${baseName}${Math.floor(1000 + Math.random() * 9000)}`;
+            }
+
+            // Check if user entered a referral code AND hasn't been referred before
+            if (referralCode && referralCode.trim() !== '' && !account.data.referredBy) {
+                let referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+                let referrerType = 'USER';
+                if (!referrer) {
+                    referrer = await Studio.findOne({ referralCode: referralCode.toUpperCase() });
+                    referrerType = 'STUDIO';
+                }
+
+                if (referrer && referrer.mobile !== account.data.mobile) { // Khud ko refer na kar le
+                    updateFields.referredBy = referrer.mobile;
+                    
+                    // 🎁 Give new user 20 Coins
+                    myWallet.coins += 20;
+                    myWallet.history.push({
+                        action: `Welcome Bonus! Referred by ${referrer.name || referrer.studioName}`,
+                        amount: `+20 Coins`,
+                        date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                        type: "credit"
+                    });
+
+                    // 💰 Give referrer 50 Coins
+                    let referrerWallet = referrer.wallet || { coins: 0, history: [], currentStreak: 0 };
+                    referrerWallet.coins += 50;
+                    referrerWallet.history.unshift({
+                        action: `Referral Bonus! ${account.data.name || account.data.ownerName || 'A user'} joined using your code.`,
+                        amount: `+50 Coins`,
+                        date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                        type: "credit"
+                    });
+
+                    if (referrerType === 'USER') await User.updateOne({ _id: referrer._id }, { $set: { wallet: referrerWallet } }, { strict: false });
+                    else await Studio.updateOne({ _id: referrer._id }, { $set: { wallet: referrerWallet } }, { strict: false });
+                }
+            }
+
+            updateFields.wallet = myWallet; // Save wallet state
+            
+            if (account.type === 'USER') {
+                await User.updateOne(query, { $set: updateFields }, { strict: false });
+            } else if (account.type === 'STUDIO') {
+                await Studio.updateOne(query, { $set: updateFields }, { strict: false });
+            }
+
+            // Get fresh data to return to client
+            const freshAccount = await findAccount(identifier, roleFilter);
+            
+            // 🔒 GENERATE NEW SECURE TOKEN
+            const userObj = { name: freshAccount.data.name || freshAccount.data.ownerName, mobile: freshAccount.data.mobile, role: freshAccount.type };
+            const token = generateToken(userObj);
+            
+            res.json({ 
+                success: true, 
+                token: token, // 👈 Send token back
+                user: freshAccount.data
+            });
+        } else {
+            res.json({ success: false, message: "Account not found in this section" });
+        }
+    } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
 });
 
 // ==========================================

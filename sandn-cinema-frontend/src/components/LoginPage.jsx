@@ -19,9 +19,10 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const [otpMethod, setOtpMethod] = useState(() => sessionStorage.getItem('loginOtpMethod') || 'mobile'); 
     
     const [otp, setOtp] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState(''); 
-    const [newEmail, setNewEmail] = useState(''); 
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState(''); 
+    const [newEmail, setNewEmail] = useState(''); 
+    const [referralCode, setReferralCode] = useState(''); // 👈 NAYA: Referral Code State
     
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -182,12 +183,13 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         setLoading(true); setError('');
 
         try {
-            const res = await axios.post(`${API_BASE}/create-password`, { 
-                mobile: inputValue.trim(), 
-                email: newEmail.trim(),
-                password: password.trim(),
-                roleFilter: activeTab.toUpperCase() 
-            });
+            const res = await axios.post(`${API_BASE}/create-password`, { 
+                mobile: inputValue.trim(), 
+                email: newEmail.trim(),
+                password: password.trim(),
+                roleFilter: activeTab.toUpperCase(),
+                referralCode: referralCode.trim() // 👈 NAYA: Send Code to Backend
+            });
 
             if (res.data.success) {
                 alert("Account Setup Complete! 🎉 Logging you in...");
@@ -313,14 +315,29 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                         </div>
 
                         <div className="input-group">
-                            <label>Confirm Password</label>
-                            <div className="pass-wrapper">
-                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                                <span className="eye-icon" onClick={() => setShowConfirmPass(!showConfirmPass)}>{showConfirmPass ? '🙈' : '👁️'}</span>
-                            </div>
+                            <label>Confirm Password</label>
+                            <div className="pass-wrapper">
+                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                                <span className="eye-icon" onClick={() => setShowConfirmPass(!showConfirmPass)}>{showConfirmPass ? '🙈' : '👁️'}</span>
+                            </div>
+                        </div>
+
+                        {/* 🔥 NAYA: REFERRAL CODE INPUT 🔥 */}
+                        <div className="input-group">
+                            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Referral Code (Optional)</span>
+                                <span style={{ color: '#2ecc71', fontSize: '10px', background: 'rgba(46, 204, 113, 0.1)', padding: '2px 5px', borderRadius: '4px' }}>Get 20 Free Coins!</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder="Enter Invite Code" 
+                                value={referralCode} 
+                                onChange={(e) => setReferralCode(e.target.value.toUpperCase())} 
+                                style={{ textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 'bold' }}
+                            />
                         </div>
 
-                        <button type="submit" className="login-btn" disabled={loading}>COMPLETE SETUP & LOGIN</button>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Setting up...' : 'COMPLETE SETUP & LOGIN'}</button>
                     </form>
                 )}
 
