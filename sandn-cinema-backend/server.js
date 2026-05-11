@@ -2623,6 +2623,46 @@ app.post('/api/auth/view-feed-post', async (req, res) => {
 });
 
 // ==========================================
+// 🌐 24.5 STUDIO MINI-WEBSITE API (THE TRAP)
+// ==========================================
+app.get('/api/auth/studio-page/:studioName', async (req, res) => {
+    try {
+        // 1. URL se Studio ka naam nikalo (Spaces aur special characters theek karke)
+        const searchName = decodeURIComponent(req.params.studioName).replace(/-/g, ' ');
+
+        // 2. Database me Studio ko dhundo (Case insensitive)
+        const studio = await Studio.findOne({ 
+            $or: [ 
+                { studioName: new RegExp(`^${searchName}$`, 'i') }, 
+                { ownerName: new RegExp(`^${searchName}$`, 'i') } 
+            ] 
+        }).select('studioName ownerName location email portfolioUrl profileImage isFeedApproved mobile');
+
+        if (!studio) {
+            return res.json({ success: false, message: "Studio not found! Make sure the link is correct." });
+        }
+
+        // 3. Agar studio mil gaya, toh uski saari Public Feed posts nikal lo
+        const posts = await FeedPost.find({ studioMobile: studio.mobile }).sort({ createdAt: -1 });
+
+        res.json({ 
+            success: true, 
+            studio: {
+                studioName: studio.studioName || studio.ownerName,
+                location: studio.location || 'India',
+                email: studio.email,
+                profileImage: studio.profileImage,
+                isVerified: studio.isFeedApproved
+            },
+            posts: posts 
+        });
+    } catch (err) {
+        console.error("Studio Page Error:", err);
+        res.status(500).json({ success: false, message: "Server Error loading studio profile." });
+    }
+});
+
+// ==========================================
 // 🚀 25. SMART ADVERTISEMENT ENGINE (TARGETED ADS)
 // ==========================================
 
