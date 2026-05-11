@@ -75,14 +75,24 @@ function App() {
           console.error("Session verification failed", e);
         }
       }
-    };
+    };
 
-    verifyDigitalLock();
-    return () => window.removeEventListener('offline', handleOffline);
-  }, []);
+    verifyDigitalLock();
+    return () => window.removeEventListener('offline', handleOffline);
+  }, []);
 
-  return (
-    <Router>
+  // ✅ PWA INSTALL APP LOGIC (GLOBAL PROMPT CATCHER)
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault(); // Browser ka default popup roko
+      window.deferredPrompt = e; // Global variable me save kar lo taki Dashboards use kar sakein
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  return (
+    <Router>
       <div className="App">
         <Routes>
           {/* Main Pages */}
