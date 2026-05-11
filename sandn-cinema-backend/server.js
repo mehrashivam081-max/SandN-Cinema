@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http'); // 👈 NAYA: HTTP module for Socket
+const { Server } = require('socket.io'); // 👈 NAYA: Socket.io
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
@@ -79,6 +81,34 @@ const streamStorage = multer.memoryStorage();
 const uploadStream = multer({ storage: streamStorage, limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB Limit
 
 const app = express();
+const server = http.createServer(app); // 👈 NAYA: Wrap express app in HTTP Server
+
+// 🚀 NAYA: Initialize Socket.io
+const io = new Server(server, {
+    cors: {
+        origin: "*", // ✅ Allow frontend to connect
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    }
+});
+
+// ⚡ Socket Connection Logic
+io.on('connection', (socket) => {
+    console.log('⚡ A user connected:', socket.id);
+
+    // Jab user apna mobile number bhejega, hum use ek private "Room" me daal denge
+    socket.on('join_user_room', (mobile) => {
+        socket.join(mobile);
+        console.log(`👤 User with mobile ${mobile} joined their private room.`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ User disconnected:', socket.id);
+    });
+});
+
+// 🔥 NAYA: 'io' ko poore app me global bana diya taaki kisi bhi API me use kar sakein
+app.set('io', io);
+
 const PORT = process.env.PORT || 5000;
 // NOTE: Database name vahi rehne do taaki purana data na khoye, bas Website URL update karo
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinemaDB';
@@ -1150,10 +1180,14 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
             const uploader = await Studio.findOne({ mobile: req.user.mobile });
             if (uploader && uploader.email && !uploader.email.includes('dummy_')) {
                 sendBrevoEmail(uploader.email, `✅ Upload Successful: ${finalFolderName}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #2ecc71; border-radius: 8px;"><h2 style="color: #2ecc71;">Upload Successful!</h2><p>Data successfully sent and saved for client ${mobile}.</p></div>`).catch(()=>{});
-            }
-        }
+            }
+        }
 
-        return res.json({ success: true, message: responseMessage });
+        // ⚡ SOCKET FIRE: Client ko real-time update bhejo!
+        const io = req.app.get('io');
+        io.to(mobile).emit('data_updated', { message: 'Naya data aaya hai!' });
+
+        return res.json({ success: true, message: responseMessage });
     } catch (e) {
         console.error("DB Insert Error:", e.message);
         
@@ -3917,6 +3951,7 @@ cron.schedule('0 * * * *', async () => {
 });
 
 // --- START SERVER ---
-app.listen(PORT, async () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+// 🛑 PURANA app.listen HATA DIYA, AB server.listen CHALEGA
+server.listen(PORT, async () => {
+    console.log(`🚀 Server (with Socket.io) running on port ${PORT}`);
 });

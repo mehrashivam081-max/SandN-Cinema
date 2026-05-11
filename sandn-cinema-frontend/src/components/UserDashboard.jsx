@@ -6,6 +6,7 @@ import './UserDashboard.css';
 import { calculateDailyReward } from '../utils/coinLogic';
 import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
+import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema.onrender.com/';
