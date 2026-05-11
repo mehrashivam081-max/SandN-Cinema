@@ -494,9 +494,14 @@ app.post('/api/auth/signup', async (req, res) => {
             });
         }
         
-        delete otpStore[`signup_${mobile}`]; 
-        res.json({ success: true });
-    } catch (e) {
+        delete otpStore[`signup_${mobile}`]; 
+
+        // ⚡ SOCKET FIRE: Admin ko batao naya account bana hai!
+        const io = req.app.get('io');
+        if (io) io.to('admin_room').emit('data_updated', { message: 'New user/studio registered!' });
+
+        res.json({ success: true });
+    } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
 });
@@ -1498,9 +1503,13 @@ app.post('/api/auth/create-booking', async (req, res) => {
             status: 'Pending'
         }], { strict: false });
 
-        res.json({ success: true, message: "Booking received successfully!", data: newBooking[0] });
-    } catch (e) {
-        console.error("Booking Error:", e);
+        // ⚡ SOCKET FIRE: Admin ko batao nayi booking aayi hai!
+        const io = req.app.get('io');
+        if (io) io.to('admin_room').emit('data_updated', { message: 'New booking received!' });
+
+        res.json({ success: true, message: "Booking received successfully!", data: newBooking[0] });
+    } catch (e) {
+        console.error("Booking Error:", e);
         res.status(500).json({ success: false, message: "Failed to create booking." });
     }
 });
@@ -2260,8 +2269,12 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
             `<h2 style="color:red;">Emergency Request!</h2><p>Client: ${emergencyBooking.name} (${mobile})</p><p>Location: ${location}</p><p>Reason: ${reason}</p>`
         ).catch(() => console.log("Admin Emergency Email failed"));
 
-        res.json({ success: true, message: "Emergency call initiated!", wallet, data: emergencyBooking });
-    } catch (e) {
+        // ⚡ SOCKET FIRE: Admin ko EMERGENCY alert bhejo!
+        const io = req.app.get('io');
+        if (io) io.to('admin_room').emit('data_updated', { message: '🚨 EMERGENCY BOOKING!' });
+
+        res.json({ success: true, message: "Emergency call initiated!", wallet, data: emergencyBooking });
+    } catch (e) {
         console.error("Emergency Booking Error:", e);
         res.status(500).json({ success: false, message: "Failed to process emergency booking." });
     }
