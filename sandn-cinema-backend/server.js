@@ -986,19 +986,77 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05) => {
 };
 
 // ==============================================================
-// 🛡️ THE SECURE STREAM PROXY UPLOADER (ZERO DISK USAGE)
+// 🛡️ HYBRID CLOUD ENGINE: DIRECT UPLOAD + SECURE STREAM PROXY
 // ==============================================================
 const AWS = require('aws-sdk');
 const cloudinary = require('cloudinary').v2;
-const { Readable } = require('stream'); // 🔥 Native Node.js Stream Module
+const { Readable } = require('stream');
 
-// ⚠️ ध्यान दें: यहाँ 'upload' की जगह 'uploadStream' लगा है!
-app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'), async (req, res) => {
+// 🚀 NEW API: GENERATE DIRECT UPLOAD SIGNATURE (For 12GB+ Files on Cloudinary/AWS)
+app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, res) => {
+    try {
+        const { fileName, fileType, fileSizeGB } = req.body;
+        
+        // 1. Storage Router se Active Cloud Pata Karo
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB || 0.05);
+
+        // 2. 🟢 CLOUDINARY DIRECT UPLOAD
+        if (activeCloud.provider === 'CLOUDINARY') {
+            cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
+            const timestamp = Math.round((new Date).getTime() / 1000);
+            const signature = cloudinary.utils.api_sign_request({ timestamp: timestamp, folder: 'snevio_vault' }, activeCloud.credentials.apiSecret);
+            
+            return res.json({ 
+                success: true, directUpload: true, provider: 'CLOUDINARY', 
+                cloudName: activeCloud.credentials.cloudName, apiKey: activeCloud.credentials.apiKey, timestamp, signature, folder: 'snevio_vault' 
+            });
+        } 
+        // 3. 🟢 AWS S3 / CLOUDFLARE R2 / STORJ DIRECT UPLOAD (Pre-Signed URL)
+        else if (['AWS_S3', 'CLOUDFLARE_R2', 'STORJ'].includes(activeCloud.provider)) {
+            const s3 = new AWS.S3({
+                accessKeyId: activeCloud.credentials.apiKey, secretAccessKey: activeCloud.credentials.apiSecret, region: activeCloud.credentials.region || 'us-east-1', signatureVersion: 'v4',
+                endpoint: activeCloud.provider === 'STORJ' ? 'https://gateway.storjshare.io' : (activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined)
+            });
+
+            const cleanFileName = fileName ? fileName.replace(/\s+/g, '_') : 'snevio_media';
+            const fileKey = `snevio_vault/${Date.now()}_${cleanFileName}`;
+            
+            // Generate a 1-Hour Valid URL for Frontend to push file directly
+            const signedUrl = await s3.getSignedUrlPromise('putObject', { 
+                Bucket: activeCloud.credentials.bucketName, Key: fileKey, Expires: 3600, ContentType: fileType || 'application/octet-stream', ACL: 'public-read' 
+            });
+            
+            return res.json({ 
+                success: true, directUpload: true, provider: activeCloud.provider, 
+                signedUrl, publicUrl: signedUrl.split('?')[0] // URL which client will save after upload
+            });
+        } 
+        
+        // 4. 🔴 IMGBB OR MEGA (Direct upload dangerous/not supported, fallback to Proxy Stream)
+        return res.json({ success: true, directUpload: false, provider: activeCloud.provider, message: "Use Proxy Stream for this provider." });
+
+    } catch (error) {
+        console.error("Signature Gen Error:", error);
+        res.status(500).json({ success: false, message: "Failed to generate upload signature." });
+    }
+});
+
+// ==============================================================
+// 🛡️ SECURE STREAM PROXY UPLOADER (For MEGA/IMGBB or Small Files)
+// ==============================================================
+app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: "No file provided" });
         
         const isImage = req.file.mimetype.startsWith('image/');
         const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
+        const filePath = req.file.path; 
+
+        // 🛑 STRICT 100MB LIMIT FOR PROXY (Saves Render Server from Dying!)
+        if (req.file.size > 100 * 1024 * 1024) { 
+            fs.unlinkSync(filePath);
+            return res.status(413).json({ success: false, message: "File too large! For files > 100MB, the system requires AWS or Cloudinary Direct Upload." });
+        }
 
         // 🛡️ STUDIO STORAGE LIMIT CHECK
         if (req.user && req.user.role === 'STUDIO') {
@@ -1008,6 +1066,7 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
                 const used = studioData.usedStorageGB || 0;
                 
                 if (used + fileSizeGB > allocated) {
+                    fs.unlinkSync(filePath); 
                     return res.status(403).json({ success: false, message: `Storage Limit Exceeded! You have used ${used.toFixed(2)}GB of your ${allocated}GB plan.` });
                 }
             }
@@ -1017,16 +1076,14 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
         let uploadedUrl = '';
         let previewUrl = '';
 
-        console.log(`☁️ Secure Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
+        console.log(`☁️ Secure Proxy Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
 
         const skipPreview = req.body.skipPreview === 'true';
-        let originalBuffer = req.file.buffer; // 🔥 FIX: Direct RAM से फाइल पढ़ रहे हैं, Disk से नहीं!
         let watermarkedBuffer = null;
 
-        // 🎨 WATERMARK PROCESSING (RAM के अंदर ही)
+        // 🎨 WATERMARK PROCESSING
         if (isImage && !skipPreview) {
-            console.log("🎨 Processing Watermark for preview image...");
-            const image = sharp(originalBuffer);
+            const image = sharp(filePath);
             const metadata = await image.metadata();
             
             const finalWidth = Math.min(metadata.width, 800);
@@ -1043,100 +1100,67 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
                 .toBuffer();
         }
 
-        // 🚀 CLOUD UPLOAD LOGIC (BUFFER/STREAM BASED)
-        if (activeCloud.provider === 'IMGBB') {
-            const originalBase64 = originalBuffer.toString('base64');
-            const imgbbResOriginal = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: originalBase64 }));
-            uploadedUrl = imgbbResOriginal.data.data.url;
+        // 🚀 CLOUD UPLOAD LOGIC
+        if (activeCloud.provider === 'CLOUDINARY') {
+            cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
+            
+            const uploadToCloudinary = (fileLoc) => {
+                return new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        { resource_type: 'auto', chunk_size: 8000000 }, 
+                        (error, result) => { if (result) resolve(result); else reject(error); }
+                    );
+                    fs.createReadStream(fileLoc).pipe(stream);
+                });
+            };
 
-            if (isImage && watermarkedBuffer) {
-                const previewBase64 = watermarkedBuffer.toString('base64');
-                const imgbbResPreview = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: previewBase64 }));
-                previewUrl = imgbbResPreview.data.data.url;
-            } else {
-                previewUrl = uploadedUrl; 
-            }
-        } else if (activeCloud.provider === 'CLOUDINARY') {
-            cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
-            
-            // 🔥 CLOUDINARY CHUNKED STREAM PIPE LOGIC (BYPASSES 10MB LIMIT)
-            const uploadToCloudinary = (bufferData) => {
-                return new Promise((resolve, reject) => {
-                    const stream = cloudinary.uploader.upload_stream(
-                        { 
-                            resource_type: 'auto',
-                            chunk_size: 8000000 // 👈 MAGIC: 8MB ke tukde karega, 10MB limit se bachne ke liye!
-                        }, 
-                        (error, result) => {
-                            if (result) resolve(result); else reject(error);
-                        }
-                    );
-                    Readable.from(bufferData).pipe(stream);
-                });
-            };
-
-            const result = await uploadToCloudinary(originalBuffer);
-            uploadedUrl = result.secure_url;
-            
-            if (isImage && !skipPreview) {
+            const result = await uploadToCloudinary(filePath);
+            uploadedUrl = result.secure_url;
+            
+            if (isImage && !skipPreview) {
                 const uploadIndex = uploadedUrl.indexOf('/upload/');
                 previewUrl = `${uploadedUrl.slice(0, uploadIndex + 8)}c_scale,w_800,q_auto/l_text:Arial_60_bold:SNEVIO PREVIEW,co_white,o_50,a_-30/${uploadedUrl.slice(uploadIndex + 8)}`;
             } else {
                 previewUrl = uploadedUrl;
             }
-        } else if (activeCloud.provider === 'MEGA') {
-            const megaStorage = await new Storage({ email: activeCloud.credentials.apiKey, password: activeCloud.credentials.apiSecret }).ready;
-            const megaFile = await megaStorage.upload(req.file.originalname, originalBuffer).complete;
-            uploadedUrl = await megaFile.link();
+        } else {
+            const originalBuffer = fs.readFileSync(filePath);
             
-            if (isImage && watermarkedBuffer) {
-                const megaPreviewFile = await megaStorage.upload(`preview_${req.file.originalname}`, watermarkedBuffer).complete;
-                previewUrl = await megaPreviewFile.link();
-            } else {
-                previewUrl = uploadedUrl;
-            }
-        } else if (['AWS_S3', 'CLOUDFLARE_R2', 'STORJ'].includes(activeCloud.provider)) {
-            const s3 = new AWS.S3({
-                accessKeyId: activeCloud.credentials.apiKey,
-                secretAccessKey: activeCloud.credentials.apiSecret,
-                region: activeCloud.credentials.region || 'us-east-1',
-                endpoint: activeCloud.provider === 'STORJ' ? 'https://gateway.storjshare.io' : (activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined)
-            });
-            
-            const originalParams = { Bucket: activeCloud.credentials.bucketName, Key: `snevio_vault/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`, Body: originalBuffer, ACL: 'public-read' };
-            const originalResult = await s3.upload(originalParams).promise();
-            uploadedUrl = originalResult.Location;
-
-            if (isImage && watermarkedBuffer) {
-                const previewParams = { Bucket: activeCloud.credentials.bucketName, Key: `snevio_preview/${Date.now()}_prev_${req.file.originalname.replace(/\s+/g, '_')}`, Body: watermarkedBuffer, ACL: 'public-read', ContentType: 'image/jpeg' };
-                const previewResult = await s3.upload(previewParams).promise();
-                previewUrl = previewResult.Location;
-            } else {
-                previewUrl = uploadedUrl;
+            if (activeCloud.provider === 'IMGBB') {
+                const originalBase64 = originalBuffer.toString('base64');
+                const imgbbResOriginal = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: originalBase64 }));
+                uploadedUrl = imgbbResOriginal.data.data.url;
+                previewUrl = (isImage && watermarkedBuffer) ? (await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: watermarkedBuffer.toString('base64') }))).data.data.url : uploadedUrl;
+            } else if (activeCloud.provider === 'MEGA') {
+                const megaStorage = await new Storage({ email: activeCloud.credentials.apiKey, password: activeCloud.credentials.apiSecret }).ready;
+                const megaFile = await megaStorage.upload(req.file.originalname, originalBuffer).complete;
+                uploadedUrl = await megaFile.link();
+                previewUrl = (isImage && watermarkedBuffer) ? await (await megaStorage.upload(`preview_${req.file.originalname}`, watermarkedBuffer).complete).link() : uploadedUrl;
+            } else if (['AWS_S3', 'CLOUDFLARE_R2', 'STORJ'].includes(activeCloud.provider)) {
+                const s3 = new AWS.S3({
+                    accessKeyId: activeCloud.credentials.apiKey, secretAccessKey: activeCloud.credentials.apiSecret, region: activeCloud.credentials.region || 'us-east-1',
+                    endpoint: activeCloud.provider === 'STORJ' ? 'https://gateway.storjshare.io' : (activeCloud.provider === 'CLOUDFLARE_R2' ? activeCloud.credentials.cloudName : undefined)
+                });
+                
+                const originalParams = { Bucket: activeCloud.credentials.bucketName, Key: `snevio_vault/${Date.now()}_${req.file.originalname.replace(/\s+/g, '_')}`, Body: fs.createReadStream(filePath), ACL: 'public-read' };
+                uploadedUrl = (await s3.upload(originalParams).promise()).Location;
+                previewUrl = (isImage && watermarkedBuffer) ? (await s3.upload({ Bucket: activeCloud.credentials.bucketName, Key: `snevio_preview/${Date.now()}_prev_${req.file.originalname.replace(/\s+/g, '_')}`, Body: watermarkedBuffer, ACL: 'public-read', ContentType: 'image/jpeg' }).promise()).Location : uploadedUrl;
             }
         }
 
-        // 3. Update Storage Counters
         activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + fileSizeGB).toFixed(4));
         await activeCloud.save();
 
-        if (req.user && req.user.role === 'STUDIO') {
-            await Studio.updateOne({ mobile: req.user.mobile }, { $inc: { usedStorageGB: fileSizeGB } }, { strict: false });
-        }
+        if (req.user && req.user.role === 'STUDIO') await Studio.updateOne({ mobile: req.user.mobile }, { $inc: { usedStorageGB: fileSizeGB } }, { strict: false });
+
+        // 🧹 TEMP FILE CLEANUP
+        if (fs.existsSync(filePath)) { fs.unlinkSync(filePath); console.log(`🧹 Disk space cleared.`); }
 
         res.json({ success: true, url: uploadedUrl, previewUrl: previewUrl || uploadedUrl, provider: activeCloud.provider });
 
     } catch (error) {
         console.error("🚨 CLOUD UPLOAD CRASHED!");
-        
-        // Axios Error pakadne ka ninja tareeqa (Fixed Scope Bug)
-        if (error.response) {
-            console.error("👉 STATUS CODE:", error.response.status);
-            console.error("👉 EXACT REASON:", JSON.stringify(error.response.data, null, 2));
-        } else {
-            console.error("👉 SYSTEM ERROR:", error.message);
-        }
-
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); 
         res.status(500).json({ success: false, message: "Secure upload failed. Check logs." });
     }
 });
