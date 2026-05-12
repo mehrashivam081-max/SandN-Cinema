@@ -728,32 +728,77 @@ const StudioDashboard = ({ user, onLogout }) => {
                             attempt++;
                             loadedBytesArray[globalIndex] = 0; // Fresh start for retry
 
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            fd.append('skipPreview', 'true');
+                            // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
+                            const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                                fileName: file.name, fileType: file.type, fileSizeGB: file.size / (1024 * 1024 * 1024)
+                            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
-                            const res = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                signal: controller.signal, 
-                                onUploadProgress: (progressEvent) => {
-                                    if (progressEvent.lengthComputable) {
-                                        loadedBytesArray[globalIndex] = progressEvent.loaded;
-                                        // 🚀 NEW: Update individual file progress (0-100)
-                                        fileProgressRef.current[globalIndex] = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                                    }
+                            // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)
+                            if (sigRes.data.directUpload) {
+                                let finalUrl = '';
+                                
+                                if (sigRes.data.provider === 'CLOUDINARY') {
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    formData.append('api_key', sigRes.data.apiKey);
+                                    formData.append('timestamp', sigRes.data.timestamp);
+                                    formData.append('signature', sigRes.data.signature);
+                                    formData.append('folder', sigRes.data.folder);
+
+                                    const cloudinaryUpload = await axios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
+                                        onUploadProgress: (e) => {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = cloudinaryUpload.data.secure_url;
+                                } 
+                                else {
+                                    // AWS S3 / STORJ / R2 Direct PUT
+                                    await axios.put(sigRes.data.signedUrl, file, {
+                                        headers: { 'Content-Type': file.type },
+                                        onUploadProgress: (e) => {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = sigRes.data.publicUrl;
                                 }
-                            });
-                            
-                            // 🛠️ Lock at 100% when success
-                            loadedBytesArray[globalIndex] = file.size;
-                            fileProgressRef.current[globalIndex] = 100;
-                            
-                            successData = isFeed ? res.data.url : { 
-                                url: res.data.url, 
-                                subFolder: file.customSubFolder || targetSubFolder || 'Main Event' 
-                            };
-                            break; 
-                        } catch (err) {
+
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef.current[globalIndex] = 100;
+                                
+                                successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                                break; // Success!
+                            } 
+                            // 🔴 STEP 2B: PROXY UPLOAD (FOR MEGA / IMGBB)
+                            else {
+                                if (file.size > 100 * 1024 * 1024) {
+                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
+                                    throw new Error("File too large for proxy.");
+                                }
+
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('skipPreview', 'true');
+
+                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                                    signal: controller.signal, 
+                                    onUploadProgress: (e) => {
+                                        loadedBytesArray[globalIndex] = e.loaded;
+                                        fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                    }
+                                });
+
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef.current[globalIndex] = 100;
+                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                                break; // Success!
+                            }
+                        } catch (err) {
                             if (axios.isCancel(err)) throw err; 
                             
                             if (!navigator.onLine) {
