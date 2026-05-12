@@ -78,7 +78,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // --- UI STATES ---
     const [currentTab, setCurrentTab] = useState('HOME');
-    const [loading, setLoading] = useState(true); 
+    const [loading, setLoading] = useState(true); 
+    const [showInstallBanner, setShowInstallBanner] = useState(false); // 👈 NAYA: Banner hide/show
     const [showExitPopup, setShowExitPopup] = useState(false);
     
     // --- USER SYNCED DATA (REAL-TIME) ---
@@ -408,6 +409,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return () => clearInterval(refreshInterval);
     }, [user?.mobile]);
 
+    // ⏳ 15 SECOND TIMER FOR INSTALL POPUP
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            // Check karo agar browser ne install allow kiya hai aur app pehle se installed nahi hai
+            if (window.deferredPrompt) {
+                setShowInstallBanner(true);
+            }
+        }, 15000); // 15000ms = 15 Seconds
+
+        return () => clearTimeout(timer);
+    }, []);
 
     const fetchSharedMedia = async (userMobile) => {
         setFetchingShared(true);
@@ -3667,15 +3679,41 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             )}
 
             {/* 🔥 NAYA: ZEN MODE EXIT INDICATOR (Shows only when Focus Mode is active) */}
-            {activeSelectionProject && (
-                <div onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); setSelectionDraft([]); }} style={{ position: 'fixed', bottom: '15px', left: '50%', transform: 'translateX(-50%)', background: '#34495e', color: '#fff', padding: '8px 20px', borderRadius: '30px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 105, cursor: 'pointer' }}>
-                    🧘‍♂️ Focus Mode Active <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '15px' }}>Tap to Exit</span>
+            {activeSelectionProject && (
+                <div onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); setSelectionDraft([]); }} style={{ position: 'fixed', bottom: '15px', left: '50%', transform: 'translateX(-50%)', background: '#34495e', color: '#fff', padding: '8px 20px', borderRadius: '30px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 105, cursor: 'pointer' }}>
+                    🧘‍♂️ Focus Mode Active <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '15px' }}>Tap to Exit</span>
+                </div>
+            )}
+
+            {/* 📱 SMART BOTTOM INSTALL BANNER (15s Timer) */}
+            {showInstallBanner && (
+                <div style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '400px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', padding: '15px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1000, boxShadow: '0 -5px 25px rgba(0,0,0,0.5)', border: '1px solid #3498db', animation: 'slideUp 0.5s ease-out' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '45px', height: '45px', background: '#f1c40f', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>📸</div>
+                        <div>
+                            <h4 style={{ margin: 0, color: '#fff', fontSize: '14px' }}>Install Snevio App</h4>
+                            <p style={{ margin: 0, color: '#aaa', fontSize: '11px' }}>For faster access & offline viewing</p>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button onClick={() => setShowInstallBanner(false)} style={{ background: 'transparent', border: 'none', color: '#777', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Later</button>
+                        <button onClick={async () => {
+                            setShowInstallBanner(false);
+                            const promptEvent = window.deferredPrompt;
+                            if (promptEvent) {
+                                promptEvent.prompt();
+                                const { outcome } = await promptEvent.userChoice;
+                                console.log(`User Choice: ${outcome}`);
+                                window.deferredPrompt = null;
+                            }
+                        }} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>Install</button>
+                    </div>
                 </div>
             )}
 
-            {/* 🔥 NAYA: ZEN MODE - Hide Nav Bar when inside Selection Album to avoid distraction */}
-            {!activeSelectionProject && (
-            <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
+            {/* 🔥 NAYA: ZEN MODE - Hide Nav Bar when inside Selection Album to avoid distraction */}
+            {!activeSelectionProject && (
+            <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
                 <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
                     🏠<span>Home</span>
                 </button>
