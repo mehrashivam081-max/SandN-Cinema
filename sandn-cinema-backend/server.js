@@ -1057,22 +1057,28 @@ app.post('/api/auth/proxy-upload', authenticateToken, uploadStream.single('file'
                 previewUrl = uploadedUrl; 
             }
         } else if (activeCloud.provider === 'CLOUDINARY') {
-            cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
-            
-            // 🔥 CLOUDINARY STREAM PIPE LOGIC (सबसे खतरनाक और तेज़)
-            const uploadToCloudinary = (bufferData) => {
-                return new Promise((resolve, reject) => {
-                    const stream = cloudinary.uploader.upload_stream({ resource_type: 'auto' }, (error, result) => {
-                        if (result) resolve(result); else reject(error);
-                    });
-                    Readable.from(bufferData).pipe(stream);
-                });
-            };
+            cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
+            
+            // 🔥 CLOUDINARY CHUNKED STREAM PIPE LOGIC (BYPASSES 10MB LIMIT)
+            const uploadToCloudinary = (bufferData) => {
+                return new Promise((resolve, reject) => {
+                    const stream = cloudinary.uploader.upload_stream(
+                        { 
+                            resource_type: 'auto',
+                            chunk_size: 8000000 // 👈 MAGIC: 8MB ke tukde karega, 10MB limit se bachne ke liye!
+                        }, 
+                        (error, result) => {
+                            if (result) resolve(result); else reject(error);
+                        }
+                    );
+                    Readable.from(bufferData).pipe(stream);
+                });
+            };
 
-            const result = await uploadToCloudinary(originalBuffer);
-            uploadedUrl = result.secure_url;
-            
-            if (isImage && !skipPreview) {
+            const result = await uploadToCloudinary(originalBuffer);
+            uploadedUrl = result.secure_url;
+            
+            if (isImage && !skipPreview) {
                 const uploadIndex = uploadedUrl.indexOf('/upload/');
                 previewUrl = `${uploadedUrl.slice(0, uploadIndex + 8)}c_scale,w_800,q_auto/l_text:Arial_60_bold:SNEVIO PREVIEW,co_white,o_50,a_-30/${uploadedUrl.slice(uploadIndex + 8)}`;
             } else {
