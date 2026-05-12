@@ -1115,36 +1115,89 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 }
 
                 const uploadTask = (async () => {
-                    let attempt = 0;
-                    const maxAttempts = 3;
-                    while (attempt < maxAttempts) {
-                        try {
-                            attempt++;
-                            loadedBytesArray[globalIndex] = 0; 
-                            
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            fd.append('skipPreview', 'true'); 
-                            
-                            const res = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                signal: controller.signal,
-                                onUploadProgress: (progressEvent) => {
-                                    if (progressEvent.lengthComputable) {
-                                        loadedBytesArray[globalIndex] = progressEvent.loaded;
-                                        // 🚀 NEW: Update individual file progress
-                                        fileProgressRef[globalIndex] = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                                    }
-                                }
-                            });
-                            
-                            // 🛠️ Lock at 100% when success
-                            loadedBytesArray[globalIndex] = file.size;
-                            fileProgressRef[globalIndex] = 100;
+                    let attempt = 0;
+                    const maxAttempts = 3;
+                    let successData = null;
 
-                            return isFeed ? res.data.url : { url: res.data.url };
+                    while (attempt < maxAttempts) {
+                        try {
+                            attempt++;
+                            loadedBytesArray[globalIndex] = 0; 
+
+                            // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
+                            const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                                fileName: file.name, fileType: file.type, fileSizeGB: file.size / (1024 * 1024 * 1024)
+                            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
+
+                            // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)
+                            if (sigRes.data.directUpload) {
+                                let finalUrl = '';
+                                
+                                if (sigRes.data.provider === 'CLOUDINARY') {
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    formData.append('api_key', sigRes.data.apiKey);
+                                    formData.append('timestamp', sigRes.data.timestamp);
+                                    formData.append('signature', sigRes.data.signature);
+                                    formData.append('folder', sigRes.data.folder);
+
+                                    const cloudinaryUpload = await axios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
+                                        onUploadProgress: (e) => {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = cloudinaryUpload.data.secure_url;
+                                } 
+                                else {
+                                    // AWS S3 / STORJ / R2 Direct PUT
+                                    await axios.put(sigRes.data.signedUrl, file, {
+                                        headers: { 'Content-Type': file.type },
+                                        onUploadProgress: (e) => {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = sigRes.data.publicUrl;
+                                }
+
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef[globalIndex] = 100;
+                                
+                                successData = isFeed ? finalUrl : { url: finalUrl };
+                                break; // Success!
+                            } 
+                            // 🔴 STEP 2B: PROXY UPLOAD (FOR MEGA / IMGBB)
+                            else {
+                                if (file.size > 100 * 1024 * 1024) {
+                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
+                                    throw new Error("File too large for proxy.");
+                                }
+
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('skipPreview', 'true'); 
+
+                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                                    signal: controller.signal, 
+                                    onUploadProgress: (e) => {
+                                        if (e.lengthComputable) {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        }
+                                    }
+                                });
+
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef[globalIndex] = 100;
+                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url };
+                                break; // Success!
+                            }
                         } catch (err) {
-                            if (axios.isCancel(err)) throw err;
+                            if (axios.isCancel(err)) throw err; 
                             
                             if (!navigator.onLine) {
                                 if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: 'Paused (Offline) ⚠️' } : job));
@@ -1154,13 +1207,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     const goOnline = () => { window.removeEventListener('online', goOnline); res(); };
                                     window.addEventListener('online', goOnline);
                                 });
-                                attempt--;
+                                attempt--; 
                             } else {
+                                console.error(`🚨 Error on [${file.name}]:`, err.message);
                                 if (attempt >= maxAttempts) { loadedBytesArray[globalIndex] = 0; return null; }
                                 await new Promise(resolve => setTimeout(resolve, 3000));
                             }
                         }
                     }
+                    return successData;
                 })();
 
                 activePromises.add(uploadTask);
