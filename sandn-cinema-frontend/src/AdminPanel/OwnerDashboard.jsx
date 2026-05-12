@@ -1166,7 +1166,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 loadedBytesArray[globalIndex] = file.size;
                                 fileProgressRef[globalIndex] = 100;
                                 
-                                successData = isFeed ? finalUrl : { url: finalUrl };
+                                // ✅ 100% PERFECT OWNER DASHBOARD LOGIC RE-ADDED
+                                successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; // Success!
                             } 
                             // 🔴 STEP 2B: PROXY UPLOAD (FOR MEGA / IMGBB)
@@ -1193,7 +1194,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                                 loadedBytesArray[globalIndex] = file.size;
                                 fileProgressRef[globalIndex] = 100;
-                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url };
+                                
+                                // ✅ 100% PERFECT OWNER DASHBOARD LOGIC RE-ADDED
+                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; // Success!
                             }
                         } catch (err) {
