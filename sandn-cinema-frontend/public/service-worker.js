@@ -1,12 +1,9 @@
-const CACHE_NAME = 'snevio-v2'; // 👈 NAYA: v1 ko v2 kar diya taaki naya cache bane
+const CACHE_NAME = 'snevio-v3'; // Version 3
 const urlsToCache = ['/', '/index.html'];
 
-// 1. Install & Force Update
+// 1. Install
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-  );
-  self.skipWaiting(); // 👈 NAYA: Turant naya worker activate hoga
+  self.skipWaiting();
 });
 
 // 2. Activate & Clean Old Garbage
@@ -17,7 +14,7 @@ self.addEventListener('activate', event => {
         cacheNames.map(cache => {
           if (cache !== CACHE_NAME) {
             console.log('🗑️ Clearing old cache:', cache);
-            return caches.delete(cache); // 👈 NAYA: Purana cache uda dega
+            return caches.delete(cache);
           }
         })
       );
@@ -26,9 +23,17 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// 3. Fetch Data
+// 3. Smart Fetch (Ignore Google APIs & POST requests)
 self.addEventListener('fetch', event => {
+  // 🔥 FIREWALL: Sirf apni website (same origin) aur GET requests ko handle karo
+  // Google, Firebase, Cloudinary ya POST API calls ko bypass kar do!
+  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    return; 
+  }
+
   event.respondWith(
-    caches.match(event.request).then(response => response || fetch(event.request))
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request);
+    })
   );
 });
