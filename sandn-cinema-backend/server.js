@@ -935,17 +935,33 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 });
 
 
-// ✅ NEW API: Update Cloud Routing Rules
+// 🚦 UPDATE SMART CLOUD ROUTING RULES (FREE VS PAID)
 app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) => {
     try {
-        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
-        await PlatformSetting.updateOne(
-            { settingId: 'GLOBAL' }, 
-            { $set: { cloudRouting: req.body } }, 
-            { upsert: true }
-        );
-        res.json({ success: true, message: "Smart Cloud Routing Settings Updated!" });
-    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+        // Sirf Owner/Admin hi change kar sakta hai
+        if (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
+
+        const { freeCloudId, paidCloudId, freeMaxFileMB, paidMaxFileMB, defaultFreeStorageGB } = req.body;
+
+        // Platform Settings dhoondo (agar nahi hai toh naya banao)
+        let settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+        if (!settings) settings = new PlatformSetting({ settingId: 'GLOBAL' });
+
+        // Naye Rules Save Karo (Koi kachra save nahi hoga)
+        settings.cloudRouting = { 
+            freeCloudId: freeCloudId || '', 
+            paidCloudId: paidCloudId || '', 
+            freeMaxFileMB: freeMaxFileMB || 100, 
+            paidMaxFileMB: paidMaxFileMB || 2048, 
+            defaultFreeStorageGB: defaultFreeStorageGB || 5 
+        };
+
+        await settings.save();
+        res.json({ success: true, message: "✅ Smart Cloud Routing Rules Saved Permanently!" });
+    } catch (error) {
+        console.error("Cloud Routing Save Error:", error);
+        res.status(500).json({ success: false, message: "Server error saving routing rules." });
+    }
 });
 
 // ==============================================================
