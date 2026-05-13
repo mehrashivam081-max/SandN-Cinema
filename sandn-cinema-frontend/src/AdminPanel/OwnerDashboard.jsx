@@ -511,9 +511,19 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setFormData(prev => ({ ...prev, imageCost: globalRates.imageCost, videoCost: globalRates.videoCost }));
                 }
                 if (res.data.data.coinPackages) setCoinPackages(res.data.data.coinPackages);
-                if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
-                if (res.data.data.cloudRouting) setCloudRoutingForm(res.data.data.cloudRouting);
-            }
+                if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
+                
+                // 🔥 THE FIX: Safely merge DB data into the form state so it survives refresh
+                if (res.data.data.cloudRouting) {
+                    setCloudRoutingForm(prev => ({
+                        freeCloudId: res.data.data.cloudRouting.freeCloudId || '',
+                        paidCloudId: res.data.data.cloudRouting.paidCloudId || '',
+                        freeMaxFileMB: res.data.data.cloudRouting.freeMaxFileMB || prev.freeMaxFileMB,
+                        paidMaxFileMB: res.data.data.cloudRouting.paidMaxFileMB || prev.paidMaxFileMB,
+                        defaultFreeStorageGB: res.data.data.cloudRouting.defaultFreeStorageGB || prev.defaultFreeStorageGB
+                    }));
+                }
+            }
         } catch(e) { console.log("No settings found yet"); }
     };
 
