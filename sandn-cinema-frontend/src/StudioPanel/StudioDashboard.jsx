@@ -2145,52 +2145,38 @@ const StudioDashboard = ({ user, onLogout }) => {
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {(() => {
-                                    // 🔥 NEW SMART LOGIC: Real Folder Data se History banayenge (100% Accurate)
-                                    let allUploads = [];
-                                    clients.forEach(client => {
-                                        if (client.uploadedData && Array.isArray(client.uploadedData)) {
-                                            client.uploadedData.forEach(folder => {
-                                                allUploads.push({
-                                                    action: `📁 Uploaded '${folder.folderName}' for ${client.name || client.mobile}`,
-                                                    date: folder.createdAt ? new Date(folder.createdAt).toLocaleString('en-IN') : 'Recently',
-                                                    timestamp: folder.createdAt ? new Date(folder.createdAt).getTime() : Date.now(),
-                                                    amount: `${folder.files ? folder.files.length : 0} Media Files`
-                                                });
-                                            });
-                                        }
-                                    });
-                                    // Naye uploads sabse upar aayenge
-                                    allUploads.sort((a, b) => b.timestamp - a.timestamp);
-
-                                    const filteredLogs = allUploads.filter(log => log.action.toLowerCase().includes(uploadLogSearch.toLowerCase()));
+                                {(() => {
+                                    // 🔥 ULTIMATE FIX: Fetching Real History directly from Backend Wallet Logs (Includes Normal + Smart Albums)
+                                    const uploadHistory = (studioProfile?.wallet?.history || []).filter(item => item.type === 'upload');
+                                    
+                                    const filteredLogs = uploadHistory.filter(log => log.action.toLowerCase().includes(uploadLogSearch.toLowerCase()) || (log.amount && log.amount.toLowerCase().includes(uploadLogSearch.toLowerCase())));
 
                                     if (filteredLogs.length === 0) return <p style={{ textAlign: 'center', color: '#999', fontSize: '12px', padding: '10px 0' }}>No upload history found.</p>;
 
                                     return (
-                                        <>
-                                            {filteredLogs.slice(0, uploadLogLimit).map((log, idx) => (
-                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad' }}>
-                                                    <div>
-                                                        <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>{log.action}</p>
-                                                        <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{log.date}</p>
-                                                    </div>
-                                                    {log.amount && (
-                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', padding: '4px 8px', borderRadius: '6px' }}>
-                                                            {log.amount}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {filteredLogs.length > uploadLogLimit && (
-                                                <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                    Show More 👇
-                                                </button>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-                            </div>
+                                        <>
+                                            {filteredLogs.slice(0, uploadLogLimit).map((log, idx) => (
+                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
+                                                    <div>
+                                                        <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>{log.action}</p>
+                                                        <p style={{ margin: 0, fontSize: '11px', color: '#7f8c8d' }}>🕒 {log.date}</p>
+                                                    </div>
+                                                    {log.amount && (
+                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', border: '1px solid rgba(142, 68, 173, 0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                                                            {log.amount}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {filteredLogs.length > uploadLogLimit && (
+                                                <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>
+                                                    Show More 👇
+                                                </button>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         </div>
 
                     </div>
