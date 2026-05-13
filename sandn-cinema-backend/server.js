@@ -1304,18 +1304,18 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
         // 1. Log for the Uploader (Studio or Owner)
         if (req.user && req.user.mobile) {
             if (req.user.role === 'STUDIO') {
-                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile}`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "upload" }], $position: 0 } }});
+                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile}`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "upload" }], $position: 0 } }}, { strict: false });
             } else if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
-                await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile} (📁 ${finalFolderName})`, time: new Date() }], $position: 0 } }});
+                await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile} (📁 ${finalFolderName})`, time: new Date() }], $position: 0 } }}, { strict: false });
             }
         }
 
         // 2. Log for the Receiver (Client or another Studio)
         const receiverRole = existingAccount ? existingAccount.type : (type || 'USER');
         if (receiverRole === 'STUDIO') {
-            await Studio.updateOne({ mobile: mobile }, { $push: { "wallet.history": { $each: [{ action: `Received ${filePaths.length} new files`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "received" }], $position: 0 } }});
+            await Studio.updateOne({ mobile: mobile }, { $push: { "wallet.history": { $each: [{ action: `Received ${filePaths.length} new files`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "received" }], $position: 0 } }}, { strict: false });
         } else {
-            await User.updateOne({ mobile: mobile }, { $push: { "wallet.history": { $each: [{ action: `Received ${filePaths.length} new files`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "received" }], $position: 0 } }});
+            await User.updateOne({ mobile: mobile }, { $push: { "wallet.history": { $each: [{ action: `Received ${filePaths.length} new files`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "received" }], $position: 0 } }}, { strict: false });
         }
 
         // 3. Email Notification to Uploader
@@ -3268,16 +3268,16 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         // 1. Log for Studio/Admin (Sender)
         if (req.user && req.user.mobile) {
             if (req.user.role === 'STUDIO') {
-                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Created Album Selection for ${clientMobile}`, amount: `📂 ${folderName}`, date: dateStr, type: "upload" }], $position: 0 } }});
+                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Created Album Selection for ${clientMobile}`, amount: `📂 ${folderName}`, date: dateStr, type: "upload" }], $position: 0 } }}, { strict: false });
             } else if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
-                await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Created Album Selection for ${clientMobile} (📂 ${folderName})`, time: new Date() }], $position: 0 } }});
+                await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Created Album Selection for ${clientMobile} (📂 ${folderName})`, time: new Date() }], $position: 0 } }}, { strict: false });
             }
         }
 
         // 2. Log for Client (Receiver)
         const clientCleanMobile = getCleanMobile(clientMobile);
-        await User.updateOne({ mobile: clientCleanMobile }, { $push: { "wallet.history": { $each: [{ action: `Received Album Selection Link`, amount: `📂 ${folderName}`, date: dateStr, type: "received" }], $position: 0 } }});
-
+        await User.updateOne({ mobile: clientCleanMobile }, { $push: { "wallet.history": { $each: [{ action: `Received Album Selection Link`, amount: `📂 ${folderName}`, date: dateStr, type: "received" }], $position: 0 } }}, { strict: false });
+        
         // ✅ UPLOADER SUCCESS NOTIFICATION
         if (req.user && req.user.role === 'STUDIO') {
             const uploader = await Studio.findOne({ mobile: req.user.mobile });
