@@ -1155,7 +1155,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     formData.append('signature', sigRes.data.signature);
                                     formData.append('folder', sigRes.data.folder);
 
-                                    const cloudinaryUpload = await axios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
+                                    // 🔥 NAYA: Fresh Axios instance to bypass global Snevio tokens!
+                                    const cleanAxios = axios.create();
+                                    delete cleanAxios.defaults.headers.common['Authorization'];
+                                    
+                                    const cloudinaryUpload = await cleanAxios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
                                         onUploadProgress: (e) => {
                                             loadedBytesArray[globalIndex] = e.loaded;
                                             fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
@@ -1166,7 +1170,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 } 
                                 else {
                                     // AWS S3 / STORJ / R2 Direct PUT
-                                    await axios.put(sigRes.data.signedUrl, file, {
+                                    // 🔥 NAYA: Fresh Axios for AWS as well
+                                    const cleanAxios = axios.create();
+                                    delete cleanAxios.defaults.headers.common['Authorization'];
+                                    
+                                    await cleanAxios.put(sigRes.data.signedUrl, file, {
                                         headers: { 'Content-Type': file.type },
                                         onUploadProgress: (e) => {
                                             loadedBytesArray[globalIndex] = e.loaded;
