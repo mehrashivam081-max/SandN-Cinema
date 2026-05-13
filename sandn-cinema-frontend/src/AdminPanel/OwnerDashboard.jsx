@@ -1227,7 +1227,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 attempt--; 
                             } else {
                                 console.error(`🚨 Error on [${file.name}]:`, err.message);
-                                if (attempt >= maxAttempts) { loadedBytesArray[globalIndex] = 0; return null; }
+                                if (attempt >= maxAttempts) { 
+                                    loadedBytesArray[globalIndex] = 0; 
+                                    fileProgressRef[globalIndex] = -1; // ❌ MARK AS FAILED
+                                    return null; 
+                                }
                                 await new Promise(resolve => setTimeout(resolve, 3000));
                             }
                         }
@@ -1247,14 +1251,42 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
             // 🛑 Aakhri files ka wait karo
             await Promise.all(activePromises);
-
             clearInterval(speedTracker);
+
+            // 🔥 AUTO-RETRY LOGIC FOR ADMIN
+            const failedFilesList = currentFiles.filter((f, i) => fileProgressRef[i] === -1).map(f => f.name);
+            const failedFilesCount = failedFilesList.length;
+
+            if (failedFilesCount > 0) {
+                if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: `⚠️ ${failedFilesCount} failed`, eta: 'Action Required' } : job));
+                else { setUploadSpeed(`⚠️ ${failedFilesCount} files failed`); setUploadETA('Waiting for your permission...'); }
+
+                const userWantsRetry = window.confirm(`⚠️ ${failedFilesCount} files failed due to network drop.\n\nDo you want the system to Auto-Retry them right now?\n\n✅ Click 'OK' to Retry failed files.\n❌ Click 'Cancel' to skip them and save the successful files to the database.`);
+                
+                if (userWantsRetry) {
+                    if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '🔄 Retrying...', progress: 0 } : job));
+                    return handleUpload(isFeed);
+                } else {
+                    console.log("Skipping failed files. Proceeding to DB save...");
+                }
+            }
+
+            if (uploadedUrls.length === 0 && failedFilesCount === 0) {
+                if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Cloud Error.' } : job));
+                else { setLoading(false); alert("❌ All uploads failed."); }
+                return;
+            }
 
             if (!isFeed) {
                 setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: 'Saving to Database...', speed: '', eta: '' } : job));
             } else {
                 setUploadProgress(100); setUploadSpeed('Finalizing...'); setUploadETA('Saving Data to Server...');
             }
+
+            // 📊 Generate Upload Report
+            const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
+
+            // 💾 3. SAVE TO DATABASE
 
             // ✅ IF UPLOADING TO PUBLIC FEED
             if (isFeed) {
@@ -1300,6 +1332,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
             // ✅ IF UPLOADING TO CLIENT FOLDER
             payloadData.fileUrls = uploadedUrls;
+            payloadData.uploadReport = uploadReportData; // 🔥 NAYA: Injecting Report
 
             const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData, {
                 headers: { 'Authorization': `Bearer ${getValidToken()}` }
@@ -1669,6 +1702,33 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const totalStudios = accounts.filter(a => a.role === 'STUDIO').length;
 
     const emergencyPendingCountVal = bookings.filter(b => (b.type === 'Emergency Booking' || b.isEmergency) && b.status === 'Pending').length;
+
+    // 📄 PDF GENERATOR FOR FAILED UPLOADS (ADMIN)
+    const generateFailedReportPDF = (log) => {
+        if (!log.report) return alert("No report data available for this upload.");
+        try {
+            const doc = new jsPDF();
+            doc.setFontSize(18); doc.setTextColor(231, 76, 60);
+            doc.text("Snevio Admin - Upload Failure Report", 14, 20);
+            doc.setFontSize(12); doc.setTextColor(50);
+            doc.text(`Date: ${log.date}`, 14, 30);
+            doc.text(`Action: ${log.action}`, 14, 38);
+            doc.text(`Folder: ${log.amount || 'N/A'}`, 14, 46);
+            doc.setFontSize(14); doc.setTextColor(41, 128, 185);
+            doc.text("Upload Statistics:", 14, 60);
+            doc.setFontSize(12); doc.setTextColor(0);
+            doc.text(`Total Files Attempted: ${log.report.total}`, 14, 70);
+            doc.text(`Successfully Uploaded: ${log.report.success}`, 14, 78);
+            doc.setTextColor(231, 76, 60); 
+            doc.text(`Failed Files: ${log.report.failed}`, 14, 86);
+            
+            if (log.report.failedNames && log.report.failedNames.length > 0) {
+                const tableData = log.report.failedNames.map((name, index) => [index + 1, name, "Network / Cloud Timeout"]);
+                autoTable(doc, { startY: 95, head: [['#', 'Failed File Name', 'Reason']], body: tableData, headStyles: { fillColor: [231, 76, 60] } });
+            }
+            doc.save(`Admin_Failed_Upload_Report_${Date.now()}.pdf`);
+        } catch (err) { console.error(err); alert("Error generating PDF."); }
+    };
 
     return (
         <div className="owner-dashboard-container">
@@ -2176,14 +2236,21 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #f39c12, #e74c3c)', height: '100%', transition: 'width 0.3s ease' }}></div>
                                         </div>
                                         <div style={{ textAlign: 'center', marginTop: '15px' }}>
-                                            <button type="button" onClick={handleStopUpload} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                🛑 Stop Upload
-                                            </button>
-                                        </div>
+                                            <button type="button" onClick={handleStopUpload} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                🛑 Stop Upload
+                                            </button>
+                                        </div>
+                                        {/* 🛑 FAILURES RETRY ACTION FOR FEED */}
+                                        {uploadSpeed.includes('failed') && !loading && (
+                                            <div style={{ background: '#fdf2e9', padding: '15px', borderRadius: '8px', marginTop: '15px', border: '1px dashed #e67e22', textAlign: 'center' }}>
+                                                <p style={{ margin: '0 0 10px 0', color: '#d35400', fontWeight: 'bold', fontSize: '13px' }}>⚠️ Some files failed to upload</p>
+                                                <button type="button" onClick={() => handleUpload(true)} style={{ background: '#e67e22', color: '#fff', padding: '8px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🔄 Retry Failed Files</button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
-                                <div style={{ display: 'flex', gap: '10px' }}>
+                                <div style={{ display: 'flex', gap: '10px' }}>
                                     {editingAdId && <button type="button" onClick={() => {setEditingAdId(null); setAdForm({ title: '', location: 'ALL', interest: 'ALL', link: '', maxViews: '0' });}} style={{ background: '#95a5a6', color: '#fff', border: 'none', padding: '15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>}
                                     <button type="submit" disabled={loading} className="global-update-btn" style={{ background: editingAdId ? '#2ecc71' : '#f39c12', padding: '15px', marginTop: editingAdId ? 0 : '10px', flex: 1 }}>
                                         {loading ? 'Processing...' : (editingAdId ? '💾 Update Live Ad' : '🚀 Publish Smart Ad Campaign')}
@@ -2693,19 +2760,35 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 {(() => {
-                                    // 🔥 NEW SMART LOGIC: Real Folder Data se History banayenge (100% Accurate)
+                                    // 🔥 ULTIMATE FIX: Fetching Real History directly from Backend Logs across all accounts + Admin Logs
                                     let allUploads = [];
+                                    
+                                    // 1. Admin's own uploads
+                                    const adminLogs = user?.logs || [];
+                                    adminLogs.forEach(log => {
+                                        allUploads.push({
+                                            action: log.action,
+                                            date: log.time ? new Date(log.time).toLocaleString('en-IN') : 'Recently',
+                                            timestamp: log.time ? new Date(log.time).getTime() : Date.now(),
+                                            amount: log.amount,
+                                            report: log.report
+                                        });
+                                    });
+
+                                    // 2. Users & Studios uploads
                                     accounts.forEach(client => {
-                                        if (client.uploadedData && Array.isArray(client.uploadedData)) {
-                                            client.uploadedData.forEach(folder => {
-                                                allUploads.push({
-                                                    action: `📁 Uploaded '${folder.folderName}' to ${client.name || client.mobile}`,
-                                                    date: folder.createdAt ? new Date(folder.createdAt).toLocaleString('en-IN') : 'Recently',
-                                                    timestamp: folder.createdAt ? new Date(folder.createdAt).getTime() : Date.now(),
-                                                    amount: `${folder.files ? folder.files.length : 0} Media Files`
-                                                });
+                                        const rawHistory = client.wallet?.history || [];
+                                        const userUploads = rawHistory.filter(item => item.type === 'received' || (item.action && (item.action.includes('pload') || item.action.includes('Album'))));
+                                        
+                                        userUploads.forEach(log => {
+                                            allUploads.push({
+                                                action: `${log.action} (User: ${client.name || client.mobile})`,
+                                                date: log.date || (log.time ? new Date(log.time).toLocaleString('en-IN') : 'Recently'),
+                                                timestamp: log.time ? new Date(log.time).getTime() : (log.date ? new Date(log.date).getTime() : Date.now()),
+                                                amount: log.amount,
+                                                report: log.report
                                             });
-                                        }
+                                        });
                                     });
                                     // Naye uploads sabse upar aayenge
                                     allUploads.sort((a, b) => b.timestamp - a.timestamp);
@@ -2717,17 +2800,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     return (
                                         <>
                                             {filteredLogs.slice(0, uploadLogLimit).map((log, idx) => (
-                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad' }}>
+                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
                                                     <div>
                                                         <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>{log.action}</p>
-                                                        <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>
-                                                            {new Date(log.time).toLocaleString('en-IN')}
-                                                        </p>
+                                                        <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>🕒 {log.date}</p>
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                                                        {log.amount && (
+                                                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', padding: '4px 8px', borderRadius: '6px' }}>
+                                                                {log.amount}
+                                                            </div>
+                                                        )}
+                                                        {log.report && log.report.failed > 0 && (
+                                                            <button onClick={() => generateFailedReportPDF(log)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(231,76,60,0.3)' }}>
+                                                                📄 Download Error Report
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
                                             {filteredLogs.length > uploadLogLimit && (
-                                                <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>
                                                     Show More 👇
                                                 </button>
                                             )}
@@ -2767,28 +2860,68 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             </div>
 
                                             {/* Progress Bar Display */}
-                                            {job.progress < 100 && !job.status.includes('❌') && !job.status.includes('🛑') && (
-                                                <>
-                                                    <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '8px', overflow: 'hidden', marginBottom: '5px' }}>
-                                                        <div style={{ width: `${job.progress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
-                                                    </div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d', fontWeight: 'bold' }}>
-                                                        <span>⚡ {job.speed}</span>
-                                                        <span style={{ color: '#f1c40f' }}>{job.stats}</span>
-                                                        <span>⏳ {job.eta}</span>
-                                                    </div>
-                                                    {/* 🛑 NAYA: Stop Button */}
-                                                    <div style={{ textAlign: 'center', marginTop: '10px' }}>
-                                                        <button onClick={() => handleStopJob(job.id)} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '4px 12px', borderRadius: '15px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                                            🛑 Cancel Upload
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
+                                            {(() => {
+                                                let successCount = 0;
+                                                let failCount = 0;
+                                                let pendingCount = 0;
+                                                const failedFilesList = [];
+                                                
+                                                (job.files || []).forEach((f, i) => {
+                                                    const prog = job.fileProgressMap ? job.fileProgressMap[i] : 0;
+                                                    if (prog === 100) successCount++;
+                                                    else if (prog === -1) { failCount++; failedFilesList.push(f.name); }
+                                                    else pendingCount++;
+                                                });
 
-                                            <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 'bold', color: job.status.includes('Completed') ? '#27ae60' : (job.status.includes('❌') || job.status.includes('🛑')) ? '#e74c3c' : '#e67e22' }}>
-                                                {job.status}
-                                            </div>
+                                                return (
+                                                    <>
+                                                        {job.progress < 100 && !job.status.includes('❌') && !job.status.includes('🛑') && (
+                                                            <>
+                                                                <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '8px', overflow: 'hidden', marginBottom: '5px' }}>
+                                                                    <div style={{ width: `${job.progress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                                                </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7f8c8d', fontWeight: 'bold' }}>
+                                                                    <span>⚡ {job.speed}</span>
+                                                                    <span style={{ color: '#f1c40f' }}>{job.stats}</span>
+                                                                    <span>⏳ {job.eta}</span>
+                                                                </div>
+                                                                {job.liveActionText && (
+                                                                    <div style={{ marginTop: '10px', padding: '8px', background: '#f5f6fa', borderRadius: '5px', fontSize: '11px', color: '#2c3e50', borderLeft: '3px solid #3498db', fontWeight: 'bold' }}>
+                                                                        🔄 {job.liveActionText}
+                                                                    </div>
+                                                                )}
+                                                                {/* 🛑 Stop Button */}
+                                                                <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                                                                    <button onClick={() => handleStopJob(job.id)} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '4px 12px', borderRadius: '15px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                                        🛑 Cancel Upload
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+
+                                                        {/* 📊 SUCCESS / FAIL STATS */}
+                                                        {job.files && job.files.length > 0 && (
+                                                            <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                                                <div style={{ flex: 1, background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>✅ {successCount} Uploaded</div>
+                                                                <div style={{ flex: 1, background: '#fdedec', border: '1px solid #e74c3c', color: '#c0392b', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>❌ {failCount} Failed</div>
+                                                                <div style={{ flex: 1, background: '#ebf5fb', border: '1px solid #3498db', color: '#2980b9', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>⏳ {pendingCount} Queued</div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 🛑 FAILURES LIST */}
+                                                        {failCount > 0 && job.progress >= 100 && (
+                                                            <div style={{ background: '#fdf2e9', padding: '10px', borderRadius: '8px', marginTop: '10px', border: '1px dashed #e67e22', textAlign: 'center' }}>
+                                                                <p style={{ margin: '0 0 8px 0', color: '#d35400', fontWeight: 'bold', fontSize: '11px' }}>⚠️ Some files failed to upload</p>
+                                                                <button onClick={() => alert(`FAILED FILES:\n\n${failedFilesList.join('\n')}`)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px' }}>👁️ View Failed Files</button>
+                                                            </div>
+                                                        )}
+
+                                                        <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 'bold', color: job.status.includes('Completed') ? '#27ae60' : (job.status.includes('❌') || job.status.includes('🛑') || job.status.includes('failed')) ? '#e74c3c' : '#e67e22' }}>
+                                                            {job.status}
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     ))}
                                 </div>
