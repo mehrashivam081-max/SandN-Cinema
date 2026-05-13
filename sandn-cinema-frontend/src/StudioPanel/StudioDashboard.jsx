@@ -747,71 +747,76 @@ const StudioDashboard = ({ user, onLogout }) => {
 
                                     const cloudinaryUpload = await axios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
                                         onUploadProgress: (e) => {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                        },
-                                        signal: controller.signal
-                                    });
-                                    finalUrl = cloudinaryUpload.data.secure_url;
-                                } 
-                                else {
-                                    // AWS S3 / STORJ / R2 Direct PUT
-                                    await axios.put(sigRes.data.signedUrl, file, {
-                                        headers: { 'Content-Type': file.type },
-                                        onUploadProgress: (e) => {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                        },
-                                        signal: controller.signal
-                                    });
-                                    finalUrl = sigRes.data.publicUrl;
-                                }
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            // 🔥 NAYA: 'file.name' mapping index ki jagah
+                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = cloudinaryUpload.data.secure_url;
+                                } 
+                                else {
+                                    await axios.put(sigRes.data.signedUrl, file, {
+                                        headers: { 'Content-Type': file.type },
+                                        onUploadProgress: (e) => {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                        },
+                                        signal: controller.signal
+                                    });
+                                    finalUrl = sigRes.data.publicUrl;
+                                }
 
-                                loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef.current[globalIndex] = 100;
-                                
-                                successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; // Success!
-                            } 
-                            // 🔴 STEP 2B: PROXY UPLOAD (FOR MEGA / IMGBB)
-                            else {
-                                if (file.size > 100 * 1024 * 1024) {
-                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
-                                    throw new Error("File too large for proxy.");
-                                }
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef.current[file.name] = 100;
+                                successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                                break; 
+                            } 
+                            else {
+                                if (file.size > 100 * 1024 * 1024) {
+                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
+                                    throw new Error("File too large for proxy.");
+                                }
 
-                                const fd = new FormData();
-                                fd.append('file', file);
-                                fd.append('skipPreview', 'true');
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('skipPreview', 'true'); 
 
-                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                    signal: controller.signal, 
-                                    onUploadProgress: (e) => {
-                                        loadedBytesArray[globalIndex] = e.loaded;
-                                        fileProgressRef.current[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                    }
-                                });
+                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                                    signal: controller.signal, 
+                                    onUploadProgress: (e) => {
+                                        if (e.lengthComputable) {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                        }
+                                    }
+                                });
 
-                                loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef.current[globalIndex] = 100;
-                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; // Success!
-                            }
-                        } catch (err) {
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef.current[file.name] = 100;
+                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                                break; 
+                            }
+                        } catch (err) {
                             if (axios.isCancel(err)) throw err; 
                             
                             if (!navigator.onLine) {
-                                setUploadSpeed('Paused (No Internet) ⚠️');
-                                setUploadETA('Waiting for connection...');
-                                await new Promise(resolve => {
-                                    const goOnline = () => { window.removeEventListener('online', goOnline); resolve(); };
+                                if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: 'Paused (Offline) ⚠️' } : job));
+                                else setUploadSpeed('Paused (No Internet) ⚠️');
+                                
+                                await new Promise(res => {
+                                    const goOnline = () => { window.removeEventListener('online', goOnline); res(); };
                                     window.addEventListener('online', goOnline);
                                 });
                                 attempt--; 
                             } else {
-                                console.error(`🚨 Error on [${file.name}]:`, err.response?.data || err.message);
-                                if (attempt >= maxAttempts) { loadedBytesArray[globalIndex] = 0; return null; }
+                                console.error(`🚨 Error on [${file.name}]:`, err.message);
+                                if (attempt >= maxAttempts) { 
+                                    loadedBytesArray[globalIndex] = 0; 
+                                    fileProgressRef.current[file.name] = -1; // ❌ MARK AS FAILED
+                                    return null; 
+                                }
                                 await new Promise(resolve => setTimeout(resolve, 3000));
                             }
                         }
@@ -819,16 +824,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                     return successData;
                 })();
 
-                // Task shuru hote hi active list me daalo
                 activePromises.add(uploadTask);
-
-                // Jaise hi task khatam ho, usko list se nikal do aur draft save karo
                 uploadTask.then(data => {
                     activePromises.delete(uploadTask);
                     if (data) {
                         uploadedUrls.push(data);
-                        
-                        // 💾 Save individual progress for smart resume instantly
                         if (!isFeed) {
                             alreadyUploadedNames.push(file.name);
                             const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
@@ -836,18 +836,44 @@ const StudioDashboard = ({ user, onLogout }) => {
                             setPendingResumeState(updatedDraft);
                         }
                     }
-                }).catch(() => {
-                    activePromises.delete(uploadTask);
-                });
+                }).catch(() => activePromises.delete(uploadTask));
             }
 
-            // 🛑 Loop khatam hone ke baad bachi hui aakhri files ka wait karo
+            // 🛑 Aakhri files ka wait karo
             await Promise.all(activePromises);
-
             clearInterval(speedTracker); 
+            
+            // 🔥 THE ENTERPRISE SUGGESTION: AUTO-RETRY LOGIC AT THE END
+            const failedFilesCount = filesToUpload.filter(f => fileProgressRef.current[f.name] === -1).length;
+            
+            if (failedFilesCount > 0) {
+                setUploadSpeed(`⚠️ ${failedFilesCount} files failed`);
+                setUploadETA('Waiting for your permission...');
+                setFileProgressMap({ ...fileProgressRef.current });
+
+                // 🧠 Ask user for permission to auto-retry
+                const userWantsRetry = window.confirm(`⚠️ ${failedFilesCount} files failed due to network drop.\n\nDo you want the system to Auto-Retry them right now?\n\n✅ Click 'OK' to Retry failed files.\n❌ Click 'Cancel' to skip them and save the successfully uploaded files to the database.`);
+                
+                if (userWantsRetry) {
+                    // 🪄 RECURSION MAGIC: System will call handleUpload again, and our smart filter will AUTOMATICALLY skip the successful ones and ONLY retry the failed ones!
+                    return handleUpload(isFeed);
+                } else {
+                    // User clicked Cancel. They want to skip failures and proceed with whatever is successfully uploaded.
+                    console.log("Skipping failed files. Proceeding to DB save for successful ones...");
+                }
+            }
+
+            // If we reach here, either 100% files uploaded, OR user chose to skip failures
+            if (uploadedUrls.length === 0 && !isResuming) {
+                setLoading(false);
+                return alert("❌ All uploads failed. Please check your cloud configuration.");
+            }
+
             setUploadProgress(100);
             setUploadSpeed('Finalizing...');
-            setUploadETA('Saving Data to Server...');
+            setUploadETA('Saving Data to Database...');
+
+            // 💾 3. SAVE TO DATABASE
 
             // ✅ IF UPLOADING TO PUBLIC FEED
             if (isFeed) {
@@ -2053,77 +2079,113 @@ const StudioDashboard = ({ user, onLogout }) => {
                                     )}
                                 </div>
 
-                                {/* ✅ PER-FILE PROGRESS BLOCK (CLIENT UPLOAD) */}
-                                {loading && (
-                                    <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
-                                            <span>{uploadProgress === 100 ? 'Saving to Database...' : `Cloud Upload... ${uploadProgress}%`}</span>
-                                            <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
-                                        </div>
-                                        <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
-                                            <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px', fontWeight: 'bold' }}>
-                                            <span style={{ color: '#f1c40f' }}>{uploadStats}</span>
-                                            <span style={{ color: '#e67e22' }}>⏳ {uploadETA}</span>
-                                        </div>
+                                {/* ✅ SMART PER-FILE PROGRESS & RETRY BLOCK (CLIENT UPLOAD) */}
+                                {(loading || (pendingResumeState && !loading && uploadSpeed.includes('failures'))) && (() => {
+                                    let successCount = 0;
+                                    let failCount = 0;
+                                    let pendingCount = 0;
+                                    const failedFilesList = [];
+                                    
+                                    files.forEach(f => {
+                                        const prog = fileProgressMap[f.name];
+                                        const isAlreadyDone = pendingResumeState?.uploadedFiles?.includes(f.name);
                                         
-                                        {/* 🔄 LIVE ACTION TEXT */}
-                                        {liveActionText && (
-                                            <div style={{ marginTop: '10px', padding: '8px', background: '#f5f6fa', borderRadius: '5px', fontSize: '11px', color: '#2c3e50', borderLeft: '3px solid #3498db', fontWeight: 'bold' }}>
-                                                🔄 {liveActionText}
-                                            </div>
-                                        )}
-                                        
-                                        {/* 🛑 Stop Upload Button */}
-                                        <div style={{ textAlign: 'center', marginTop: '15px' }}>
-                                            <button 
-                                                onClick={handleStopUpload} 
-                                                style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}
-                                            >
-                                                🛑 Stop Upload
-                                            </button>
-                                        </div>
-                                        
-                                        <div style={{marginTop: '15px', maxHeight: '200px', overflowY: 'auto', borderTop: '1px solid #eee', paddingTop: '10px'}}>
-                                            <p style={{fontSize: '11px', color: '#888', fontWeight: 'bold', margin: '0 0 10px 0'}}>PER FILE UPLOAD STATUS:</p>
-                                            {files.map((f, i) => {
-                                                const fileProg = fileProgressMap[i] || 0;
-                                                let statusColor = '#f39c12'; 
-                                                let statusText = '⏳ Queued';
-                                                
-                                                if (fileProg > 0 && fileProg < 100) {
-                                                    statusColor = '#3498db'; 
-                                                    statusText = `🚀 ${fileProg}%`;
-                                                } else if (fileProg === 100) {
-                                                    statusColor = '#2ecc71'; 
-                                                    statusText = '✅ Done';
-                                                }
+                                        if (prog === 100 || isAlreadyDone) successCount++;
+                                        else if (prog === -1) { failCount++; failedFilesList.push(f.name); }
+                                        else pendingCount++;
+                                    });
 
-                                                return (
-                                                    <div key={i} style={{ padding: '8px', background: '#fff', marginBottom: '5px', borderRadius: '6px', border: '1px solid #eee', fontSize: '11px', color: '#444', position: 'relative', overflow: 'hidden' }}>
-                                                        {/* Background Live Loading Bar */}
-                                                        <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${fileProg}%`, background: fileProg === 100 ? 'rgba(46, 204, 113, 0.15)' : 'rgba(52, 152, 219, 0.15)', transition: 'width 0.3s ease', zIndex: 0 }}></div>
-                                                        
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-                                                            <div style={{width: '70%', display: 'flex', flexDirection: 'column'}}>
-                                                                <span style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: fileProg > 0 ? 'bold' : 'normal'}}>
-                                                                    📄 {f.name}
-                                                                </span>
-                                                                {f.customSubFolder && (
-                                                                    <span style={{fontSize: '9px', color: '#888', marginTop: '2px'}}>📂 {f.customSubFolder}</span>
-                                                                )}
-                                                            </div>
-                                                            <span style={{ color: statusColor, fontWeight: 'bold', background: '#fff', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${statusColor}` }}>
-                                                                {statusText}
-                                                            </span>
-                                                        </div>
+                                    return (
+                                        <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>
+                                                <span>{uploadProgress === 100 ? 'Saving to Database...' : `Cloud Upload... ${uploadProgress}%`}</span>
+                                                <span style={{ color: '#3498db' }}>{uploadSpeed}</span>
+                                            </div>
+                                            <div style={{ width: '100%', background: '#eee', borderRadius: '10px', height: '12px', overflow: 'hidden' }}>
+                                                <div style={{ width: `${uploadProgress}%`, background: 'linear-gradient(90deg, #3498db, #2ecc71)', height: '100%', transition: 'width 0.3s ease' }}></div>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '12px', fontWeight: 'bold' }}>
+                                                <span style={{ color: '#f1c40f' }}>{uploadStats}</span>
+                                                <span style={{ color: '#e67e22' }}>⏳ {uploadETA}</span>
+                                            </div>
+                                            
+                                            {/* 🔄 LIVE ACTION TEXT */}
+                                            {liveActionText && loading && (
+                                                <div style={{ marginTop: '10px', padding: '8px', background: '#f5f6fa', borderRadius: '5px', fontSize: '11px', color: '#2c3e50', borderLeft: '3px solid #3498db', fontWeight: 'bold' }}>
+                                                    🔄 {liveActionText}
+                                                </div>
+                                            )}
+
+                                            {/* 📊 SUCCESS / FAIL STATS */}
+                                            <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                                <div style={{ flex: 1, background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '8px', borderRadius: '6px', textAlign: 'center', fontSize: '11px', fontWeight: 'bold' }}>✅ {successCount} Uploaded</div>
+                                                <div style={{ flex: 1, background: '#fdedec', border: '1px solid #e74c3c', color: '#c0392b', padding: '8px', borderRadius: '6px', textAlign: 'center', fontSize: '11px', fontWeight: 'bold' }}>❌ {failCount} Failed</div>
+                                                <div style={{ flex: 1, background: '#ebf5fb', border: '1px solid #3498db', color: '#2980b9', padding: '8px', borderRadius: '6px', textAlign: 'center', fontSize: '11px', fontWeight: 'bold' }}>⏳ {pendingCount} Queued</div>
+                                            </div>
+
+                                            {/* 🛑 FAILURES RETRY ACTION */}
+                                            {failCount > 0 && !loading && (
+                                                <div style={{ background: '#fdf2e9', padding: '15px', borderRadius: '8px', marginTop: '15px', border: '1px dashed #e67e22', textAlign: 'center' }}>
+                                                    <p style={{ margin: '0 0 10px 0', color: '#d35400', fontWeight: 'bold', fontSize: '13px' }}>⚠️ Some files failed to upload</p>
+                                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                                        <button onClick={() => handleUpload(false)} style={{ background: '#e67e22', color: '#fff', padding: '8px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>🔄 Retry Failed Files</button>
+                                                        <button onClick={() => alert(`FAILED FILES:\n\n${failedFilesList.join('\n')}`)} style={{ background: 'transparent', color: '#e74c3c', textDecoration: 'underline', border: 'none', padding: '8px 15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>👁️ View List</button>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
+                                                </div>
+                                            )}
+                                            
+                                            {/* 🛑 Stop Upload Button */}
+                                            {loading && (
+                                                <div style={{ textAlign: 'center', marginTop: '15px' }}>
+                                                    <button onClick={handleStopUpload} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>
+                                                        🛑 Stop Upload
+                                                    </button>
+                                                </div>
+                                            )}
+                                            
+                                            <div style={{marginTop: '15px', maxHeight: '200px', overflowY: 'auto', borderTop: '1px solid #eee', paddingTop: '10px'}}>
+                                                <p style={{fontSize: '11px', color: '#888', fontWeight: 'bold', margin: '0 0 10px 0'}}>PER FILE UPLOAD STATUS:</p>
+                                                {files.map((f, i) => {
+                                                    const fileProg = fileProgressMap[f.name] || (pendingResumeState?.uploadedFiles?.includes(f.name) ? 100 : 0);
+                                                    let statusColor = '#f39c12'; 
+                                                    let statusText = '⏳ Queued';
+                                                    
+                                                    if (fileProg > 0 && fileProg < 100) {
+                                                        statusColor = '#3498db'; 
+                                                        statusText = `🚀 ${fileProg}%`;
+                                                    } else if (fileProg === 100) {
+                                                        statusColor = '#2ecc71'; 
+                                                        statusText = '✅ Done';
+                                                    } else if (fileProg === -1) {
+                                                        statusColor = '#e74c3c'; 
+                                                        statusText = '❌ Failed';
+                                                    }
+
+                                                    return (
+                                                        <div key={i} style={{ padding: '8px', background: '#fff', marginBottom: '5px', borderRadius: '6px', border: '1px solid #eee', fontSize: '11px', color: '#444', position: 'relative', overflow: 'hidden' }}>
+                                                            {/* Background Live Loading Bar */}
+                                                            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${fileProg === -1 ? 100 : fileProg}%`, background: fileProg === 100 ? 'rgba(46, 204, 113, 0.15)' : (fileProg === -1 ? 'rgba(231, 76, 60, 0.15)' : 'rgba(52, 152, 219, 0.15)'), transition: 'width 0.3s ease', zIndex: 0 }}></div>
+                                                            
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+                                                                <div style={{width: '70%', display: 'flex', flexDirection: 'column'}}>
+                                                                    <span style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: fileProg > 0 ? 'bold' : 'normal', color: fileProg === -1 ? '#e74c3c' : '#444'}}>
+                                                                        📄 {f.name}
+                                                                    </span>
+                                                                    {f.customSubFolder && (
+                                                                        <span style={{fontSize: '9px', color: '#888', marginTop: '2px'}}>📂 {f.customSubFolder}</span>
+                                                                    )}
+                                                                </div>
+                                                                <span style={{ color: statusColor, fontWeight: 'bold', background: '#fff', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${statusColor}` }}>
+                                                                    {statusText}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 
                                 <button onClick={() => handleUpload(false)} disabled={loading} className="global-update-btn" style={{ width: '100%', padding: '15px', fontSize: '16px', background: loading ? '#95a5a6' : (uploadType === 'SELECTION' ? '#8e44ad' : '#2ecc71'), cursor: loading ? 'not-allowed' : 'pointer' }}>
                                     {loading ? 'Uploading to Cloud...' : (uploadType === 'SELECTION' ? '✨ Upload Selection Project & Email Client' : '🚀 Upload Folder & Notify Client')}
