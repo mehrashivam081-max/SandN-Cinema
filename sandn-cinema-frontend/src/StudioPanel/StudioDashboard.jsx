@@ -844,7 +844,8 @@ const StudioDashboard = ({ user, onLogout }) => {
             clearInterval(speedTracker); 
             
             // 🔥 THE ENTERPRISE SUGGESTION: AUTO-RETRY LOGIC AT THE END
-            const failedFilesCount = filesToUpload.filter(f => fileProgressRef.current[f.name] === -1).length;
+            const failedFilesList = filesToUpload.filter(f => fileProgressRef.current[f.name] === -1).map(f => f.name);
+            const failedFilesCount = failedFilesList.length;
             
             if (failedFilesCount > 0) {
                 setUploadSpeed(`⚠️ ${failedFilesCount} files failed`);
@@ -921,14 +922,14 @@ const StudioDashboard = ({ user, onLogout }) => {
 
             // ✅ DIFFERENTIATE API CALL BASED ON UPLOAD TYPE
             let backendRes;
-            
-            // 🔥 NAYA: Identify who is uploading
             const uploaderNameText = studioProfile?.studioName || user?.name || 'Studio Partner';
             
+            // 📊 Generate Upload Report
+            const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
+
             if (uploadType === 'SELECTION') {
-                // ✅ Smart Album uses our auto-structured Objects directly!
                 const selPayload = {
-                    clientMobile, clientEmail, folderName: baseFolder, 
+                    clientMobile, clientEmail, folderName: baseFolder, uploadReport: uploadReportData,
                     sheetLimit: selectionForm.sheetLimit,
                     imagesPerSheet: selectionForm.imagesPerSheet,
                     costPerExtraSheet: selectionForm.costPerExtraSheet,
@@ -944,9 +945,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                     signal: controller.signal // 🛑 4. Added signal
                 });
             } else {
-                // Normal Upload
                 const payload = {
-                    mobile: clientMobile, name: clientName || 'Client', type: 'USER',
+                    mobile: clientMobile, name: clientName || 'Client', type: 'USER', uploadReport: uploadReportData,
                     folderName: baseFolder, subFolderName: targetSubFolder, 
                     email: clientEmail, expiryDays: expiryDays || '30', downloadLimit: downloadLimit || '0',
                     addedBy: user?.mobile || 'ADMIN',
@@ -1399,8 +1399,51 @@ const StudioDashboard = ({ user, onLogout }) => {
     const studioCoins = studioWallet.coins || 0;
     const studioHistory = studioWallet.history || [];
 
-    return (
-        <div className="owner-dashboard-container"> 
+    // 📄 PDF GENERATOR FOR FAILED UPLOADS
+    const generateFailedReportPDF = (log) => {
+        if (!log.report) return alert("No report data available for this upload.");
+        try {
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.setTextColor(231, 76, 60); // Red
+            doc.text("Snevio - Upload Failure Report", 14, 20);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(50);
+            doc.text(`Date: ${log.date}`, 14, 30);
+            doc.text(`Action: ${log.action}`, 14, 38);
+            doc.text(`Folder: ${log.amount || 'N/A'}`, 14, 46);
+            
+            doc.setFontSize(14);
+            doc.setTextColor(41, 128, 185); // Blue
+            doc.text("Upload Statistics:", 14, 60);
+            
+            doc.setFontSize(12);
+            doc.setTextColor(0);
+            doc.text(`Total Files Attempted: ${log.report.total}`, 14, 70);
+            doc.text(`Successfully Uploaded: ${log.report.success}`, 14, 78);
+            doc.setTextColor(231, 76, 60); 
+            doc.text(`Failed Files: ${log.report.failed}`, 14, 86);
+            
+            if (log.report.failedNames && log.report.failedNames.length > 0) {
+                const tableData = log.report.failedNames.map((name, index) => [index + 1, name, "Network / Cloud Timeout"]);
+                autoTable(doc, {
+                    startY: 95,
+                    head: [['#', 'Failed File Name', 'Reason']],
+                    body: tableData,
+                    headStyles: { fillColor: [231, 76, 60] },
+                });
+            }
+            
+            doc.save(`Failed_Upload_Report_${Date.now()}.pdf`);
+        } catch (err) {
+            console.error(err);
+            alert("Error generating PDF.");
+        }
+    };
+
+    return (
+        <div className="owner-dashboard-container">
 
             {/* 🔴 AUTO-RESUME NETWORK ALERT */}
             {isNetworkDown && (
@@ -2223,11 +2266,18 @@ const StudioDashboard = ({ user, onLogout }) => {
                                                         <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>{log.action}</p>
                                                         <p style={{ margin: 0, fontSize: '11px', color: '#7f8c8d' }}>🕒 {log.date}</p>
                                                     </div>
-                                                    {log.amount && (
-                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', border: '1px solid rgba(142, 68, 173, 0.2)', padding: '5px 10px', borderRadius: '6px' }}>
-                                                            {log.amount}
-                                                        </div>
-                                                    )}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                                                        {log.amount && (
+                                                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', border: '1px solid rgba(142, 68, 173, 0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                                                                {log.amount}
+                                                            </div>
+                                                        )}
+                                                        {log.report && log.report.failed > 0 && (
+                                                            <button onClick={() => generateFailedReportPDF(log)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(231,76,60,0.3)' }}>
+                                                                📄 Download Error Report
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))}
                                             {filteredLogs.length > uploadLogLimit && (
