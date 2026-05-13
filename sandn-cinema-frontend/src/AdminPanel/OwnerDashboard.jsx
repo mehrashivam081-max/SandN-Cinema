@@ -1147,16 +1147,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             if (sigRes.data.directUpload) {
                                 let finalUrl = '';
                                 
-                                // 🔥 THE NUCLEAR FIX: Create an untouchable Axios instance
-                                const nukeAxios = axios.create();
-                                nukeAxios.interceptors.request.use(config => {
-                                    if (config.headers) {
-                                        delete config.headers['Authorization'];
-                                        delete config.headers.common['Authorization'];
-                                    }
-                                    return config;
-                                });
-                                
                                 if (sigRes.data.provider === 'CLOUDINARY') {
                                     const formData = new FormData();
                                     formData.append('file', file);
@@ -1165,24 +1155,66 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     formData.append('signature', sigRes.data.signature);
                                     formData.append('folder', sigRes.data.folder);
 
-                                    const cloudinaryUpload = await nukeAxios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
-                                        onUploadProgress: (e) => {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                        },
-                                        signal: controller.signal
+                                    // 🔥 GOD MODE FIX: Native XHR (Bypasses ALL Axios limits & global tokens!)
+                                    const cloudinaryUpload = await new Promise((resolve, reject) => {
+                                        const xhr = new XMLHttpRequest();
+                                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                                        
+                                        // 📊 Progress Tracker
+                                        xhr.upload.onprogress = (e) => {
+                                            if (e.lengthComputable) {
+                                                loadedBytesArray[globalIndex] = e.loaded;
+                                                fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                            }
+                                        };
+
+                                        // ✅ Success Check
+                                        xhr.onload = () => {
+                                            if (xhr.status >= 200 && xhr.status < 300) {
+                                                resolve({ data: JSON.parse(xhr.responseText) });
+                                            } else {
+                                                reject(new Error("Cloudinary Error: " + xhr.statusText));
+                                            }
+                                        };
+                                        
+                                        // ❌ Error & Stop Upload Handle
+                                        xhr.onerror = () => reject(new Error("Network Error"));
+                                        controller.signal.addEventListener('abort', () => { 
+                                            xhr.abort(); 
+                                            reject(new axios.Cancel("Aborted by user")); 
+                                        });
+
+                                        xhr.send(formData); // Send without ANY hidden headers!
                                     });
+                                    
                                     finalUrl = cloudinaryUpload.data.secure_url;
                                 } 
                                 else {
                                     // AWS S3 / STORJ / R2 Direct PUT
-                                    await nukeAxios.put(sigRes.data.signedUrl, file, {
-                                        headers: { 'Content-Type': file.type },
-                                        onUploadProgress: (e) => {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                        },
-                                        signal: controller.signal
+                                    await new Promise((resolve, reject) => {
+                                        const xhr = new XMLHttpRequest();
+                                        xhr.open('PUT', sigRes.data.signedUrl);
+                                        xhr.setRequestHeader('Content-Type', file.type); // Only allow content-type
+                                        
+                                        xhr.upload.onprogress = (e) => {
+                                            if (e.lengthComputable) {
+                                                loadedBytesArray[globalIndex] = e.loaded;
+                                                fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                            }
+                                        };
+
+                                        xhr.onload = () => {
+                                            if (xhr.status >= 200 && xhr.status < 300) resolve(true);
+                                            else reject(new Error("AWS Error"));
+                                        };
+                                        
+                                        xhr.onerror = () => reject(new Error("Network Error"));
+                                        controller.signal.addEventListener('abort', () => { 
+                                            xhr.abort(); 
+                                            reject(new axios.Cancel("Aborted by user")); 
+                                        });
+
+                                        xhr.send(file);
                                     });
                                     finalUrl = sigRes.data.publicUrl;
                                 }
@@ -1190,37 +1222,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 loadedBytesArray[globalIndex] = file.size;
                                 fileProgressRef[globalIndex] = 100;
                                 
-                                // ✅ 100% PERFECT OWNER DASHBOARD LOGIC RE-ADDED
                                 successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; // Success!
-                            } 
-                            // 🔴 STEP 2B: PROXY UPLOAD (FOR MEGA / IMGBB)
-                            else {
-                                if (file.size > 100 * 1024 * 1024) {
-                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
-                                    throw new Error("File too large for proxy.");
-                                }
-
-                                const fd = new FormData();
-                                fd.append('file', file);
-                                fd.append('skipPreview', 'true'); 
-
-                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                    signal: controller.signal, 
-                                    onUploadProgress: (e) => {
-                                        if (e.lengthComputable) {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
-                                        }
-                                    }
-                                });
-
-                                loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef[globalIndex] = 100;
-                                
-                                // ✅ 100% PERFECT OWNER DASHBOARD LOGIC RE-ADDED
-                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; // Success!
                             }
                         } catch (err) {
