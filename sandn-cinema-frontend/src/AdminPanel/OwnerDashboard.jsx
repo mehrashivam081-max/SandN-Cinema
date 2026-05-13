@@ -3444,13 +3444,24 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         {/* CONNECTED ACCOUNTS GRID */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
                             {storageAccounts.map(acc => {
-                                const usagePercent = Math.min((acc.usedStorageGB / acc.maxLimitGB) * 100, 100).toFixed(1);
-                                const isCritical = usagePercent > 90;
-                                return (
-                                    <div key={acc._id} style={{ background: '#fff', border: acc.isActive ? '2px solid #2ecc71' : '1px solid #ddd', borderRadius: '10px', padding: '15px', position: 'relative', boxShadow: acc.isActive ? '0 5px 15px rgba(46,204,113,0.2)' : '0 2px 5px rgba(0,0,0,0.05)' }}>
-                                        {acc.isActive && <div style={{ position: 'absolute', top: '-10px', right: '10px', background: '#2ecc71', color: '#fff', padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>ACTIVE ROUTE</div>}
-                                        
-                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '16px' }}>{acc.provider === 'CLOUDINARY' ? '☁️' : '📦'} {acc.nickname}</h3>
+                                const usagePercent = Math.min((acc.usedStorageGB / acc.maxLimitGB) * 100, 100).toFixed(1);
+                                const isCritical = usagePercent > 90;
+                                
+                                // 🔥 THE MAGIC: Check routing assignments
+                                const isFreeRoute = cloudRoutingForm.freeCloudId === acc._id;
+                                const isPaidRoute = cloudRoutingForm.paidCloudId === acc._id;
+
+                                return (
+                                    <div key={acc._id} style={{ background: '#fff', border: acc.isActive ? '2px solid #2ecc71' : '1px solid #ddd', borderRadius: '10px', padding: '15px', position: 'relative', marginTop: '10px', boxShadow: acc.isActive ? '0 5px 15px rgba(46,204,113,0.2)' : '0 2px 5px rgba(0,0,0,0.05)' }}>
+                                        
+                                        {/* 🔥 MULTIPLE BADGES FOR ROUTING STATUS */}
+                                        <div style={{ position: 'absolute', top: '-12px', right: '10px', display: 'flex', gap: '5px', zIndex: 5 }}>
+                                            {isFreeRoute && <span style={{ background: '#7f8c8d', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>🆓 FREE ROUTE</span>}
+                                            {isPaidRoute && <span style={{ background: '#f39c12', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>💎 PAID ROUTE</span>}
+                                            {acc.isActive && <span style={{ background: '#2ecc71', color: '#fff', padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>🟢 DEFAULT</span>}
+                                        </div>
+                                        
+                                        <h3 style={{ margin: '0 0 5px 0', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '16px' }}>{acc.provider === 'CLOUDINARY' ? '☁️' : '📦'} {acc.nickname}</h3>
                                         <p style={{ fontSize: '11px', color: '#7f8c8d', margin: '0 0 15px 0', fontWeight: 'bold' }}>Provider: {acc.provider}</p>
 
                                         <div style={{ marginBottom: '20px' }}>
