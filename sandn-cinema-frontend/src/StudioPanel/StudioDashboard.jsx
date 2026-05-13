@@ -734,26 +734,31 @@ const StudioDashboard = ({ user, onLogout }) => {
                             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
                             // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)
-                            if (sigRes.data.directUpload) {
-                                let finalUrl = '';
-                                
-                                if (sigRes.data.provider === 'CLOUDINARY') {
-                                    const formData = new FormData();
-                                    formData.append('file', file);
-                                    formData.append('api_key', sigRes.data.apiKey);
-                                    formData.append('timestamp', sigRes.data.timestamp);
-                                    formData.append('signature', sigRes.data.signature);
-                                    formData.append('folder', sigRes.data.folder);
+                            if (sigRes.data.directUpload) {
+                                let finalUrl = '';
+                                
+                                // 🔥 THE NUCLEAR FIX: Create an untouchable Axios instance
+                                const nukeAxios = axios.create();
+                                nukeAxios.interceptors.request.use(config => {
+                                    if (config.headers) {
+                                        delete config.headers['Authorization'];
+                                        delete config.headers.common['Authorization'];
+                                    }
+                                    return config;
+                                });
+                                
+                                if (sigRes.data.provider === 'CLOUDINARY') {
+                                    const formData = new FormData();
+                                    formData.append('file', file);
+                                    formData.append('api_key', sigRes.data.apiKey);
+                                    formData.append('timestamp', sigRes.data.timestamp);
+                                    formData.append('signature', sigRes.data.signature);
+                                    formData.append('folder', sigRes.data.folder);
 
-                                    // 🔥 NAYA: Fresh Axios instance to bypass global Snevio tokens!
-                                    const cleanAxios = axios.create();
-                                    delete cleanAxios.defaults.headers.common['Authorization'];
-                                    
-                                    const cloudinaryUpload = await cleanAxios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
-                                        onUploadProgress: (e) => {
+                                    const cloudinaryUpload = await nukeAxios.post(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, formData, {
+                                        onUploadProgress: (e) => {
                                             loadedBytesArray[globalIndex] = e.loaded;
-                                            // 🔥 NAYA: 'file.name' mapping index ki jagah
-                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
                                         },
                                         signal: controller.signal
                                     });
@@ -761,15 +766,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 } 
                                 else {
                                     // AWS S3 / STORJ / R2 Direct PUT
-                                    // 🔥 NAYA: Fresh Axios for AWS as well
-                                    const cleanAxios = axios.create();
-                                    delete cleanAxios.defaults.headers.common['Authorization'];
-                                    
-                                    await cleanAxios.put(sigRes.data.signedUrl, file, {
+                                    await nukeAxios.put(sigRes.data.signedUrl, file, {
                                         headers: { 'Content-Type': file.type },
                                         onUploadProgress: (e) => {
                                             loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
                                         },
                                         signal: controller.signal
                                     });
