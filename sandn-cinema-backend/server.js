@@ -935,15 +935,54 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 });
 
 
-// ==============================================================
-// 🧠 SMART STORAGE AUTO-ROUTER LOGIC
-// ==============================================================
-const getOrUpdateActiveStorage = async (fileSizeGB = 0.05) => {
+// ✅ NEW API: Update Cloud Routing Rules
+app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) => {
     try {
-        let activeStorage = await StorageConfig.findOne({ isActive: true });
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { $set: { cloudRouting: req.body } }, 
+            { upsert: true }
+        );
+        res.json({ success: true, message: "Smart Cloud Routing Settings Updated!" });
+    } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
 
-        // Backup: If no active storage, make the oldest one active
-        if (!activeStorage) {
+// ==============================================================
+// 🧠 SMART STORAGE AUTO-ROUTER LOGIC (FREE VS PAID ROUTING)
+// ==============================================================
+const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null) => {
+    try {
+        let targetCloudId = null;
+        
+        // 🚦 1. Check if user is FREE or PAID and fetch Assigned Cloud
+        if (userMobile) {
+            const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+            if (settings && settings.cloudRouting) {
+                const studio = await Studio.findOne({ mobile: userMobile });
+                const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
+                targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
+            }
+        }
+
+        let activeStorage = null;
+
+        // 🟢 2. Use Assigned Tier Cloud (If it has space)
+        if (targetCloudId) {
+            activeStorage = await StorageConfig.findById(targetCloudId);
+            if (activeStorage && (activeStorage.usedStorageGB + fileSizeGB) >= (activeStorage.maxLimitGB * 0.95)) {
+                console.log(`⚠️ Assigned cloud [${activeStorage.nickname}] is full! Falling back to default.`);
+                activeStorage = null; // Target is full, force fallback
+            }
+        }
+
+        // 🟠 3. Fallback to normal Active Cloud
+        if (!activeStorage) {
+            activeStorage = await StorageConfig.findOne({ isActive: true });
+        }
+
+        // Backup: If no active storage, make the oldest one active
+        if (!activeStorage) {
             activeStorage = await StorageConfig.findOneAndUpdate(
                 { $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } }, 
                 { isActive: true },
@@ -997,8 +1036,25 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
     try {
         const { fileName, fileType, fileSizeGB } = req.body;
         
+        // 🛑 SMART LIMIT CHECK
+        const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+        let maxAllowedMB = 5000; // default 5GB for Direct
+        let isPaid = false;
+
+        if (req.user && req.user.role === 'STUDIO') {
+            const studio = await Studio.findOne({ mobile: req.user.mobile });
+            isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
+            if (settings && settings.cloudRouting) {
+                maxAllowedMB = isPaid ? Number(settings.cloudRouting.paidMaxFileMB) : Number(settings.cloudRouting.freeMaxFileMB);
+            }
+        }
+
+        if ((fileSizeGB * 1024) > maxAllowedMB) {
+            return res.status(413).json({ success: false, directUpload: false, message: `File too large! Your current plan allows max ${maxAllowedMB}MB per file.` });
+        }
+
         // 1. Storage Router se Active Cloud Pata Karo
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB || 0.05);
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB || 0.05, req.user?.mobile);
 
         // 2. 🟢 CLOUDINARY DIRECT UPLOAD
         if (activeCloud.provider === 'CLOUDINARY') {
@@ -1051,18 +1107,35 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         const isImage = req.file.mimetype.startsWith('image/');
         const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
         const filePath = req.file.path; 
+        const fileSizeMB = req.file.size / (1024 * 1024);
 
-        // 🛑 STRICT 100MB LIMIT FOR PROXY (Saves Render Server from Dying!)
-        if (req.file.size > 100 * 1024 * 1024) { 
-            fs.unlinkSync(filePath);
-            return res.status(413).json({ success: false, message: "File too large! For files > 100MB, the system requires AWS or Cloudinary Direct Upload." });
+        // 🛑 SMART PROXY LIMIT CHECK
+        const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+        let maxAllowedMB = 100; // Absolute max for Proxy to prevent crash
+        let isPaid = false;
+        let defaultFreeAlloc = 5;
+
+        if (settings && settings.cloudRouting) {
+            defaultFreeAlloc = Number(settings.cloudRouting.defaultFreeStorageGB) || 5;
         }
 
-        // 🛡️ STUDIO STORAGE LIMIT CHECK
         if (req.user && req.user.role === 'STUDIO') {
             const studioData = await Studio.findOne({ mobile: req.user.mobile });
             if (studioData) {
-                const allocated = studioData.allocatedStorageGB || 5; 
+                isPaid = studioData.storagePlan && studioData.storagePlan !== 'FREE';
+                if (settings && settings.cloudRouting) {
+                    // Check user's specific limit, but never exceed 100MB for proxy
+                    const userPlanLimit = isPaid ? Number(settings.cloudRouting.paidMaxFileMB) : Number(settings.cloudRouting.freeMaxFileMB);
+                    maxAllowedMB = Math.min(100, userPlanLimit); 
+                }
+
+                if (fileSizeMB > maxAllowedMB) { 
+                    fs.unlinkSync(filePath);
+                    return res.status(413).json({ success: false, message: `File too large! Your plan allows max ${maxAllowedMB}MB per file in proxy mode.` });
+                }
+
+                // Check Total Storage Capacity
+                const allocated = studioData.allocatedStorageGB || (isPaid ? 5 : defaultFreeAlloc); 
                 const used = studioData.usedStorageGB || 0;
                 
                 if (used + fileSizeGB > allocated) {
@@ -3277,7 +3350,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         // 2. Log for Client (Receiver)
         const clientCleanMobile = getCleanMobile(clientMobile);
         await User.updateOne({ mobile: clientCleanMobile }, { $push: { "wallet.history": { $each: [{ action: `Received Album Selection Link`, amount: `📂 ${folderName}`, date: dateStr, type: "received" }], $position: 0 } }}, { strict: false });
-        
+
         // ✅ UPLOADER SUCCESS NOTIFICATION
         if (req.user && req.user.role === 'STUDIO') {
             const uploader = await Studio.findOne({ mobile: req.user.mobile });
