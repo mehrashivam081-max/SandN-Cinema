@@ -337,6 +337,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
         credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
     });
+    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5' });
 
     // ✅ Dynamic Location Counter
 
@@ -510,8 +511,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setFormData(prev => ({ ...prev, imageCost: globalRates.imageCost, videoCost: globalRates.videoCost }));
                 }
                 if (res.data.data.coinPackages) setCoinPackages(res.data.data.coinPackages);
-                if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
-            }
+                if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
+                if (res.data.data.cloudRouting) setCloudRoutingForm(res.data.data.cloudRouting);
+            }
         } catch(e) { console.log("No settings found yet"); }
     };
 
@@ -658,6 +660,18 @@ const OwnerDashboard = ({ user, onLogout }) => {
             }
         }
     };
+
+    // 🚦 SAVE CLOUD ROUTING RULES
+    const handleSaveCloudRouting = async (e) => {
+        e.preventDefault();
+        if (!window.confirm("Update Cloud Routing Rules for Free and Paid Studios?")) return;
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/update-cloud-routing`, cloudRoutingForm, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            alert(res.data.message);
+        } catch (e) { alert("Error updating cloud routing rules."); }
+        setLoading(false);
+    };
 
     // 🏷️ SUBSCRIPTION PLANS API CALLS
     const fetchSubPlans = async () => {
@@ -3269,6 +3283,43 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 );
                             })}
                         </div>
+
+                        {/* 🚦 SMART CLOUD ROUTING & LIMITS */}
+                        <div className="update-creation-container" style={{ maxWidth: '800px', margin: '0 auto 30px', background: '#fdf2e9', border: '1px solid #e67e22', borderTop: '5px solid #d35400' }}>
+                            <h3 style={{ marginTop: 0, color: '#d35400' }}>🚦 Free vs Paid - Smart Cloud Routing</h3>
+                            <p style={{ fontSize: '13px', color: '#555', marginBottom: '20px' }}>Control where data is saved and limit file sizes based on the Studio's subscription tier.</p>
+                            
+                            <form onSubmit={handleSaveCloudRouting} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #ccc' }}>
+                                        <h4 style={{ margin: '0 0 10px 0', color: '#7f8c8d' }}>🆓 FREE Studios</h4>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Assign Cloud Account</label>
+                                        <select value={cloudRoutingForm.freeCloudId} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, freeCloudId: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}}>
+                                            <option value="">-- Use Default Active Route --</option>
+                                            {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>{acc.nickname} ({acc.provider})</option>)}
+                                        </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
+                                        <input type="number" required value={cloudRoutingForm.freeMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, freeMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}} />
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Total Free Storage limit (GB)</label>
+                                        <input type="number" required value={cloudRoutingForm.defaultFreeStorageGB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, defaultFreeStorageGB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
+                                    </div>
+
+                                    <div style={{ flex: 1, background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
+                                        <h4 style={{ margin: '0 0 10px 0', color: '#f39c12' }}>💎 PAID (Premium/VIP) Studios</h4>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Assign Cloud Account</label>
+                                        <select value={cloudRoutingForm.paidCloudId} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidCloudId: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}}>
+                                            <option value="">-- Use Default Active Route --</option>
+                                            {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>{acc.nickname} ({acc.provider})</option>)}
+                                        </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
+                                        <input type="number" required value={cloudRoutingForm.paidMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
+                                    </div>
+                                </div>
+                                <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#d35400', padding: '15px', fontSize: '15px', fontWeight: 'bold' }}>
+                                    {loading ? 'Saving...' : '💾 Save Smart Routing Rules'}
+                                </button>
+                            </form>
+                        </div>
 
                         {/* ADD NEW ACCOUNT FORM */}
                         <div id="storage-form-top" className="update-creation-container" style={{ maxWidth: '600px', margin: '0' }}>
