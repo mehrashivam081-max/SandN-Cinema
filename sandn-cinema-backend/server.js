@@ -1375,9 +1375,10 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
         const dateStr = new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' ' + new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata', hour: '2-digit', minute:'2-digit'});
         
         // 1. Log for the Uploader (Studio or Owner)
+        const uploadReport = req.body.uploadReport || null; // 🔥 NAYA: Catch Report
         if (req.user && req.user.mobile) {
             if (req.user.role === 'STUDIO') {
-                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile}`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "upload" }], $position: 0 } }}, { strict: false });
+                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile}`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "upload", report: uploadReport }], $position: 0 } }}, { strict: false });
             } else if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
                 await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Uploaded ${filePaths.length} files to ${mobile} (📁 ${finalFolderName})`, time: new Date() }], $position: 0 } }}, { strict: false });
             }
@@ -3339,9 +3340,10 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const dateStr = new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' ' + new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata', hour: '2-digit', minute:'2-digit'});
         
         // 1. Log for Studio/Admin (Sender)
+        const uploadReport = req.body.uploadReport || null; // 🔥 NAYA: Catch Report
         if (req.user && req.user.mobile) {
             if (req.user.role === 'STUDIO') {
-                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Created Album Selection for ${clientMobile}`, amount: `📂 ${folderName}`, date: dateStr, type: "upload" }], $position: 0 } }}, { strict: false });
+                await Studio.updateOne({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Created Album Selection for ${clientMobile}`, amount: `📂 ${folderName}`, date: dateStr, type: "upload", report: uploadReport }], $position: 0 } }}, { strict: false });
             } else if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
                 await Admin.updateOne({ mobile: req.user.mobile }, { $push: { "logs": { $each: [{ action: `Created Album Selection for ${clientMobile} (📂 ${folderName})`, time: new Date() }], $position: 0 } }}, { strict: false });
             }
