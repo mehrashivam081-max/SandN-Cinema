@@ -867,19 +867,28 @@ const StudioDashboard = ({ user, onLogout }) => {
                     return successData;
                 })();
 
-                activePromises.add(uploadTask);
-                uploadTask.then(data => {
-                    activePromises.delete(uploadTask);
-                    if (data) {
-                        uploadedUrls.push(data);
-                        if (!isFeed) {
-                            alreadyUploadedNames.push(file.name);
-                            const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
-                            localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
-                            setPendingResumeState(updatedDraft);
+                // 🔥 THE SYNC-SAFE FIX: Moving data push INSIDE the async task chain
+                const wrappedTask = (async () => {
+                    try {
+                        const data = await uploadTask;
+                        if (data) {
+                            uploadedUrls.push(data);
+                            
+                            // 💾 Save progress for smart resume
+                            if (!isFeed) {
+                                alreadyUploadedNames.push(file.name);
+                                const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
+                                localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
+                                setPendingResumeState(updatedDraft);
+                            }
                         }
+                        return data;
+                    } finally {
+                        activePromises.delete(wrappedTask); // Always cleanup
                     }
-                }).catch(() => activePromises.delete(uploadTask));
+                })();
+
+                activePromises.add(wrappedTask);
             }
 
             // 🛑 Aakhri files ka wait karo
@@ -963,31 +972,48 @@ const StudioDashboard = ({ user, onLogout }) => {
                 return; 
             }
 
-            // ✅ DIFFERENTIATE API CALL BASED ON UPLOAD TYPE
-            let backendRes;
-            const uploaderNameText = studioProfile?.studioName || user?.name || 'Studio Partner';
-            
-            // 📊 Generate Upload Report
+            // 📊 Generate Upload Report
             const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
 
+            // 🛡️ ZERO DATA CHECK: Agar uploadedUrls khali hai toh save mat karo
+            if (uploadedUrls.length === 0) {
+                setLoading(false);
+                setUploadSpeed('❌ Upload Failed: No data reached Cloud');
+                return alert("🚨 Error: No files were successfully uploaded to Cloud. Database save aborted.");
+            }
+
+            // 💾 3. SAVE TO DATABASE
+            let backendRes;
+            const uploaderNameText = studioProfile?.studioName || user?.name || 'Studio Partner';
+
             if (uploadType === 'SELECTION') {
+                // ✨ SMART ALBUM PAYLOAD FIX (Mapping URLs to proper Image objects)
                 const selPayload = {
-                    clientMobile, clientEmail, folderName: baseFolder, uploadReport: uploadReportData,
+                    clientMobile, 
+                    clientEmail, 
+                    folderName: baseFolder, 
+                    uploadReport: uploadReportData,
                     sheetLimit: selectionForm.sheetLimit,
                     imagesPerSheet: selectionForm.imagesPerSheet,
                     costPerExtraSheet: selectionForm.costPerExtraSheet,
                     totalPhases: selectionForm.totalPhases,
-                    fileUrls: uploadedUrls, 
                     cloudProvider: 'CLOUDINARY',
-                    uploaderName: uploaderNameText, // 🔥 NAYA
-                    uploaderRole: 'Studio Partner' // 🔥 NAYA
+                    addedBy: studioProfile.mobile,
+                    uploaderName: uploaderNameText,
+                    uploaderRole: 'Studio Partner',
+                    // Convert URLs array to objects for Selection Schema
+                    images: uploadedUrls.map(item => ({ 
+                        url: item.url || item, // Handle both object and string formats
+                        subFolder: item.subFolder || 'Main Event', 
+                        status: 'pending' 
+                    }))
                 };
-                
-                backendRes = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                    signal: controller.signal // 🛑 4. Added signal
-                });
-            } else {
+                
+                backendRes = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                    signal: controller.signal
+                });
+            } else {
                 const payload = {
                     mobile: clientMobile, name: clientName || 'Client', type: 'USER', uploadReport: uploadReportData,
                     folderName: baseFolder, subFolderName: targetSubFolder, 

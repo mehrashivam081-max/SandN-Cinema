@@ -1251,14 +1251,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     return successData;
                 })();
 
-                activePromises.add(uploadTask);
-
-                uploadTask.then(data => {
-                    activePromises.delete(uploadTask);
-                    if (data) {
-                        uploadedUrls.push(data);
+                // 🔥 THE SYNC-SAFE FIX: ensure data is pushed BEFORE Promise.all finishes
+                const wrappedTask = (async () => {
+                    try {
+                        const data = await uploadTask;
+                        if (data) {
+                            uploadedUrls.push(data);
+                        }
+                        return data;
+                    } finally {
+                        activePromises.delete(wrappedTask);
                     }
-                }).catch(() => activePromises.delete(uploadTask));
+                })();
+
+                activePromises.add(wrappedTask);
             }
 
             // 🛑 Aakhri files ka wait karo
@@ -1298,7 +1304,43 @@ const OwnerDashboard = ({ user, onLogout }) => {
             // 📊 Generate Upload Report
             const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
 
+            // 🛡️ ZERO DATA CHECK: Agar uploadedUrls khali hai toh save mat karo
+            if (uploadedUrls.length === 0) {
+                setLoading(false);
+                if(!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed: No files uploaded' } : job));
+                return alert("🚨 Error: No files were successfully uploaded to Cloud. Database save cancelled.");
+            }
+
             // 💾 3. SAVE TO DATABASE
+            let backendRes;
+
+            if (uploadMode === 'SELECTION') {
+                // ✨ SMART ALBUM PAYLOAD FIX
+                const selPayload = {
+                    clientMobile: activeMobile, 
+                    clientEmail: activeEmail, 
+                    folderName: baseFolder, 
+                    uploadReport: uploadReportData,
+                    addedBy: user?.mobile || 'ADMIN',
+                    // Mapping each uploaded file to required Selection format
+                    images: uploadedUrls.map(item => ({ 
+                        url: item.url, 
+                        subFolder: item.subFolder || 'Main Event', 
+                        status: 'pending' 
+                    }))
+                };
+                
+                backendRes = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+            } else {
+                // NORMAL UPLOAD
+                payloadData.fileUrls = uploadedUrls;
+                payloadData.uploadReport = uploadReportData;
+                backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+            }
 
             // ✅ IF UPLOADING TO PUBLIC FEED
             if (isFeed) {
