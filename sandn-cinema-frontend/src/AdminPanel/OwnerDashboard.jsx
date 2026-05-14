@@ -1150,7 +1150,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                             // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
                             const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                                fileName: file.name, fileType: file.type, fileSizeGB: file.size / (1024 * 1024 * 1024)
+                                fileName: file.name, 
+                                fileType: file.type, 
+                                fileSizeGB: file.size / (1024 * 1024 * 1024),
+                                // 🔥 DYNAMIC FOLDER: Pass base folder and subfolder (if any)
+                                targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
                             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
                             // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)

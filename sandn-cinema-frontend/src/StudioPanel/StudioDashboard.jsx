@@ -729,9 +729,13 @@ const StudioDashboard = ({ user, onLogout }) => {
                             loadedBytesArray[globalIndex] = 0; // Fresh start for retry
 
                             // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
-                            const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                                fileName: file.name, fileType: file.type, fileSizeGB: file.size / (1024 * 1024 * 1024)
-                            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
+                            const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                                fileName: file.name, 
+                                fileType: file.type, 
+                                fileSizeGB: file.size / (1024 * 1024 * 1024),
+                                // 🔥 DYNAMIC FOLDER: Pass base folder and subfolder (if any)
+                                targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
+                            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
                             // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)
                             if (sigRes.data.directUpload) {
