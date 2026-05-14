@@ -1165,12 +1165,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     formData.append('signature', sigRes.data.signature);
                                     formData.append('folder', sigRes.data.folder);
 
-                                    // 🔥 GOD MODE FIX: Native XHR (Bypasses ALL Axios limits & global tokens!)
+                                    // 🔥 THE ULTIMATE FIX: Force Axios out, use pure Native XHR
                                     const cloudinaryUpload = await new Promise((resolve, reject) => {
                                         const xhr = new XMLHttpRequest();
-                                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, true);
                                         
-                                        // 📊 Progress Tracker
+                                        // Force remove ANY default headers that browsers/extensions might add
+                                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
                                         xhr.upload.onprogress = (e) => {
                                             if (e.lengthComputable) {
                                                 loadedBytesArray[globalIndex] = e.loaded;
@@ -1178,7 +1180,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             }
                                         };
 
-                                        // ✅ Success Check
                                         xhr.onload = () => {
                                             if (xhr.status >= 200 && xhr.status < 300) {
                                                 resolve({ data: JSON.parse(xhr.responseText) });
@@ -1187,14 +1188,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             }
                                         };
                                         
-                                        // ❌ Error & Stop Upload Handle
                                         xhr.onerror = () => reject(new Error("Network Error"));
                                         controller.signal.addEventListener('abort', () => { 
                                             xhr.abort(); 
                                             reject(new axios.Cancel("Aborted by user")); 
                                         });
 
-                                        xhr.send(formData); // Send without ANY hidden headers!
+                                        // Send ONLY formData, NO hidden tokens!
+                                        xhr.send(formData); 
                                     });
                                     
                                     finalUrl = cloudinaryUpload.data.secure_url;
@@ -1203,8 +1204,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     // AWS S3 / STORJ / R2 Direct PUT
                                     await new Promise((resolve, reject) => {
                                         const xhr = new XMLHttpRequest();
-                                        xhr.open('PUT', sigRes.data.signedUrl);
-                                        xhr.setRequestHeader('Content-Type', file.type); // Only allow content-type
+                                        xhr.open('PUT', sigRes.data.signedUrl, true);
+                                        xhr.setRequestHeader('Content-Type', file.type);
                                         
                                         xhr.upload.onprogress = (e) => {
                                             if (e.lengthComputable) {
