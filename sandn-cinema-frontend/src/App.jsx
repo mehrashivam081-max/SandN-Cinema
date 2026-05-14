@@ -17,12 +17,14 @@ import ContactUs from './pages/legal/ContactUs';
 
 const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
 
-// 🔒 GLOBAL AXIOS INTERCEPTOR
+// 🔒 SMART GLOBAL AXIOS INTERCEPTOR (CORS & Cloudinary Safe)
 axios.interceptors.request.use(
   (config) => {
-    // Session aur Local dono check karega ab
-    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-    if (token) {
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    // 🔥 THE FIX: Sirf tabhi Token bhejo jab request hamare Snevio Backend par jaa rahi ho!
+    // Agar request Cloudinary ya kisi aur server (S3, AWS) par hai, toh token mat bhejna.
+    if (token && config.url && config.url.includes('sandn-cinema.onrender.com')) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
