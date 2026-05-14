@@ -968,16 +968,20 @@ app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) =
 // 🧠 SMART STORAGE AUTO-ROUTER LOGIC (FREE VS PAID ROUTING)
 // ==============================================================
 const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null) => {
-    try {
+    try {
         let targetCloudId = null;
         
-        // 🚦 1. Check if user is FREE or PAID and fetch Assigned Cloud
-        if (userMobile) {
-            const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
-            if (settings && settings.cloudRouting) {
-                const studio = await Studio.findOne({ mobile: userMobile });
-                const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
-                targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
+        // 🚦 1. Check if user is FREE or PAID and fetch Assigned Cloud safely
+        const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+        
+        if (userMobile && settings && settings.cloudRouting) {
+            const studio = await Studio.findOne({ mobile: userMobile });
+            const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
+            
+            // 🔥 FIX: Ensure ID is valid before assigning
+            const potentialId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
+            if (potentialId && mongoose.Types.ObjectId.isValid(potentialId)) {
+                targetCloudId = potentialId;
             }
         }
 
@@ -1057,7 +1061,11 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
         let maxAllowedMB = 5000; // default 5GB for Direct
         let isPaid = false;
 
-        if (req.user && req.user.role === 'STUDIO') {
+        // 🔥 FIX: Let ADMIN/OWNER bypass limits
+        if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'OWNER')) {
+            maxAllowedMB = 50000; // Give admins 50GB limit
+        } 
+        else if (req.user && req.user.role === 'STUDIO') {
             const studio = await Studio.findOne({ mobile: req.user.mobile });
             isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
             if (settings && settings.cloudRouting) {
