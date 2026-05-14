@@ -938,29 +938,17 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 // 🚦 UPDATE SMART CLOUD ROUTING RULES (FREE VS PAID)
 app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) => {
     try {
-        // Sirf Owner/Admin hi change kar sakta hai
-        if (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
-
-        const { freeCloudId, paidCloudId, freeMaxFileMB, paidMaxFileMB, defaultFreeStorageGB } = req.body;
-
-        // Platform Settings dhoondo (agar nahi hai toh naya banao)
-        let settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
-        if (!settings) settings = new PlatformSetting({ settingId: 'GLOBAL' });
-
-        // Naye Rules Save Karo (Koi kachra save nahi hoga)
-        settings.cloudRouting = { 
-            freeCloudId: freeCloudId || '', 
-            paidCloudId: paidCloudId || '', 
-            freeMaxFileMB: freeMaxFileMB || 100, 
-            paidMaxFileMB: paidMaxFileMB || 2048, 
-            defaultFreeStorageGB: defaultFreeStorageGB || 5 
-        };
-
-        await settings.save();
+        if(req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({success: false, message: "Unauthorized"});
+        
+        // 🔥 THE FIX: { strict: false } ensures MongoDB saves the object even if schema doesn't perfectly match!
+        await PlatformSetting.updateOne(
+            { settingId: 'GLOBAL' }, 
+            { $set: { cloudRouting: req.body } }, 
+            { upsert: true, strict: false } 
+        );
         res.json({ success: true, message: "✅ Smart Cloud Routing Rules Saved Permanently!" });
-    } catch (error) {
-        console.error("Cloud Routing Save Error:", error);
-        res.status(500).json({ success: false, message: "Server error saving routing rules." });
+    } catch (e) { 
+        res.status(500).json({ success: false, message: e.message }); 
     }
 });
 
@@ -997,12 +985,12 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null) =>
         }
 
         // 🟠 3. Fallback to normal Active Cloud
-        if (!activeStorage) {
+        if (!activeStorage) {
             activeStorage = await StorageConfig.findOne({ isActive: true });
         }
 
-        // Backup: If no active storage, make the oldest one active
-        if (!activeStorage) {
+        // Backup: If no active storage, make the oldest one active
+        if (!activeStorage) {
             activeStorage = await StorageConfig.findOneAndUpdate(
                 { $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } }, 
                 { isActive: true },
@@ -1054,7 +1042,12 @@ const { Readable } = require('stream');
 // 🚀 NEW API: GENERATE DIRECT UPLOAD SIGNATURE (For 12GB+ Files on Cloudinary/AWS)
 app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, res) => {
     try {
-        const { fileName, fileType, fileSizeGB } = req.body;
+        // 🔥 NAYA: Front-end ab targetFolder bhi bhejega
+        const { fileName, fileType, fileSizeGB, targetFolder } = req.body;
+        
+        // Cloudinary ke hisaab se folder ka naam saaf karo (special chars hatao)
+        const safeFolderName = targetFolder ? targetFolder.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Uncategorized';
+        const cloudFolder = `snevio_vault/${safeFolderName}`;
         
         // 🛑 SMART LIMIT CHECK
         const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
@@ -1084,11 +1077,13 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
         if (activeCloud.provider === 'CLOUDINARY') {
             cloudinary.config({ cloud_name: activeCloud.credentials.cloudName, api_key: activeCloud.credentials.apiKey, api_secret: activeCloud.credentials.apiSecret });
             const timestamp = Math.round((new Date).getTime() / 1000);
-            const signature = cloudinary.utils.api_sign_request({ timestamp: timestamp, folder: 'snevio_vault' }, activeCloud.credentials.apiSecret);
+            
+            // 🔥 FIX: Use the dynamic cloudFolder instead of hardcoded 'snevio_vault'
+            const signature = cloudinary.utils.api_sign_request({ timestamp: timestamp, folder: cloudFolder }, activeCloud.credentials.apiSecret);
             
             return res.json({ 
                 success: true, directUpload: true, provider: 'CLOUDINARY', 
-                cloudName: activeCloud.credentials.cloudName, apiKey: activeCloud.credentials.apiKey, timestamp, signature, folder: 'snevio_vault' 
+                cloudName: activeCloud.credentials.cloudName, apiKey: activeCloud.credentials.apiKey, timestamp, signature, folder: cloudFolder 
             });
         } 
         // 3. 🟢 AWS S3 / CLOUDFLARE R2 / STORJ DIRECT UPLOAD (Pre-Signed URL)
@@ -1099,7 +1094,8 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
             });
 
             const cleanFileName = fileName ? fileName.replace(/\s+/g, '_') : 'snevio_media';
-            const fileKey = `snevio_vault/${Date.now()}_${cleanFileName}`;
+            // 🔥 FIX: Use dynamic cloudFolder for AWS/S3 too
+            const fileKey = `${cloudFolder}/${Date.now()}_${cleanFileName}`;
             
             // Generate a 1-Hour Valid URL for Frontend to push file directly
             const signedUrl = await s3.getSignedUrlPromise('putObject', { 
@@ -1266,8 +1262,8 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
 // 🚀 DYNAMIC MULTI-CLOUD UPLOAD ROUTE (USER DATA)
 // ==============================================================
 app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile); 
-    let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity, uploaderName, uploaderRole } = req.body; // 🔥 NAYA ADD KIYA
+    const mobile = getCleanMobile(req.body.mobile); 
+    let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, fileUrls, imageCost, videoCost, unlockValidity, uploaderName, uploaderRole } = req.body; 
 
     if (folderName === 'undefined' || folderName === 'null') folderName = '';
     if (name === 'undefined' || name === 'null') name = 'Client';
@@ -1278,6 +1274,11 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
 
     try {
         const filePaths = Array.isArray(fileUrls) ? fileUrls : [];
+        
+        // 🛑 ANTI-EMPTY FOLDER SHIELD: Agar fileUrls khali hai, toh DB me save mat karo!
+        if (filePaths.length === 0) {
+            return res.status(400).json({ success: false, message: "Upload failed on the cloud. Database aborted creating an empty folder." });
+        }
         
         // 1. SMART ROUTER: Estimate size and update Active Storage
         // Default estimate: Assume each file is around 5MB (0.005 GB) if calculating directly from URLs
@@ -3296,11 +3297,15 @@ app.post('/api/auth/update-studio-storage-plan', authenticateToken, async (req, 
 
 // 1. Studio Creates a New Selection Event (Triggers Email)
 app.post('/api/auth/create-album-selection', authenticateToken, async (req, res) => {
-    try {
-        // 🔥 FIX: Owner ko bhi permission de di
-        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
+    try {
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
 
-        const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider, uploaderName, uploaderRole } = req.body; // 🔥 NAYA
+        const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider, uploaderName, uploaderRole } = req.body; 
+
+        // 🛑 ANTI-EMPTY FOLDER SHIELD FOR SMART ALBUM
+        if (!fileUrls || fileUrls.length === 0) {
+            return res.status(400).json({ success: false, message: "Upload failed on the cloud. Smart Album creation aborted to prevent empty project." });
+        }
 
         // Find Studio Name for Email
         const studioAcc = await Studio.findOne({ mobile: req.user.mobile });
