@@ -11,15 +11,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
-// Register Service Worker for PWA
+// 🔥 ZOMBIE KILLER: Purane Service Worker ko hamesha ke liye maar do taaki naya code load ho!
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {
-        console.log('Snevio App (Service Worker) registered successfully! Scope:', registration.scope);
-      })
-      .catch(error => {
-        console.log('Service Worker registration failed:', error);
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (let registration of registrations) {
+      registration.unregister().then(bool => {
+        console.log("🧟‍♂️ Zombie Service Worker Killed: ", bool);
       });
+    }
   });
+  
+  // Cache storage ko bhi saaf kar do
+  if (window.caches) {
+      caches.keys().then((keyList) => {
+          Promise.all(keyList.map((key) => caches.delete(key)));
+      });
+  }
 }

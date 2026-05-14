@@ -1138,7 +1138,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, liveActionText: `Uploading ${file.name.length > 20 ? file.name.substring(0, 15) + '...' : file.name} to 📂 ${file.customSubFolder || 'Main Event'}...` } : job));
                 }
 
-                const uploadTask = (async () => {
+                // 🚀 Naya upload task banao (Execution shuru)
+                const uploadTask = (async () => {
                     let attempt = 0;
                     const maxAttempts = 3;
                     let successData = null;
@@ -1146,14 +1147,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     while (attempt < maxAttempts) {
                         try {
                             attempt++;
-                            loadedBytesArray[globalIndex] = 0; 
+                            loadedBytesArray[globalIndex] = 0; // Fresh start for retry
 
                             // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
                             const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
                                 fileName: file.name, 
                                 fileType: file.type, 
                                 fileSizeGB: file.size / (1024 * 1024 * 1024),
-                                // 🔥 DYNAMIC FOLDER: Pass base folder and subfolder (if any)
+                                // 🔥 DYNAMIC FOLDER: Back-end ko client ka folder name batao
                                 targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
                             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
@@ -1239,6 +1240,32 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 
                                 successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; // Success!
+                            }
+                            else {
+                                if (file.size > 100 * 1024 * 1024) {
+                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
+                                    throw new Error("File too large for proxy.");
+                                }
+
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('skipPreview', 'true'); 
+
+                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                                    signal: controller.signal, 
+                                    onUploadProgress: (e) => {
+                                        if (e.lengthComputable) {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                        }
+                                    }
+                                });
+
+                                loadedBytesArray[globalIndex] = file.size;
+                                fileProgressRef[globalIndex] = 100;
+                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                                break; 
                             }
                         } catch (err) {
                             if (axios.isCancel(err)) throw err; 
