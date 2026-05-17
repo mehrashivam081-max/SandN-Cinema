@@ -525,14 +525,33 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // ✅ CHECK IF FILE IS UNLOCKED (VALIDITY CHECK)
-    const isFileUnlocked = (filePath) => {
-        if (!wallet.unlockedFiles) return false;
-        const unlockedEntry = wallet.unlockedFiles.find(f => f.fileUrl === filePath);
-        if (!unlockedEntry) return false;
-        
-        if (unlockedEntry.expiry === 'Permanent') return true;
-        return new Date(unlockedEntry.expiry) > new Date(); // True if not expired
-    };
+    const isFileUnlocked = (filePath) => {
+        if (!wallet.unlockedFiles) return false;
+        const unlockedEntry = wallet.unlockedFiles.find(f => f.fileUrl === filePath);
+        if (!unlockedEntry) return false;
+        
+        if (unlockedEntry.expiry === 'Permanent') return true;
+        return new Date(unlockedEntry.expiry) > new Date(); // True if not expired
+    };
+
+    // 🔥 NAYA: TIME CALCULATOR FOR FOMO UI (LIVE COUNTDOWN)
+    const getUnlockTimerText = (filePath) => {
+        if (!wallet.unlockedFiles) return null;
+        const unlockedEntry = wallet.unlockedFiles.find(f => f.fileUrl === filePath);
+        if (!unlockedEntry || unlockedEntry.expiry === 'Permanent') return null;
+
+        const timeDiff = new Date(unlockedEntry.expiry) - new Date();
+        if (timeDiff <= 0) return null; // Time is up
+
+        const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+        const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        // Make it look professional (09h 05m)
+        const hDisp = hours < 10 ? `0${hours}` : hours;
+        const mDisp = minutes < 10 ? `0${minutes}` : minutes;
+        
+        return `⏳ Locks in ${hDisp}h ${mDisp}m`;
+    };
 
     // --- PROFILE HANDLERS ---
     const handleDPChange = (e) => {
@@ -2622,20 +2641,28 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         })()}
 
                                         {/* Badge Area */}
-                                        <div style={{ textAlign: 'right' }}>
-                                            {isUnlocked ? (
-                                                <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                    ✅ Unlocked
-                                                </span>
-                                            ) : (
-                                                <>
-                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
-                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                        🪙 {getCostLabel(filePath)}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            {isUnlocked ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                    <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        ✅ Unlocked
+                                                    </span>
+                                                    {/* 🔥 THE FIX: Live Countdown Badge */}
+                                                    {getUnlockTimerText(filePath) && (
+                                                        <span style={{ fontSize: '10px', color: '#e74c3c', fontWeight: 'bold', background: 'rgba(231,76,60,0.1)', padding: '2px 6px', borderRadius: '4px', animation: 'pulse 2s infinite' }}>
+                                                            {getUnlockTimerText(filePath)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
+                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        🪙 {getCostLabel(filePath)}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )

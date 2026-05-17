@@ -261,6 +261,7 @@ const StudioDashboard = ({ user, onLogout }) => {
             fetchStudioBookings();
             fetchSubPlans(); // Fetch dynamic plans
             if (studioProfile.isFeedApproved) fetchMyFeedPosts();
+            fetchStudioSelections(); // 🔥 ADD THIS LINE FOR INITIAL LOAD!
 
             // 🚀 SOCKET.IO REAL-TIME CONNECTION
             const socket = io(SERVER_URL); 
@@ -277,6 +278,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 fetchClients();
                 fetchStudioBookings();
                 if (studioProfile.isFeedApproved) fetchMyFeedPosts();
+                fetchStudioSelections(); // 🔥 ADD THIS LINE FOR REAL-TIME MAGIC!
             });
 
             // Cleanup Socket on unmount
@@ -292,6 +294,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         if (activeTab === 'FEED' && studioProfile.isFeedApproved) fetchMyFeedPosts();
         if (activeTab === 'DASHBOARD') fetchClients();
         if (activeTab === 'PAYOUTS') fetchMyPayouts(); // 💳 Naya Payouts Fetch
+        if (activeTab === 'SELECTION_PROJECTS') fetchStudioSelections(); // 🔥 ADD THIS LINE!
     }, [activeTab]);
 
     // ✅ 1. SMART NETWORK MONITOR & 5-MIN GRACE PERIOD
@@ -904,21 +907,24 @@ const StudioDashboard = ({ user, onLogout }) => {
             const uploaderNameText = studioProfile?.studioName || user?.name || 'Studio Partner';
 
             if (uploadType === 'SELECTION') {
-                const selPayload = {
-                    clientMobile, 
-                    clientEmail, 
-                    folderName: baseFolder, 
-                    uploadReport: uploadReportData,
-                    sheetLimit: selectionForm.sheetLimit,
-                    imagesPerSheet: selectionForm.imagesPerSheet,
-                    costPerExtraSheet: selectionForm.costPerExtraSheet,
-                    totalPhases: selectionForm.totalPhases,
-                    cloudProvider: 'CLOUDINARY',
-                    addedBy: studioProfile?.mobile || user?.mobile || 'STUDIO',
-                    uploaderName: uploaderNameText,
-                    uploaderRole: 'Studio Partner',
-                    fileUrls: uploadedUrls // 🔥 THE PAYLOAD FIX: Mongoose needs 'fileUrls', not 'images'!
-                };
+                const selPayload = {
+                    clientMobile, 
+                    clientEmail, 
+                    folderName: baseFolder, 
+                    uploadReport: uploadReportData,
+                    sheetLimit: selectionForm.sheetLimit,
+                    imagesPerSheet: selectionForm.imagesPerSheet,
+                    costPerExtraSheet: selectionForm.costPerExtraSheet,
+                    totalPhases: selectionForm.totalPhases,
+                    cloudProvider: 'CLOUDINARY',
+                    addedBy: studioProfile?.mobile || user?.mobile || 'STUDIO',
+                    // 🔥 THE FIX: Backend ko batana padega ki ye kis Studio ka project hai!
+                    studioMobile: studioProfile?.mobile || user?.mobile,
+                    assignToStudio: studioProfile?.mobile || user?.mobile,
+                    uploaderName: uploaderNameText,
+                    uploaderRole: 'Studio Partner',
+                    fileUrls: uploadedUrls
+                };
                 
                 dbResNormal = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
                     headers: { 'Authorization': `Bearer ${getValidToken()}` },
@@ -952,10 +958,12 @@ const StudioDashboard = ({ user, onLogout }) => {
                     setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
                     setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
                     setFiles([]); document.getElementById('file-input-field').value = '';
-                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
-                    fetchClients(); fetchMyProfile(); 
-                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
-                    setLoading(false);
+                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    fetchClients(); fetchMyProfile();
+                    // 🔥 THE FIX: Upload hote hi turant selections list refresh maaro!
+                    fetchStudioSelections();
+                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
+                    setLoading(false);
                 }, 500);
             } else { 
                 alert(`❌ Error from Database: ${dbResNormal.data.message}`); 
