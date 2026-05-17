@@ -4223,6 +4223,34 @@ app.get('/api/auth/my-payouts', authenticateToken, async (req, res) => {
     }
 });
 
+// ==============================================================
+// ✨ SMART ALBUM SELECTIONS (GOD VIEW) FOR ADMIN
+// ==============================================================
+app.get('/api/auth/admin-get-all-selections', authenticateToken, async (req, res) => {
+    try {
+        // Sirf Admin ya Owner ko access milega
+        if (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: "Unauthorized Access!" });
+        }
+
+        // Agar tumhara Selection ka Mongoose Model hai, toh ye query chalegi
+        // Agar Model ka naam kuch aur hai (jaise AlbumSelection), toh usey yahan replace kar lena
+        const MongooseModel = mongoose.models.Selection || mongoose.models.AlbumSelection;
+
+        if (!MongooseModel) {
+            // Agar Model nahi bana hai, toh UI crash rokne ke liye khali array bhej do
+            return res.json({ success: true, data: [] });
+        }
+
+        const allSelections = await MongooseModel.find().sort({ createdAt: -1 });
+        res.json({ success: true, data: allSelections });
+
+    } catch (error) {
+        console.error("God View Fetch Error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch selections", data: [] });
+    }
+});
+
 // ==========================================
 // ⏰ 33. CRON JOB: AUTO-CONFIRM SPLIT AFTER 72 HOURS
 // ==========================================
