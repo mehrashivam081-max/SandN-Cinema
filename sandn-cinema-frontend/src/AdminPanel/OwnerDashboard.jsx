@@ -161,14 +161,32 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [previewProject, setPreviewProject] = useState(null);    
 
     // ==========================================
-    // 🚀 ADMIN SMART DOWNLOADER & PREVIEW ENGINE
-    // ==========================================
-    const handleMagicLogin = (project) => {
-        if (!project || !project.images || project.images.length === 0) return alert("No images found.");
-        setPreviewProject(project); 
+    // 🚀 ADMIN SMART DOWNLOADER & PREVIEW ENGINE
+    // ==========================================
+    const handleMagicLogin = (project) => {
+        if (!project || !project.images || project.images.length === 0) return alert("No images found.");
+        setPreviewProject(project); 
+    };
+
+    // ✅ NEW: DELETE ENTIRE SMART SELECTION PROJECT (God View)
+    const handleDeleteSelectionProject = async (projectId) => {
+        if (!window.confirm("⚠️ WARNING: Are you absolutely sure you want to delete this Selection Project? All data and client progress will be permanently lost!")) return;
+        try {
+            const token = getValidToken();
+            const res = await axios.post(`${API_BASE}/delete-selection-project`, { projectId }, { headers: { 'Authorization': `Bearer ${token}` } });
+            
+            if (res.data.success) {
+                alert("✅ Project deleted successfully!");
+                setAllSelections(prev => prev.filter(sel => sel._id !== projectId)); // 🔥 Removes from God View instantly
+            } else {
+                alert("❌ Failed to delete: " + res.data.message);
+            }
+        } catch (e) {
+            alert(`Error deleting project.`);
+        }
     };
 
-    const isSplitWindowActive = (project) => {
+    const isSplitWindowActive = (project) => {
         if (!project || !project.finalSubmissionDate) return false;
         if (project.splitCompleted) return false;
         const now = new Date();
@@ -1001,12 +1019,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
     };
 
 // 🚀 ENTERPRISE BACKGROUND UPLOAD QUEUE (MULTI-TASKING)
-    const handleUpload = async (isFeed = false) => {
-        const activeMobile = formData.mobile;
-        const activeFiles = formData.files;
-        const activeFolderName = formData.folderName;
-        const activeName = formData.name;
-        const activeEmail = formData.email;
+    const handleUpload = async (isFeed = false) => {
+        const activeMobile = formData.mobile;
+        const activeFiles = formData.files;
+        const activeFolderName = formData.folderName;
+        const activeName = formData.name;
+        const activeEmail = formData.email;
+        const activeUploadMode = uploadMode; // 🔥 THE FIX: Mode ko lock kar liya!
 
         if (!isFeed && (!activeMobile || activeMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         
@@ -1261,9 +1280,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
             }
 
             // 💾 3. SAVE TO DATABASE (🔥 FIX: Removed Extra Payload Data to prevent 400 Bad Request)
-            
-            if (uploadMode === 'SELECTION') {
-                const selPayload = {
+            
+            if (activeUploadMode === 'SELECTION') { // 🔥 THE FIX: Hamesha Smart Album hi banega!
+                const selPayload = {
                     clientMobile: activeMobile, 
                     clientEmail: activeEmail, 
                     folderName: baseFolder, 
@@ -1308,14 +1327,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     setLoading(false);
                 }
             } else {
-                // NORMAL UPLOAD
-                const normalPayloadData = {
-                    mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
-                    folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
-                    expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
-                    addedBy: user?.mobile || 'ADMIN', 
-                    imageCost: formData.imageCost || '5', videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
-                    uploadType: uploadMode,
+                // NORMAL UPLOAD
+                const normalPayloadData = {
+                    mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
+                    folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
+                    expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
+                    addedBy: user?.mobile || 'ADMIN', 
+                    imageCost: formData.imageCost || '5', videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
+                    uploadType: activeUploadMode, // 🔥 THE FIX: Ab ye Normal hi jayega
                     fileUrls: uploadedUrls.map(obj => ({ url: obj.url || obj }))
                 };
 
@@ -1749,12 +1768,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         </div>
                         
                         <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-                            {(() => {
-                                const selectedImgs = previewProject.images.filter(img => img.status === 'selected');
-                                if (selectedImgs.length === 0) return <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No finalized images available yet.</p>;
+                            {(() => {
+                                // 🔥 THE FIX: Filter hata diya taaki Upload hote hi saari photos Golden UI me dikhe!
+                                const displayImgs = previewProject.images || [];
+                                if (displayImgs.length === 0) return <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No images available yet.</p>;
 
-                                const groupedData = {};
-                                selectedImgs.forEach(img => {
+                                const groupedData = {};
+                                displayImgs.forEach(img => {
                                     const aTag = img.albumTag || 'Album 1';
                                     const sTag = img.subFolder || 'Main Event';
                                     if (!groupedData[aTag]) groupedData[aTag] = {};
@@ -1763,19 +1783,26 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 });
 
                                 return Object.keys(groupedData).sort().map((albumName) => {
-                                    const subFolders = groupedData[albumName];
-                                    const totalInAlbum = Object.values(subFolders).flat().length;
-                                    
-                                    return (
-                                        <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
-                                            <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: albumName === 'Album 2' ? 'rgba(243, 156, 18, 0.15)' : 'rgba(52, 152, 219, 0.15)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
-                                            
-                                            <h3 style={{ color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', position: 'relative', zIndex: 2 }}>
-                                                {albumName === 'Album 2' ? '📙' : '📘'} {albumName} 
-                                                <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: '12px', marginLeft: 'auto' }}>
-                                                    {totalInAlbum} Photos
-                                                </span>
-                                            </h3>
+                                        const subFolders = groupedData[albumName];
+                                        const totalInAlbum = Object.values(subFolders).flat().length;
+                                        
+                                        return (
+                                            <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: '1px solid #f39c12', boxShadow: '0 10px 30px rgba(243, 156, 18, 0.15)', position: 'relative', overflow: 'hidden' }}>
+                                                {/* 🔥 Premium Golden Glow Effect */}
+                                                <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'rgba(243, 156, 18, 0.15)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
+                                                
+                                                <h3 style={{ 
+                                                    color: '#f1c40f', 
+                                                    borderBottom: '1px solid rgba(243, 156, 18, 0.2)', 
+                                                    paddingBottom: '10px', 
+                                                    marginBottom: '20px',
+                                                    display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', position: 'relative', zIndex: 2
+                                                }}>
+                                                    ✨ {albumName} 
+                                                    <span style={{ fontSize: '11px', background: 'rgba(243, 156, 18, 0.1)', border: '1px solid rgba(243, 156, 18, 0.3)', color: '#f1c40f', padding: '3px 10px', borderRadius: '12px', marginLeft: 'auto' }}>
+                                                        {totalInAlbum} Photos
+                                                    </span>
+                                                </h3>
                                             
                                             {Object.keys(subFolders).sort().map(folderName => (
                                                 <div key={folderName} style={{ marginBottom: '25px', position: 'relative', zIndex: 2 }}>
@@ -2089,9 +2116,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                                 </td>
                                                 <td><strong style={{color: sel.extraAmountToPay > 0 ? '#e74c3c' : '#2ecc71'}}>₹{sel.extraAmountToPay || 0}</strong></td>
                                                 <td style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                    <button onClick={() => handleMagicLogin(sel)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>👁️ Preview Data</button>
+                                                    <button onClick={() => handleMagicLogin(sel)} style={{background:'#34495e', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>👁️ Preview Data</button>
                                                     
-                                                    {sel.status === 'Confirmed' || (sel.status === 'Completed' && !isSplitWindowActive(sel)) ? (
+                                                    {/* 🔥 THE DELETE BUTTON FOR ENTIRE PROJECT */}
+                                                    <button onClick={() => handleDeleteSelectionProject(sel._id)} style={{background:'#e74c3c', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>🗑️ Delete</button>
+                                                    
+                                                    {sel.status === 'Confirmed' || (sel.status === 'Completed' && !isSplitWindowActive(sel)) ? (
                                                         <button onClick={() => startSmartDownload(sel)} disabled={downloadManager.active && downloadManager.projectId === sel._id} style={{background: (downloadManager.active && downloadManager.projectId === sel._id) ? '#bdc3c7' : '#2ecc71', color:'white', border:'none', padding:'6px 10px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', fontWeight: 'bold'}}>
                                                             {downloadManager.active && downloadManager.projectId === sel._id ? 'Downloading...' : '📥 Download ZIP'}
                                                         </button>
