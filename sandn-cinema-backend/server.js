@@ -3300,18 +3300,20 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
     try {
         if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') return res.json({ success: false, message: "Unauthorized Action" });
 
-        const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider, uploaderName, uploaderRole } = req.body; 
+        const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider, uploaderName, uploaderRole, assignToStudio } = req.body; 
 
-        // 🛑 ANTI-EMPTY FOLDER SHIELD FOR SMART ALBUM
+        // 🛑 ANTI-EMPTY FOLDER SHIELD FOR SMART ALBUM
         if (!fileUrls || fileUrls.length === 0) {
             return res.status(400).json({ success: false, message: "Upload failed on the cloud. Smart Album creation aborted to prevent empty project." });
         }
 
         // Find Studio Name for Email
-        const studioAcc = await Studio.findOne({ mobile: req.user.mobile });
-        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Studio';
+        // 🔥 THE FIX: Agar Admin ne kisi Studio ko assign kiya hai, toh target wo hoga, warna khud Admin
+        const targetStudioMobile = assignToStudio ? assignToStudio : req.user.mobile;
+        const studioAcc = await Studio.findOne({ mobile: targetStudioMobile });
+        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Studio';
 
-        // ✅ FORMAT IMAGES (Smart Logic for Normal Arrays vs New Objects)
+        // ✅ FORMAT IMAGES (Smart Logic for Normal Arrays vs New Objects)
         const imageObjects = fileUrls.map(item => {
             if (typeof item === 'string') {
                 return { url: item, previewUrl: item, status: 'active', selectedBy: [], subFolder: 'Main Event', deletedAt: null };
@@ -3325,7 +3327,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const rawUrls = imageObjects.map(img => img.url);
 
         const newSelection = await AlbumSelection.create({
-            studioMobile: req.user.mobile,
+            studioMobile: targetStudioMobile, // 🔥 THE FIX: Assigned studio ka mobile save hoga
             studioName: sName,
             uploaderName: uploaderName || sName || 'Snevio Partner', // 🔥 NAYA
             uploaderRole: uploaderRole || 'Studio Partner', // 🔥 NAYA
@@ -4271,6 +4273,30 @@ cron.schedule('0 * * * *', async () => {
             console.log(`✅ Project ${proj.folderName} auto-confirmed after 72h window.`);
         }
     } catch (err) { console.error('Cron Error:', err.message); }
+});
+
+// ==========================================
+// 🗑️ DELETE SPECIFIC IMAGE FROM SMART ALBUM
+// ==========================================
+app.post('/api/auth/delete-selection-image', authenticateToken, async (req, res) => {
+    try {
+        const { projectId, fileUrl } = req.body;
+        const project = await AlbumSelection.findById(projectId);
+        
+        if (!project) return res.json({ success: false, message: "Project not found" });
+
+        // Filter out the image from both arrays
+        project.images = project.images.filter(img => img.url !== fileUrl);
+        if (project.allImages) {
+            project.allImages = project.allImages.filter(url => url !== fileUrl);
+        }
+
+        await project.save();
+        res.json({ success: true, message: "Image deleted successfully from Smart Album" });
+    } catch (error) {
+        console.error("Delete Selection Image Error:", error);
+        res.status(500).json({ success: false, message: "Server error deleting image" });
+    }
 });
 
 // --- START SERVER ---
