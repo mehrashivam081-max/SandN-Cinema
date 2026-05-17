@@ -1000,7 +1000,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
 // 🚀 ENTERPRISE BACKGROUND UPLOAD QUEUE (MULTI-TASKING)
     const handleUpload = async (isFeed = false) => {
-        
         const activeMobile = formData.mobile;
         const activeFiles = formData.files;
         const activeFolderName = formData.folderName;
@@ -1010,7 +1009,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if (!isFeed && (!activeMobile || activeMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         
         const currentFiles = isFeed ? feedFiles : activeFiles;
-        
         if (currentFiles.length === 0) return alert("Please select files to upload.");
 
         let baseFolder = activeFolderName.trim() || 'Snevio Photography';
@@ -1019,41 +1017,22 @@ const OwnerDashboard = ({ user, onLogout }) => {
             targetSubFolder = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); 
         }
 
-        // 🛑 NAYA: Start Controller for Background Job
         const controller = new AbortController();
 
-        // --- BACKGROUND QUEUE UI PREP (For Client Uploads Only) ---
-        let jobId = null;
-        const payloadData = {
-            mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
-            folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
-            expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
-            addedBy: user?.mobile || 'ADMIN', 
-            uploaderName: adminProfile?.name || 'Snevio Admin', // 🔥 NAYA: Uploader ka naam track hoga
-            uploaderRole: 'Super Admin', // 🔥 NAYA: Pata chalega ki Admin ne bheja hai
-            imageCost: formData.imageCost || '5',
-            videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
-            uploadType: uploadMode 
-        };
-
-        // 🚀 NEW: Local Ref for Background Queue Map
-        const fileProgressRef = {};
-
-        if (!isFeed) {
-            jobId = Date.now().toString();
-            const newJob = {
-                id: jobId, mobile: activeMobile, name: activeName || 'Client', folderName: baseFolder,
-                progress: 0, status: 'Preparing...', speed: '', eta: '', stats: '', controller: controller, // 🔥 NAYA
-                files: currentFiles, // 🚀 NEW
-                fileProgressMap: {}, // 🚀 NEW
-                liveActionText: ''   // 🚀 NEW
-            };
-            setUploadJobs(prev => [newJob, ...prev]);
+        let jobId = null;
+        if (!isFeed) {
+            jobId = Date.now().toString();
+            const newJob = {
+                id: jobId, mobile: activeMobile, name: activeName || 'Client', folderName: baseFolder,
+                progress: 0, status: 'Preparing...', speed: '', eta: '', stats: '', controller: controller, 
+                files: currentFiles, fileProgressMap: {}, liveActionText: ''   
+            };
+            setUploadJobs(prev => [newJob, ...prev]);
             
-            // 🧹 Clear form immediately for next user!
+            // Clear form
             setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' });
-            setUseDateFolder(false);
-            setUploadMode('NORMAL'); // 🔥 NAYA: Reset to Normal after upload queue
+            setUseDateFolder(false);
+            setUploadMode('NORMAL'); 
             const fileInput = document.getElementById('admin-file-input'); if (fileInput) fileInput.value = '';
             setFileStats({ photos: 0, videos: 0 });
             setPreviews([]);
@@ -1074,9 +1053,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
         let fallbackSpeed = '0.00';
 
         setUploadController(controller);
+        if (!fileProgressRef.current) fileProgressRef.current = {};
+
+        // 🔥 THE CORS FIX: Create a clean axios instance to prevent global 'Authorization' headers from leaking to Cloudinary
+        const cloudAxios = axios.create();
+        delete cloudAxios.defaults.headers.common['Authorization'];
 
         try {
-            // ⏱️ GLOBAL ETA TIMER FOR ADMIN
             const speedTracker = setInterval(() => {
                 const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
                 let bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
@@ -1098,47 +1081,42 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 let etaStr = etaSeconds > 60 ? `Total: ${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left` : `Total: ${Math.floor(etaSeconds)}s left`;
                 if (etaSeconds <= 0 || percentCompleted >= 98) etaStr = "Saving to Database...";
-
                 if (!navigator.onLine) etaStr = "Waiting for network...";
 
-                if (!isFeed) {
-                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: Math.min(percentCompleted, 99), speed: `${fallbackSpeed} MB/s`, status: `Cloud Upload... ${Math.min(percentCompleted, 99)}%`, eta: etaStr, stats: statsStr, fileProgressMap: {...fileProgressRef} } : job));
-                } else {
-                    setUploadProgress(Math.min(percentCompleted, 99)); 
-                    setUploadSpeed(`${fallbackSpeed} MB/s (Turbo Mode 🚀)`);
-                    setUploadETA(etaStr);
-                    setUploadStats(statsStr);
-                }
+                if (!isFeed) {
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: Math.min(percentCompleted, 99), speed: `${fallbackSpeed} MB/s`, status: `Cloud Upload... ${Math.min(percentCompleted, 99)}%`, eta: etaStr, stats: statsStr, fileProgressMap: {...fileProgressRef.current} } : job));
+                } else {
+                    setUploadProgress(Math.min(percentCompleted, 99)); 
+                    setUploadSpeed(`${fallbackSpeed} MB/s (Turbo Mode 🚀)`);
+                    setUploadETA(etaStr);
+                    setUploadStats(statsStr);
+                }
 
-                lastTotalLoaded = totalLoaded;
-            }, 500);
+                lastTotalLoaded = totalLoaded;
+            }, 500);
 
-            // 🧠 ADVANCED SLIDING WINDOW CHUNKING (With 0.1s Staggering to prevent RAM Crash)
-            let currentIndex = 0;
-            const activePromises = new Set();
+            let currentIndex = 0;
+            const activePromises = new Set();
 
-            while (currentIndex < currentFiles.length) {
-                const file = currentFiles[currentIndex];
-                const globalIndex = currentIndex;
-                currentIndex++;
+            while (currentIndex < currentFiles.length) {
+                const file = currentFiles[currentIndex];
+                const globalIndex = currentIndex;
+                currentIndex++;
 
-                const isVid = file.type.startsWith('video/');
-                const concurrencyLimit = isVid ? 1 : 5; 
+                const isVid = file.type.startsWith('video/');
+                const concurrencyLimit = isVid ? 1 : 5; 
 
-                // 🚦 Agar 5 slots full hain, toh kisi ek ke khatam hone ka wait karo
-                while (activePromises.size >= concurrencyLimit) {
-                    await Promise.race(activePromises);
-                }
+                while (activePromises.size >= concurrencyLimit) {
+                    await Promise.race(activePromises);
+                }
 
-                // 🛑 RAM CRASH PROTECTION: 0.1s (100ms) delay before firing next file
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 100));
 
-                // 🚀 NEW: Update Live Action Text in Queue
-                if (!isFeed) {
-                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, liveActionText: `Uploading ${file.name.length > 20 ? file.name.substring(0, 15) + '...' : file.name} to 📂 ${file.customSubFolder || 'Main Event'}...` } : job));
-                }
+                const actionTxt = `Uploading ${file.name.length > 20 ? file.name.substring(0, 15) + '...' : file.name} to 📂 ${file.customSubFolder || 'Main Event'}...`;
+                if (!isFeed) {
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, liveActionText: actionTxt } : job));
+                }
 
-                // 🚀 Naya upload task banao (Execution shuru)
                 const uploadTask = (async () => {
                     let attempt = 0;
                     const maxAttempts = 3;
@@ -1147,106 +1125,63 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     while (attempt < maxAttempts) {
                         try {
                             attempt++;
-                            loadedBytesArray[globalIndex] = 0; // Fresh start for retry
+                            loadedBytesArray[globalIndex] = 0; 
 
-                            // 🚨 STEP 1: ASK BACKEND FOR UPLOAD SIGNATURE
                             const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
                                 fileName: file.name, 
                                 fileType: file.type, 
                                 fileSizeGB: file.size / (1024 * 1024 * 1024),
-                                // 🔥 DYNAMIC FOLDER: Back-end ko client ka folder name batao
                                 targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
                             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
-                            // 🟢 STEP 2A: DIRECT CLOUD UPLOAD (CLOUDINARY/AWS)
                             if (sigRes.data.directUpload) {
                                 let finalUrl = '';
                                 
                                 if (sigRes.data.provider === 'CLOUDINARY') {
-                                    const formData = new FormData();
-                                    formData.append('file', file);
-                                    formData.append('api_key', sigRes.data.apiKey);
-                                    formData.append('timestamp', sigRes.data.timestamp);
-                                    formData.append('signature', sigRes.data.signature);
-                                    formData.append('folder', sigRes.data.folder);
+                                    const cFormData = new FormData();
+                                    cFormData.append('file', file);
+                                    cFormData.append('api_key', sigRes.data.apiKey);
+                                    cFormData.append('timestamp', sigRes.data.timestamp);
+                                    cFormData.append('signature', sigRes.data.signature);
+                                    cFormData.append('folder', sigRes.data.folder);
 
-                                    // 🔥 THE ULTIMATE FIX: Force Axios out, use pure Native XHR
-                                    const cloudinaryUpload = await new Promise((resolve, reject) => {
-                                        const xhr = new XMLHttpRequest();
-                                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, true);
-                                        
-                                        // Force remove ANY default headers that browsers/extensions might add
-                                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-
-                                        xhr.upload.onprogress = (e) => {
-                                            if (e.lengthComputable) {
-                                                loadedBytesArray[globalIndex] = e.loaded;
-                                                fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                    // 🔥 THE CORS FIX: Use the clean axios instance
+                                    const cloudinaryUpload = await cloudAxios.post(
+                                        `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`,
+                                        cFormData,
+                                        {
+                                            signal: controller.signal,
+                                            onUploadProgress: (e) => {
+                                                if (e.lengthComputable) {
+                                                    loadedBytesArray[globalIndex] = e.loaded;
+                                                    fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                                }
                                             }
-                                        };
-
-                                        xhr.onload = () => {
-                                            if (xhr.status >= 200 && xhr.status < 300) {
-                                                resolve({ data: JSON.parse(xhr.responseText) });
-                                            } else {
-                                                reject(new Error("Cloudinary Error: " + xhr.statusText));
-                                            }
-                                        };
-                                        
-                                        xhr.onerror = () => reject(new Error("Network Error"));
-                                        controller.signal.addEventListener('abort', () => { 
-                                            xhr.abort(); 
-                                            reject(new axios.Cancel("Aborted by user")); 
-                                        });
-
-                                        // Send ONLY formData, NO hidden tokens!
-                                        xhr.send(formData); 
-                                    });
-                                    
+                                        }
+                                    );
                                     finalUrl = cloudinaryUpload.data.secure_url;
                                 } 
                                 else {
-                                    // AWS S3 / STORJ / R2 Direct PUT
-                                    await new Promise((resolve, reject) => {
-                                        const xhr = new XMLHttpRequest();
-                                        xhr.open('PUT', sigRes.data.signedUrl, true);
-                                        xhr.setRequestHeader('Content-Type', file.type);
-                                        
-                                        xhr.upload.onprogress = (e) => {
+                                    // AWS S3
+                                    await cloudAxios.put(sigRes.data.signedUrl, file, {
+                                        headers: { 'Content-Type': file.type },
+                                        signal: controller.signal,
+                                        onUploadProgress: (e) => {
                                             if (e.lengthComputable) {
                                                 loadedBytesArray[globalIndex] = e.loaded;
-                                                fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                                fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
                                             }
-                                        };
-
-                                        xhr.onload = () => {
-                                            if (xhr.status >= 200 && xhr.status < 300) resolve(true);
-                                            else reject(new Error("AWS Error"));
-                                        };
-                                        
-                                        xhr.onerror = () => reject(new Error("Network Error"));
-                                        controller.signal.addEventListener('abort', () => { 
-                                            xhr.abort(); 
-                                            reject(new axios.Cancel("Aborted by user")); 
-                                        });
-
-                                        xhr.send(file);
+                                        }
                                     });
                                     finalUrl = sigRes.data.publicUrl;
                                 }
 
                                 loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef[globalIndex] = 100;
-                                
+                                fileProgressRef.current[file.name] = 100;
                                 successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; // Success!
+                                break; 
                             }
                             else {
-                                if (file.size > 100 * 1024 * 1024) {
-                                    alert(`🚨 Cannot upload ${file.name}! MEGA/IMGBB only supports max 100MB per file to prevent server crash. Please switch to Cloudinary or AWS S3 from Admin Dashboard.`);
-                                    throw new Error("File too large for proxy.");
-                                }
-
                                 const fd = new FormData();
                                 fd.append('file', file);
                                 fd.append('skipPreview', 'true'); 
@@ -1257,13 +1192,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     onUploadProgress: (e) => {
                                         if (e.lengthComputable) {
                                             loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef[globalIndex] = Math.round((e.loaded * 100) / e.total);
+                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
                                         }
                                     }
                                 });
 
                                 loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef[globalIndex] = 100;
+                                fileProgressRef.current[file.name] = 100;
                                 successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; 
                             }
@@ -1271,8 +1206,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             if (axios.isCancel(err)) throw err; 
                             
                             if (!navigator.onLine) {
-                                if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: 'Paused (Offline) ⚠️' } : job));
-                                else setUploadSpeed('Paused (No Internet) ⚠️');
+                                if (!isFeed) {
+                                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: 'Paused (Offline) ⚠️' } : job));
+                                } else {
+                                    setUploadSpeed('Paused (No Internet) ⚠️');
+                                }
                                 
                                 await new Promise(res => {
                                     const goOnline = () => { window.removeEventListener('online', goOnline); res(); };
@@ -1283,7 +1221,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 console.error(`🚨 Error on [${file.name}]:`, err.message);
                                 if (attempt >= maxAttempts) { 
                                     loadedBytesArray[globalIndex] = 0; 
-                                    fileProgressRef[globalIndex] = -1; // ❌ MARK AS FAILED
+                                    fileProgressRef.current[file.name] = -1; // ❌ FAILED
                                     return null; 
                                 }
                                 await new Promise(resolve => setTimeout(resolve, 3000));
@@ -1293,7 +1231,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     return successData;
                 })();
 
-                // 🔥 THE SYNC-SAFE FIX: ensure data is pushed BEFORE Promise.all finishes
                 const wrappedTask = (async () => {
                     try {
                         const data = await uploadTask;
@@ -1309,14 +1246,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 activePromises.add(wrappedTask);
             }
 
-            // 🛑 Aakhri files ka wait karo
             await Promise.all(activePromises);
-            clearInterval(speedTracker);
-
-            // 🔥 AUTO-RETRY LOGIC FOR ADMIN
-            const failedFilesList = currentFiles.filter((f, i) => fileProgressRef[i] === -1).map(f => f.name);
+            clearInterval(speedTracker); 
+            
+            const failedFilesList = currentFiles.filter((f) => fileProgressRef.current[f.name] === -1).map(f => f.name);
             const failedFilesCount = failedFilesList.length;
-
+            
             if (failedFilesCount > 0) {
                 if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: `⚠️ ${failedFilesCount} failed`, eta: 'Action Required' } : job));
                 else { setUploadSpeed(`⚠️ ${failedFilesCount} files failed`); setUploadETA('Waiting for your permission...'); }
@@ -1343,48 +1278,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 setUploadProgress(100); setUploadSpeed('Finalizing...'); setUploadETA('Saving Data to Server...');
             }
 
-            // 📊 Generate Upload Report
             const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
 
-            // 🛡️ ZERO DATA CHECK: Agar uploadedUrls khali hai toh save mat karo
             if (uploadedUrls.length === 0) {
                 setLoading(false);
                 if(!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed: No files uploaded' } : job));
                 return alert("🚨 Error: No files were successfully uploaded to Cloud. Database save cancelled.");
             }
 
-            // 💾 3. SAVE TO DATABASE
-            let backendRes;
-
-            if (uploadMode === 'SELECTION') {
-                // ✨ SMART ALBUM PAYLOAD FIX
-                const selPayload = {
-                    clientMobile: activeMobile, 
-                    clientEmail: activeEmail, 
-                    folderName: baseFolder, 
-                    uploadReport: uploadReportData,
-                    addedBy: user?.mobile || 'ADMIN',
-                    // Mapping each uploaded file to required Selection format
-                    images: uploadedUrls.map(item => ({ 
-                        url: item.url, 
-                        subFolder: item.subFolder || 'Main Event', 
-                        status: 'pending' 
-                    }))
-                };
-                
-                backendRes = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
-                });
-            } else {
-                // NORMAL UPLOAD
-                payloadData.fileUrls = uploadedUrls;
-                payloadData.uploadReport = uploadReportData;
-                backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
-                });
-            }
-
-            // ✅ IF UPLOADING TO PUBLIC FEED
+            // 💾 3. SAVE TO DATABASE (🔥 FIX: NO DUPLICATE `backendRes` VARIABLES)
             if (isFeed) {
                 let finalExpiryHours = '';
                 if (feedExpiryType === 'custom') {
@@ -1394,8 +1296,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 }
 
                 const feedPayload = {
-                    mobile: studioProfile.mobile,
-                    studioName: studioProfile.studioName || user.ownerName,
+                    mobile: user?.mobile,
+                    studioName: user?.name || 'Admin',
                     description: feedDescription,
                     feedCategory: feedCategory,
                     price: feedPrice,
@@ -1403,60 +1305,93 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     fileUrls: uploadedUrls 
                 };
                 
-                const backendRes = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload, {
+                const feedResponse = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload, {
                     headers: { 'Authorization': `Bearer ${getValidToken()}` }
                 });
                 
-                if (backendRes.data.success) {
+                if (feedResponse.data.success) {
                     setUploadETA('Complete!');
                     setTimeout(() => {
-                        alert(`✅ Success: ${backendRes.data.message}`);
+                        alert(`✅ Success: ${feedResponse.data.message}`);
                         setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
                         setFeedFiles([]); setFeedPreviews([]);
                         setFeedDescription(''); setFeedPrice(''); setFeedCategory('trending');
                         setFeedExpiryType('permanent'); setCustomExpiryHours('');
                         setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
                         setLoading(false);
-                        fetchMyFeedPosts(); // Refresh the grid
+                        fetchAds(); 
                     }, 500);
                 } else {
-                    alert(`❌ Error: ${backendRes.data.message}`); 
+                    alert(`❌ Error: ${feedResponse.data.message}`); 
                     setLoading(false);
                 }
-                return; 
+            } else if (uploadMode === 'SELECTION') {
+                const selPayload = {
+                    clientMobile: activeMobile, 
+                    clientEmail: activeEmail, 
+                    folderName: baseFolder, 
+                    uploadReport: uploadReportData,
+                    addedBy: user?.mobile || 'ADMIN',
+                    images: uploadedUrls.map(item => ({ 
+                        url: item.url, 
+                        subFolder: item.subFolder || 'Main Event', 
+                        status: 'pending' 
+                    }))
+                };
+                
+                const selResponse = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+
+                if (selResponse.data.success) {
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
+                    fetchAccounts();
+                } else { 
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${selResponse.data.message}` } : job));
+                }
+            } else {
+                // NORMAL UPLOAD
+                const normalPayloadData = {
+                    mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
+                    folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
+                    expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
+                    addedBy: user?.mobile || 'ADMIN', 
+                    uploaderName: adminProfile?.name || 'Snevio Admin',
+                    uploaderRole: 'Super Admin', 
+                    imageCost: formData.imageCost || '5',
+                    videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
+                    uploadType: uploadMode,
+                    fileUrls: uploadedUrls,
+                    uploadReport: uploadReportData
+                };
+
+                const normalResponse = await axios.post(`${API_BASE}/admin-add-user-cloud`, normalPayloadData, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+
+                if (normalResponse.data.success) {
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
+                    fetchAccounts();
+                } else { 
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${normalResponse.data.message}` } : job));
+                }
             }
-
-            // ✅ IF UPLOADING TO CLIENT FOLDER
-            payloadData.fileUrls = uploadedUrls;
-            payloadData.uploadReport = uploadReportData; // 🔥 NAYA: Injecting Report
-
-            const backendRes = await axios.post(`${API_BASE}/admin-add-user-cloud`, payloadData, {
-                headers: { 'Authorization': `Bearer ${getValidToken()}` }
-            });
-
-            if (backendRes.data.success) {
-                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
-                fetchAccounts();
-            } else { 
-                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${backendRes.data.message}` } : job));
-            }
-        } catch (error) { 
-            // 🛑 NAYA: Agar user ne Stop kiya hai, toh ye yahi ruk jayega
+        } catch (error) { 
             if (axios.isCancel(error)) {
                 console.log('Upload aborted by user.');
                 return;
             }
 
-            console.error(error);
-            if (!isFeed) {
-                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
-            } else {
-                alert("Upload Failed. Check internet connection."); 
-                setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
-                setLoading(false);
-            }
-        } 
-    };
+            console.error(error);
+            if (!isFeed) {
+                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
+            } else {
+                alert("Upload Failed. Check internet connection."); 
+                setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
+                setLoading(false);
+            }
+        } 
+    };
 
 
     // ==========================================
