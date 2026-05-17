@@ -190,8 +190,19 @@ const platformSettingSchema = new mongoose.Schema({
         bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
     },
 
-    // GLOBAL DEFAULT PRICING
-    defaultPricing: {
+    // 🚦 SMART CLOUD ROUTING & UPLOAD LOGIC
+    cloudRouting: {
+        freeCloudId: String,
+        freeMaxFileMB: Number,
+        freeUploadLogic: { type: String, default: 'STREAM' }, // 'STREAM' or 'DIRECT'
+        defaultFreeStorageGB: Number,
+        paidCloudId: String,
+        paidMaxFileMB: Number,
+        paidUploadLogic: { type: String, default: 'DIRECT' } // 'STREAM' or 'DIRECT'
+    },
+
+    // GLOBAL DEFAULT PRICING
+    defaultPricing: {
         imageCost: { type: Number, default: 5 },
         videoCost: { type: Number, default: 10 }
     },
@@ -258,6 +269,8 @@ const albumSelectionSchema = new mongoose.Schema({
     clientMobile: { type: String, required: true },
     clientEmail: { type: String, default: '' },
     folderName: { type: String, required: true },
+    uploadReport: { type: mongoose.Schema.Types.Mixed, default: {} },
+    cloudProvider: { type: String, default: 'CLOUDINARY' },
     
     // ⚙️ Limits & Pricing (For Extra Earning)
     sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain
@@ -285,6 +298,7 @@ const albumSelectionSchema = new mongoose.Schema({
     // 📸 Data Arrays (Stateful Image Tracking)
     images: [{
         url: String,
+        previewUrl: { type: String, default: '' },
         status: { type: String, enum: ['active', 'selected', 'rejected'], default: 'active' },
         selectedBy: [{ type: String }], // Array of mobile numbers (Jo family member select karega uska number)
         subFolder: { type: String, default: 'Main Event' }, // ✅ Added subFolder support for Multi-Folder Uploads
