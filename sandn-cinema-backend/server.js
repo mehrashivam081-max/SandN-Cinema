@@ -3425,15 +3425,30 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
 
 // 2. Fetch Selections (For Studio Dashboard)
 app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) => {
-    try {
-        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN') return res.json({ success: false, message: "Unauthorized Action" });
-        
-        const selections = await AlbumSelection.find({ studioMobile: req.user.mobile }).sort({ createdAt: -1 });
-        res.json({ success: true, data: selections });
-    } catch (e) {
-        console.error("Selection Update Error:", e);
-        res.status(500).json({ success: false, message: "Server error during selection update.", error: e.message });
-    }
+    try {
+        // Allow Owner, Admin, and Studio to fetch
+        if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: "Unauthorized Action" });
+        }
+        
+        // Mobile number ko clean string banao
+        const cleanMobile = String(req.user.mobile).trim();
+
+        // 🔥 ULTIMATE FALLBACK QUERY: String, Number, aur AssignToStudio sab check karega!
+        const selections = await AlbumSelection.find({ 
+            $or: [
+                { studioMobile: cleanMobile },
+                { studioMobile: Number(cleanMobile) },
+                { assignToStudio: cleanMobile },
+                { assignToStudio: Number(cleanMobile) }
+            ]
+        }).sort({ createdAt: -1 });
+
+        res.json({ success: true, data: selections });
+    } catch (e) {
+        console.error("Selection Fetch Error:", e);
+        res.status(500).json({ success: false, message: "Server error during selection fetch." });
+    }
 });
 
 // 🔄 MOVE IMAGE BETWEEN ALBUMS (SPLIT LOGIC)
