@@ -3307,11 +3307,10 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
             return res.status(400).json({ success: false, message: "Upload failed on the cloud. Smart Album creation aborted to prevent empty project." });
         }
 
-        // Find Studio Name for Email
-        // 🔥 THE FIX: Agar Admin ne kisi Studio ko assign kiya hai, toh target wo hoga, warna khud Admin
-        const targetStudioMobile = assignToStudio ? assignToStudio : req.user.mobile;
+        // 🔥 HARD-LOCK: Agar Admin ne assign nahi kiya, toh mobile ki jagah ADMIN_ONLY save hoga!
+        const targetStudioMobile = (assignToStudio && assignToStudio.trim() !== '') ? assignToStudio : ("ADMIN_ONLY_" + req.user.mobile);
         const studioAcc = await Studio.findOne({ mobile: targetStudioMobile });
-        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Studio';
+        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Admin';
 
         // ✅ FORMAT IMAGES (Smart Logic for Normal Arrays vs New Objects)
         const imageObjects = fileUrls.map(item => {
@@ -3327,9 +3326,9 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const rawUrls = imageObjects.map(img => img.url);
 
         const newSelection = await AlbumSelection.create({
-            studioMobile: targetStudioMobile, // 🔥 THE FIX: Assigned studio ka mobile save hoga
+            studioMobile: targetStudioMobile, // 🔥 THE LOCK: Ab studio ko nahi dikhega!
             studioName: sName,
-            uploaderName: uploaderName || sName || 'Snevio Partner', // 🔥 NAYA
+            uploaderName: uploaderName || sName || 'Snevio Admin',
             uploaderRole: uploaderRole || 'Studio Partner', // 🔥 NAYA
             clientMobile: getCleanMobile(clientMobile),
             clientEmail: clientEmail,
