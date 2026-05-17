@@ -2603,7 +2603,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         </div>
 
                                         {/* 🔥 NAYA: Assign to Studio Dropdown */}
-                                        {activeUploadMode === 'SELECTION' && (
+                                        {uploadMode === 'SELECTION' && (
                                             <div style={{ background: '#fff9c4', padding: '10px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
                                                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#d35400' }}>🏢 Assign to Studio (Optional)</label>
                                                 <select value={formData.assignToStudio} onChange={(e) => setFormData({ ...formData, assignToStudio: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px', fontWeight: 'bold' }}>
