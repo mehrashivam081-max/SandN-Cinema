@@ -337,7 +337,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
         credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
     });
-    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5' });
+    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5', freeUploadLogic: 'STREAM', paidUploadLogic: 'DIRECT' });
 
     // ✅ Dynamic Location Counter
 
@@ -520,7 +520,9 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         paidCloudId: res.data.data.cloudRouting.paidCloudId || '',
                         freeMaxFileMB: res.data.data.cloudRouting.freeMaxFileMB || prev.freeMaxFileMB,
                         paidMaxFileMB: res.data.data.cloudRouting.paidMaxFileMB || prev.paidMaxFileMB,
-                        defaultFreeStorageGB: res.data.data.cloudRouting.defaultFreeStorageGB || prev.defaultFreeStorageGB
+                        defaultFreeStorageGB: res.data.data.cloudRouting.defaultFreeStorageGB || prev.defaultFreeStorageGB,
+                        freeUploadLogic: res.data.data.cloudRouting.freeUploadLogic || 'STREAM',
+                        paidUploadLogic: res.data.data.cloudRouting.paidUploadLogic || 'DIRECT'
                     }));
                 }
             }
@@ -1029,7 +1031,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
             };
             setUploadJobs(prev => [newJob, ...prev]);
             
-            // Clear form
             setFormData({ type: 'USER', name: '', mobile: '', email: '', folderName: '', files: [], expiryDays: '30', downloadLimit: '0', imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost, unlockValidity: '24 Hours' });
             setUseDateFolder(false);
             setUploadMode('NORMAL'); 
@@ -1037,7 +1038,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
             setFileStats({ photos: 0, videos: 0 });
             setPreviews([]);
             setUploadSubTab('BASIC'); 
-            alert("✅ Upload Queued in Background! You can prepare the next client data.");
+            alert("✅ Upload Queued in Background!");
         } else {
             setLoading(true);
             setUploadProgress(0); setUploadSpeed('Preparing Feed Upload...'); setUploadETA('Calculating...');
@@ -1054,10 +1055,6 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
         setUploadController(controller);
         if (!fileProgressRef.current) fileProgressRef.current = {};
-
-        // 🔥 THE CORS FIX: Create a clean axios instance to prevent global 'Authorization' headers from leaking to Cloudinary
-        const cloudAxios = axios.create();
-        delete cloudAxios.defaults.headers.common['Authorization'];
 
         try {
             const speedTracker = setInterval(() => {
@@ -1081,13 +1078,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 let etaStr = etaSeconds > 60 ? `Total: ${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left` : `Total: ${Math.floor(etaSeconds)}s left`;
                 if (etaSeconds <= 0 || percentCompleted >= 98) etaStr = "Saving to Database...";
-                if (!navigator.onLine) etaStr = "Waiting for network...";
 
                 if (!isFeed) {
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: Math.min(percentCompleted, 99), speed: `${fallbackSpeed} MB/s`, status: `Cloud Upload... ${Math.min(percentCompleted, 99)}%`, eta: etaStr, stats: statsStr, fileProgressMap: {...fileProgressRef.current} } : job));
                 } else {
                     setUploadProgress(Math.min(percentCompleted, 99)); 
-                    setUploadSpeed(`${fallbackSpeed} MB/s (Turbo Mode 🚀)`);
+                    setUploadSpeed(`${fallbackSpeed} MB/s 🚀`);
                     setUploadETA(etaStr);
                     setUploadStats(statsStr);
                 }
@@ -1112,7 +1108,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
                 await new Promise(resolve => setTimeout(resolve, 100));
 
-                const actionTxt = `Uploading ${file.name.length > 20 ? file.name.substring(0, 15) + '...' : file.name} to 📂 ${file.customSubFolder || 'Main Event'}...`;
+                const actionTxt = `Uploading ${file.name.substring(0, 15)}...`;
                 if (!isFeed) {
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, liveActionText: actionTxt } : job));
                 }
@@ -1127,6 +1123,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                             attempt++;
                             loadedBytesArray[globalIndex] = 0; 
 
+                            // Ask backend for routing decision (Stream vs Direct)
                             const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
                                 fileName: file.name, 
                                 fileType: file.type, 
@@ -1134,6 +1131,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
                             }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
+                            // 🟢 DIRECT CLOUD UPLOAD (NO CORS)
                             if (sigRes.data.directUpload) {
                                 let finalUrl = '';
                                 
@@ -1145,34 +1143,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                     cFormData.append('signature', sigRes.data.signature);
                                     cFormData.append('folder', sigRes.data.folder);
 
-                                    // 🔥 THE CORS FIX: Use the clean axios instance
-                                    const cloudinaryUpload = await cloudAxios.post(
-                                        `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`,
-                                        cFormData,
-                                        {
-                                            signal: controller.signal,
-                                            onUploadProgress: (e) => {
-                                                if (e.lengthComputable) {
-                                                    loadedBytesArray[globalIndex] = e.loaded;
-                                                    fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
-                                                }
-                                            }
-                                        }
-                                    );
-                                    finalUrl = cloudinaryUpload.data.secure_url;
+                                    // 🔥 THE ULTIMATE CORS FIX: Native Fetch API instead of Axios
+                                    const fetchResponse = await fetch(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, {
+                                        method: 'POST',
+                                        body: cFormData,
+                                        signal: controller.signal
+                                    });
+
+                                    if (!fetchResponse.ok) throw new Error(`Cloudinary Error: ${fetchResponse.statusText}`);
+                                    const cData = await fetchResponse.json();
+                                    finalUrl = cData.secure_url;
                                 } 
                                 else {
-                                    // AWS S3
-                                    await cloudAxios.put(sigRes.data.signedUrl, file, {
+                                    // AWS S3 / R2 using Native Fetch
+                                    const fetchResponse = await fetch(sigRes.data.signedUrl, {
+                                        method: 'PUT',
                                         headers: { 'Content-Type': file.type },
-                                        signal: controller.signal,
-                                        onUploadProgress: (e) => {
-                                            if (e.lengthComputable) {
-                                                loadedBytesArray[globalIndex] = e.loaded;
-                                                fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
-                                            }
-                                        }
+                                        body: file,
+                                        signal: controller.signal
                                     });
+
+                                    if (!fetchResponse.ok) throw new Error("AWS Error");
                                     finalUrl = sigRes.data.publicUrl;
                                 }
 
@@ -1181,6 +1172,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
                                 break; 
                             }
+                            // 🔵 PROXY UPLOAD (STREAMING)
                             else {
                                 const fd = new FormData();
                                 fd.append('file', file);
@@ -1203,20 +1195,14 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                 break; 
                             }
                         } catch (err) {
-                            if (axios.isCancel(err)) throw err; 
+                            if (err.name === "AbortError" || axios.isCancel(err)) throw err; 
                             
                             if (!navigator.onLine) {
-                                if (!isFeed) {
-                                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: 'Paused (Offline) ⚠️' } : job));
-                                } else {
-                                    setUploadSpeed('Paused (No Internet) ⚠️');
-                                }
-                                
+                                attempt--; 
                                 await new Promise(res => {
                                     const goOnline = () => { window.removeEventListener('online', goOnline); res(); };
                                     window.addEventListener('online', goOnline);
                                 });
-                                attempt--; 
                             } else {
                                 console.error(`🚨 Error on [${file.name}]:`, err.message);
                                 if (attempt >= maxAttempts) { 
@@ -1234,9 +1220,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 const wrappedTask = (async () => {
                     try {
                         const data = await uploadTask;
-                        if (data) {
-                            uploadedUrls.push(data);
-                        }
+                        if (data) uploadedUrls.push(data);
                         return data;
                     } finally {
                         activePromises.delete(wrappedTask);
@@ -1247,11 +1231,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
             }
 
             await Promise.all(activePromises);
-            clearInterval(speedTracker); 
-            
-            const failedFilesList = currentFiles.filter((f) => fileProgressRef.current[f.name] === -1).map(f => f.name);
+            clearInterval(speedTracker);
+
+            const failedFilesList = currentFiles.filter(f => fileProgressRef.current[f.name] === -1).map(f => f.name);
             const failedFilesCount = failedFilesList.length;
-            
+
             if (failedFilesCount > 0) {
                 if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, speed: `⚠️ ${failedFilesCount} failed`, eta: 'Action Required' } : job));
                 else { setUploadSpeed(`⚠️ ${failedFilesCount} files failed`); setUploadETA('Waiting for your permission...'); }
@@ -1261,12 +1245,10 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 if (userWantsRetry) {
                     if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '🔄 Retrying...', progress: 0 } : job));
                     return handleUpload(isFeed);
-                } else {
-                    console.log("Skipping failed files. Proceeding to DB save...");
                 }
             }
 
-            if (uploadedUrls.length === 0 && failedFilesCount === 0) {
+            if (uploadedUrls.length === 0) {
                 if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Cloud Error.' } : job));
                 else { setLoading(false); alert("❌ All uploads failed."); }
                 return;
@@ -1278,76 +1260,52 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 setUploadProgress(100); setUploadSpeed('Finalizing...'); setUploadETA('Saving Data to Server...');
             }
 
-            const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
+            // 💾 3. SAVE TO DATABASE (🔥 FIX: Removed Extra Payload Data to prevent 400 Bad Request)
+            
+            if (uploadMode === 'SELECTION') {
+                const selPayload = {
+                    clientMobile: activeMobile, 
+                    clientEmail: activeEmail, 
+                    folderName: baseFolder, 
+                    addedBy: user?.mobile || 'ADMIN',
+                    sheetLimit: '30',
+                    imagesPerSheet: '4',
+                    costPerExtraSheet: '150',
+                    totalPhases: '3',
+                    cloudProvider: 'CLOUDINARY',
+                    fileUrls: uploadedUrls // 🔥 THE FIX: Backend 'fileUrls' expect kar raha hai, 'images' nahi!
+                };
+                
+                const dbRes1 = await axios.post(`${API_BASE}/create-album-selection`, selPayload, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
-            if (uploadedUrls.length === 0) {
-                setLoading(false);
-                if(!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed: No files uploaded' } : job));
-                return alert("🚨 Error: No files were successfully uploaded to Cloud. Database save cancelled.");
-            }
-
-            // 💾 3. SAVE TO DATABASE (🔥 FIX: NO DUPLICATE `backendRes` VARIABLES)
-            if (isFeed) {
-                let finalExpiryHours = '';
-                if (feedExpiryType === 'custom') {
-                    finalExpiryHours = customExpiryHours;
-                } else if (feedExpiryType !== 'permanent') {
-                    finalExpiryHours = feedExpiryType;
+                if (dbRes1.data.success) {
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
+                    fetchAccounts();
+                } else { 
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${dbRes1.data.message}` } : job));
                 }
 
+            } else if (isFeed) {
                 const feedPayload = {
                     mobile: user?.mobile,
                     studioName: user?.name || 'Admin',
                     description: feedDescription,
                     feedCategory: feedCategory,
                     price: feedPrice,
-                    expiryHours: finalExpiryHours, 
+                    expiryHours: feedExpiryType === 'custom' ? customExpiryHours : feedExpiryType, 
                     fileUrls: uploadedUrls 
                 };
                 
-                const feedResponse = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
-                });
+                const dbRes2 = await axios.post(`${API_BASE}/upload-feed-post`, feedPayload, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
                 
-                if (feedResponse.data.success) {
-                    setUploadETA('Complete!');
-                    setTimeout(() => {
-                        alert(`✅ Success: ${feedResponse.data.message}`);
-                        setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
-                        setFeedFiles([]); setFeedPreviews([]);
-                        setFeedDescription(''); setFeedPrice(''); setFeedCategory('trending');
-                        setFeedExpiryType('permanent'); setCustomExpiryHours('');
-                        setFileStats(prev => ({ ...prev, feedPhotos: 0, feedVideos: 0 }));
-                        setLoading(false);
-                        fetchAds(); 
-                    }, 500);
-                } else {
-                    alert(`❌ Error: ${feedResponse.data.message}`); 
+                if (dbRes2.data.success) {
+                    alert(`✅ Success: ${dbRes2.data.message}`);
+                    setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
+                    setFeedFiles([]); setFeedPreviews([]);
                     setLoading(false);
-                }
-            } else if (uploadMode === 'SELECTION') {
-                const selPayload = {
-                    clientMobile: activeMobile, 
-                    clientEmail: activeEmail, 
-                    folderName: baseFolder, 
-                    uploadReport: uploadReportData,
-                    addedBy: user?.mobile || 'ADMIN',
-                    images: uploadedUrls.map(item => ({ 
-                        url: item.url, 
-                        subFolder: item.subFolder || 'Main Event', 
-                        status: 'pending' 
-                    }))
-                };
-                
-                const selResponse = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
-                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
-                });
-
-                if (selResponse.data.success) {
-                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
-                    fetchAccounts();
-                } else { 
-                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${selResponse.data.message}` } : job));
+                } else {
+                    alert(`❌ Error: ${dbRes2.data.message}`); 
+                    setLoading(false);
                 }
             } else {
                 // NORMAL UPLOAD
@@ -1356,40 +1314,27 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
                     expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
                     addedBy: user?.mobile || 'ADMIN', 
-                    uploaderName: adminProfile?.name || 'Snevio Admin',
-                    uploaderRole: 'Super Admin', 
-                    imageCost: formData.imageCost || '5',
-                    videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
+                    imageCost: formData.imageCost || '5', videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
                     uploadType: uploadMode,
-                    fileUrls: uploadedUrls,
-                    uploadReport: uploadReportData
+                    fileUrls: uploadedUrls.map(obj => ({ url: obj.url || obj }))
                 };
 
-                const normalResponse = await axios.post(`${API_BASE}/admin-add-user-cloud`, normalPayloadData, {
+                const dbRes3 = await axios.post(`${API_BASE}/admin-add-user-cloud`, normalPayloadData, {
                     headers: { 'Authorization': `Bearer ${getValidToken()}` }
                 });
 
-                if (normalResponse.data.success) {
+                if (dbRes3.data.success) {
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, progress: 100, status: '✅ Completed & Notified' } : job));
                     fetchAccounts();
                 } else { 
-                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${normalResponse.data.message}` } : job));
+                    setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${dbRes3.data.message}` } : job));
                 }
             }
         } catch (error) { 
-            if (axios.isCancel(error)) {
-                console.log('Upload aborted by user.');
-                return;
-            }
-
+            if (error.name === "AbortError" || axios.isCancel(error)) return console.log('Upload aborted.');
             console.error(error);
-            if (!isFeed) {
-                setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
-            } else {
-                alert("Upload Failed. Check internet connection."); 
-                setUploadProgress(0); setUploadSpeed(''); setUploadETA('');
-                setLoading(false);
-            }
+            if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
+            else { alert("Upload Failed. Check internet connection."); setLoading(false); }
         } 
     };
 
@@ -3473,6 +3418,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                             <option value="">-- Use Default Active Route --</option>
                                             {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>{acc.nickname} ({acc.provider})</option>)}
                                         </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Upload Method (Logic)</label>
+                                        <select value={cloudRoutingForm.freeUploadLogic} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, freeUploadLogic: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px', color: '#8e44ad', fontWeight: 'bold'}}>
+                                            <option value="STREAM">Proxy Stream (Safe, with Limits & Watermarks)</option>
+                                            <option value="DIRECT">Direct Cloud (Fast, No limits, No Watermarks)</option>
+                                        </select>
                                         <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
                                         <input type="number" required value={cloudRoutingForm.freeMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, freeMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}} />
                                         <label style={{fontSize:'12px', fontWeight:'bold'}}>Total Free Storage limit (GB)</label>
@@ -3485,6 +3435,11 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <select value={cloudRoutingForm.paidCloudId} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidCloudId: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}}>
                                             <option value="">-- Use Default Active Route --</option>
                                             {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>{acc.nickname} ({acc.provider})</option>)}
+                                        </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Upload Method (Logic)</label>
+                                        <select value={cloudRoutingForm.paidUploadLogic} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidUploadLogic: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px', color: '#27ae60', fontWeight: 'bold'}}>
+                                            <option value="DIRECT">Direct Cloud (Fast, No limits, No Watermarks)</option>
+                                            <option value="STREAM">Proxy Stream (Safe, with Limits & Watermarks)</option>
                                         </select>
                                         <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
                                         <input type="number" required value={cloudRoutingForm.paidMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
