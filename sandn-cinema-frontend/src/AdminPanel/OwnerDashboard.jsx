@@ -48,12 +48,13 @@ const OwnerDashboard = ({ user, onLogout }) => {
         email: '',          
         folderName: '', 
         files: [],
-        expiryDays: '30',        
-        downloadLimit: '0',
-        imageCost: '5',
-        videoCost: '10',
-        unlockValidity: '24 Hours' 
-    });
+        expiryDays: '30',        
+        downloadLimit: '0',
+        imageCost: '5',
+        videoCost: '10',
+        unlockValidity: '24 Hours',
+        assignToStudio: '' // 🔥 NAYA: Studio assignment
+    });
     
     const [previews, setPreviews] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1283,11 +1284,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
             
             if (activeUploadMode === 'SELECTION') { // 🔥 THE FIX: Hamesha Smart Album hi banega!
                 const selPayload = {
-                    clientMobile: activeMobile, 
-                    clientEmail: activeEmail, 
-                    folderName: baseFolder, 
-                    addedBy: user?.mobile || 'ADMIN',
-                    sheetLimit: '30',
+                    clientMobile: activeMobile, 
+                    clientEmail: activeEmail, 
+                    folderName: baseFolder, 
+                    addedBy: user?.mobile || 'ADMIN',
+                    assignToStudio: formData.assignToStudio, // 🔥 THE FIX: Studio assignment
+                    sheetLimit: '30',
                     imagesPerSheet: '4',
                     costPerExtraSheet: '150',
                     totalPhases: '3',
@@ -2594,13 +2596,29 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         </div>
                                         
                                         <div>
-                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
-                                            <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
-                                                <option value="USER">User</option><option value="STUDIO">Studio</option>
-                                            </select>
-                                        </div>
+                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Role</label>
+                                            <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="custom-admin-input">
+                                                <option value="USER">User</option><option value="STUDIO">Studio</option>
+                                            </select>
+                                        </div>
 
-                                        {/* Show Active Mode Indicator */}
+                                        {/* 🔥 NAYA: Assign to Studio Dropdown */}
+                                        {activeUploadMode === 'SELECTION' && (
+                                            <div style={{ background: '#fff9c4', padding: '10px', borderRadius: '8px', border: '1px solid #f1c40f' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#d35400' }}>🏢 Assign to Studio (Optional)</label>
+                                                <select value={formData.assignToStudio} onChange={(e) => setFormData({ ...formData, assignToStudio: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px', fontWeight: 'bold' }}>
+                                                    <option value="">-- Keep it for Admin Only --</option>
+                                                    {accounts.filter(a => a.role === 'STUDIO').map((studio, idx) => (
+                                                        <option key={idx} value={studio.mobile}>
+                                                            {studio.studioName || studio.ownerName} ({studio.mobile})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p style={{ fontSize: '11px', color: '#555', margin: '3px 0 0 0' }}>If selected, this studio will be able to manage this album in their dashboard.</p>
+                                            </div>
+                                        )}
+
+                                        {/* Show Active Mode Indicator */}
                                         {uploadMode === 'SELECTION' && (
                                             <div style={{ background: '#f5eef8', padding: '10px', borderRadius: '8px', border: '1px dashed #8e44ad', fontSize: '12px', color: '#8e44ad', fontWeight: 'bold' }}>
                                                 ✨ Smart Album Mode Active. User can select photos.
