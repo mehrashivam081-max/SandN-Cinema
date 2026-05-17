@@ -89,6 +89,12 @@ const StudioDashboard = ({ user, onLogout }) => {
     
     // ✅ NEW: VIEW CLIENT UI STATE (For Modal)
     const [previewProject, setPreviewProject] = useState(null);
+    const [renderLimit, setRenderLimit] = useState(50); // 🔥 NAYA: Infinite Scroll DOM Chunking (Speed Booster)
+
+    // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
+    useEffect(() => {
+        if (previewProject) setRenderLimit(50);
+    }, [previewProject]);
 
     // --- UPLOAD PROGRESS TRACKER STATES ---
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -1469,16 +1475,31 @@ const StudioDashboard = ({ user, onLogout }) => {
                             <button onClick={() => setPreviewProject(null)} style={{ background: 'transparent', border: 'none', fontSize: '24px', color: '#fff', cursor: 'pointer' }}>✖</button>
                         </div>
                         
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-                            {previewProject.images && previewProject.images.length > 0 ? (
-                                (() => {
-                                    // 1. Sirf selected images filter karo
-                                    const selectedImgs = previewProject.images.filter(img => img.status === 'selected');
-                                    if (selectedImgs.length === 0) return <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No finalized images available yet.</p>;
+                        {/* 🔥 THE FIX: onScroll event for Infinite Scroll DOM Chunking! */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }} onScroll={(e) => {
+                            if (e.target.scrollHeight - e.target.scrollTop <= e.target.clientHeight + 400) {
+                                setRenderLimit(prev => Math.min(prev + 50, previewProject.images?.length || prev));
+                            }
+                        }}>
+                            {previewProject.images && previewProject.images.length > 0 ? (
+                                (() => {
+                                    const allSelectedImgs = previewProject.images.filter(img => img.status === 'selected');
+                                    if (allSelectedImgs.length === 0) return <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No finalized images available yet.</p>;
 
-                                    // 2. Images ko 'albumTag' aur phir 'subFolder' ke hisaab se group karo
+                                    // 1. Calculate Real Totals using ALL images
+                                    const originalGroupedData = {};
+                                    allSelectedImgs.forEach(img => {
+                                        const aTag = img.albumTag || 'Album 1';
+                                        const sTag = img.subFolder || 'Main Event';
+                                        if (!originalGroupedData[aTag]) originalGroupedData[aTag] = {};
+                                        if (!originalGroupedData[aTag][sTag]) originalGroupedData[aTag][sTag] = [];
+                                        originalGroupedData[aTag][sTag].push(img);
+                                    });
+
+                                    // 2. Chunking logic (DOM Optimization)
+                                    const displayImgs = allSelectedImgs.slice(0, renderLimit);
                                     const groupedData = {};
-                                    selectedImgs.forEach(img => {
+                                    displayImgs.forEach(img => {
                                         const aTag = img.albumTag || 'Album 1';
                                         const sTag = img.subFolder || 'Main Event';
                                         if (!groupedData[aTag]) groupedData[aTag] = {};
@@ -1486,51 +1507,65 @@ const StudioDashboard = ({ user, onLogout }) => {
                                         groupedData[aTag][sTag].push(img);
                                     });
 
-                                    // 3. Alag-alag section aur folder mein render karo
-                                    return Object.keys(groupedData).sort().map((albumName) => {
-                                        const subFolders = groupedData[albumName];
-                                        const totalInAlbum = Object.values(subFolders).flat().length;
-                                        
-                                        return (
-                                            <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
-                                                {/* 🔥 Premium Glow Effect */}
-                                                <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: albumName === 'Album 2' ? 'rgba(243, 156, 18, 0.15)' : 'rgba(52, 152, 219, 0.15)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
+                                    return (
+                                        <>
+                                            {Object.keys(originalGroupedData).sort().map((albumName) => {
+                                                const originalSubFolders = originalGroupedData[albumName];
+                                                const totalInAlbum = Object.values(originalSubFolders).flat().length;
                                                 
-                                                <h3 style={{ 
-                                                    color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', 
-                                                    borderBottom: '1px solid rgba(255,255,255,0.05)', 
-                                                    paddingBottom: '10px', 
-                                                    marginBottom: '20px',
-                                                    display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', position: 'relative', zIndex: 2
-                                                }}>
-                                                    {albumName === 'Album 2' ? '📙' : '📘'} {albumName} 
-                                                    <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: '12px', marginLeft: 'auto' }}>
-                                                        {totalInAlbum} Photos
-                                                    </span>
-                                                </h3>
+                                                const subFolders = groupedData[albumName];
+                                                if (!subFolders) return null; // Skip rendering if chunk not reached
                                                 
-                                                {Object.keys(subFolders).sort().map(folderName => (
-                                                    <div key={folderName} style={{ marginBottom: '25px', position: 'relative', zIndex: 2 }}>
-                                                        <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.5px' }}>
-                                                            📁 {folderName} <span style={{fontSize: '10px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#bdc3c7', padding: '3px 8px', borderRadius: '8px', fontWeight: 'bold'}}>{subFolders[folderName].length} Items</span>
-                                                        </h4>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                                                            {subFolders[folderName].map((img, idx) => (
-                                                                <div key={idx} style={{ position: 'relative', height: '100px', background: '#000', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}>
-                                                                    <img src={getCleanUrl(img.url, true)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`img-${idx}`} />
+                                                return (
+                                                    <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
+                                                        {/* 🔥 Premium Glow Effect */}
+                                                        <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: albumName === 'Album 2' ? 'rgba(243, 156, 18, 0.15)' : 'rgba(52, 152, 219, 0.15)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
+                                                        
+                                                        <h3 style={{ 
+                                                            color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', 
+                                                            borderBottom: '1px solid rgba(255,255,255,0.05)', 
+                                                            paddingBottom: '10px', 
+                                                            marginBottom: '20px',
+                                                            display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', position: 'relative', zIndex: 2
+                                                        }}>
+                                                            {albumName === 'Album 2' ? '📙' : '📘'} {albumName} 
+                                                            <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: '12px', marginLeft: 'auto' }}>
+                                                                {totalInAlbum} Photos
+                                                            </span>
+                                                        </h3>
+                                                        
+                                                        {Object.keys(subFolders).sort().map(folderName => (
+                                                            <div key={folderName} style={{ marginBottom: '25px', position: 'relative', zIndex: 2 }}>
+                                                                <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.5px' }}>
+                                                                    📁 {folderName} <span style={{fontSize: '10px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#bdc3c7', padding: '3px 8px', borderRadius: '8px', fontWeight: 'bold'}}>{subFolders[folderName].length} Items</span>
+                                                                </h4>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                                                                    {subFolders[folderName].map((img, idx) => (
+                                                                        <div key={idx} style={{ position: 'relative', height: '100px', background: '#111', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}>
+                                                                            {/* 🔥 THE FIX: decoding="async" prevents UI freezes! */}
+                                                                            <img src={getCleanUrl(img.url, true)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`img-${idx}`} />
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
-                                                            ))}
-                                                        </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        );
-                                    });
-                                })()
-                            ) : (
-                                <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No images found.</p>
-                            )}
-                        </div>
+                                                );
+                                            })}
+                                            
+                                            {/* 🔥 Auto-Loading Indicator */}
+                                            {allSelectedImgs.length > renderLimit && (
+                                                <div style={{textAlign: 'center', padding: '15px', color: '#f1c40f', fontWeight: 'bold'}}>
+                                                    ⏳ Scroll down to load more images... ({renderLimit} / {allSelectedImgs.length})
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()
+                            ) : (
+                                <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No images found.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
