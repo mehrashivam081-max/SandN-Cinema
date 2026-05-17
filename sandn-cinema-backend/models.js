@@ -12,7 +12,13 @@ const userSchema = new mongoose.Schema({
     addedBy: { type: String, default: 'SELF' }, 
     
     // UPGRADED: Mixed type allows flexible folder structures (including imageCost & videoCost)
-    uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
+    uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
+    
+    // 🔥 NEW: 24-Hour Unlock Tracker (FOMO Logic)
+    unlockedMedia: [{
+        url: { type: String, required: true },
+        unlockedAt: { type: Date, default: Date.now } // Jis time coin katega, wo time save hoga
+    }],
     
     // Profile
     profileImage: String,

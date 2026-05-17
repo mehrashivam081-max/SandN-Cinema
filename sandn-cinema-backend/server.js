@@ -1885,23 +1885,36 @@ app.post('/api/auth/update-download-count', async (req, res) => {
 
 // SINGLE File Deduct Route
 app.post('/api/auth/deduct-coins', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile);
-    const { amount, reason } = req.body;
+    const mobile = getCleanMobile(req.body.mobile);
+    const { amount, reason, fileUrl, expiryHours = 24 } = req.body; // 🔥 NAYA: fileUrl aur expiry time
 
-    try {
-        const account = await findAccount(mobile);
-        if(!account) return res.json({ success: false, message: "Account not found" });
+    try {
+        const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
 
-        let wallet = account.data.wallet || { coins: 0, history: [] };
-        
-        if (wallet.coins < parseInt(amount)) {
-            return res.json({ success: false, message: "Not enough coins! Watch an Ad to earn more." });
+        let wallet = account.data.wallet || { coins: 0, history: [], unlockedFiles: [] };
+        
+        if (wallet.coins < parseInt(amount)) {
+            return res.json({ success: false, message: "Not enough coins! Watch an Ad to earn more." });
+        }
+
+        // Deduct Coins
+        wallet.coins -= parseInt(amount);
+
+        // 🔥 FOMO 24-HOUR LOGIC: Save the unlocked file with expiry timestamp
+        if (fileUrl) {
+            const expiryTime = new Date();
+            expiryTime.setHours(expiryTime.getHours() + parseInt(expiryHours));
+            
+            wallet.unlockedFiles = wallet.unlockedFiles || [];
+            wallet.unlockedFiles.push({
+                fileUrl: fileUrl,
+                unlockTime: new Date().toISOString(),
+                expiry: expiryTime.toISOString()
+            });
         }
 
-        // Deduct Coins
-        wallet.coins -= parseInt(amount);
-
-        // Add to history
+        // Add to history
         const historyEntry = {
             action: reason || "Unlocked Premium Media",
             amount: `-${amount} Coins`,
@@ -3303,14 +3316,18 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const { clientMobile, clientEmail, folderName, sheetLimit, imagesPerSheet, costPerExtraSheet, totalPhases, fileUrls, cloudProvider, uploaderName, uploaderRole, assignToStudio } = req.body; 
 
         // 🛑 ANTI-EMPTY FOLDER SHIELD FOR SMART ALBUM
-        if (!fileUrls || fileUrls.length === 0) {
-            return res.status(400).json({ success: false, message: "Upload failed on the cloud. Smart Album creation aborted to prevent empty project." });
+        if (!fileUrls || fileUrls.length === 0) {
+            return res.status(400).json({ success: false, message: "Upload failed on the cloud. Smart Album creation aborted to prevent empty project." });
+        }
+
+        // 🔥 THE REAL BUG FIX: Studio upload karega toh uska apna mobile use hoga, Admin karega toh assignToStudio check hoga!
+        let targetStudioMobile = req.user.mobile;
+        if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
+            targetStudioMobile = (assignToStudio && assignToStudio.trim() !== '') ? assignToStudio : ("ADMIN_ONLY_" + req.user.mobile);
         }
 
-        // 🔥 HARD-LOCK: Agar Admin ne assign nahi kiya, toh mobile ki jagah ADMIN_ONLY save hoga!
-        const targetStudioMobile = (assignToStudio && assignToStudio.trim() !== '') ? assignToStudio : ("ADMIN_ONLY_" + req.user.mobile);
         const studioAcc = await Studio.findOne({ mobile: targetStudioMobile });
-        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : 'Snevio Admin';
+        const sName = studioAcc ? (studioAcc.studioName || studioAcc.ownerName) : (req.user.role === 'STUDIO' ? req.user.name : 'Snevio Admin');
 
         // ✅ FORMAT IMAGES (Smart Logic for Normal Arrays vs New Objects)
         const imageObjects = fileUrls.map(item => {
