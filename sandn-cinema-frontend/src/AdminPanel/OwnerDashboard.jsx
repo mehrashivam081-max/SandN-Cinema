@@ -1288,7 +1288,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     clientEmail: activeEmail, 
                     folderName: baseFolder, 
                     addedBy: user?.mobile || 'ADMIN',
-                    assignToStudio: formData.assignToStudio, // 🔥 THE FIX: Studio assignment
+                    assignToStudio: formData.assignToStudio, // 🔥 BHEJO BACKEND KO
                     sheetLimit: '30',
                     imagesPerSheet: '4',
                     costPerExtraSheet: '150',
@@ -2619,9 +2619,25 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         )}
 
                                         {/* Show Active Mode Indicator */}
+                                        {uploadMode === 'SELECTION' && (
+                                            <div style={{ background: '#f5eef8', padding: '10px', borderRadius: '8px', border: '1px dashed #8e44ad', fontSize: '12px', color: '#8e44ad', fontWeight: 'bold', marginBottom: '15px' }}>
+                                                ✨ Smart Album Mode Active. User can select photos.
+                                            </div>
+                                        )}
+
+                                        {/* 🔥 NAYA: Assign to Studio Dropdown */}
                                         {uploadMode === 'SELECTION' && (
-                                            <div style={{ background: '#f5eef8', padding: '10px', borderRadius: '8px', border: '1px dashed #8e44ad', fontSize: '12px', color: '#8e44ad', fontWeight: 'bold' }}>
-                                                ✨ Smart Album Mode Active. User can select photos.
+                                            <div style={{ background: '#fff9c4', padding: '15px', borderRadius: '8px', border: '1px solid #f1c40f', marginBottom: '20px' }}>
+                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#d35400' }}>🏢 Assign to Studio (Optional)</label>
+                                                <select value={formData.assignToStudio || ''} onChange={(e) => setFormData({ ...formData, assignToStudio: e.target.value })} className="custom-admin-input" style={{ marginTop: '5px', fontWeight: 'bold' }}>
+                                                    <option value="">-- Private (Admin Only, Hidden from Studios) --</option>
+                                                    {accounts.filter(a => a.role === 'STUDIO').map((studio, idx) => (
+                                                        <option key={idx} value={studio.mobile}>
+                                                            {studio.studioName || studio.ownerName} ({studio.mobile})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p style={{ fontSize: '11px', color: '#555', margin: '5px 0 0 0' }}>If left blank, NO studio will see this album. If selected, it transfers to their dashboard.</p>
                                             </div>
                                         )}
                                         
