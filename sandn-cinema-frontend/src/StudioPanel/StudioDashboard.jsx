@@ -655,190 +655,156 @@ const StudioDashboard = ({ user, onLogout }) => {
         try {
             let fallbackSpeed = '0.00';
 
-            const speedTracker = setInterval(() => {
-                const totalLoaded = loadedBytesArray.reduce((acc, val) => acc + val, 0);
-                let bytesLoadedSinceLast = totalLoaded - lastTotalLoaded;
-                if (bytesLoadedSinceLast < 0) bytesLoadedSinceLast = 0; 
-
-                const instantSpeedBps = bytesLoadedSinceLast / 0.5;
-                const speedMbps = (instantSpeedBps / (1024 * 1024)).toFixed(2);
-                if (instantSpeedBps > 0) fallbackSpeed = speedMbps;
-                setUploadSpeed(`${fallbackSpeed} MB/s (Stable Sync 🚀)`);
-
-                const elapsedTimeSec = (Date.now() - startTime) / 1000;
-                const averageSpeedBps = totalLoaded / elapsedTimeSec; 
-                const bytesRemaining = Math.max(0, totalBytes - totalLoaded);
+            // 🛑 THE FIX: Sequential Upload Loop (Fixes "Same file uploading repeatedly" and "Stuck Progress" bugs)
+            let totalLoadedBytes = 0;
+            
+            for (let i = 0; i < filesToUpload.length; i++) {
+                const file = filesToUpload[i];
+                const globalIndex = i;
                 
-                const etaSeconds = averageSpeedBps > 0 ? bytesRemaining / averageSpeedBps : 0;
-
-                const percentCompleted = Math.round((totalLoaded * 100) / totalBytes) || 0;
-                setUploadProgress(Math.min(percentCompleted, 99));
-
-                if (percentCompleted >= 98) {
-                    setUploadETA(`Almost done... Saving data`);
-                } else if (etaSeconds > 60) {
-                    setUploadETA(`Total: ${Math.floor(etaSeconds / 60)}m ${Math.floor(etaSeconds % 60)}s left`);
-                } else if (etaSeconds > 0 && etaSeconds !== Infinity) {
-                    setUploadETA(`Total: ${Math.floor(etaSeconds)}s left`);
-                } else {
-                    setUploadETA(`Calculating total time...`);
+                if (controller.signal.aborted) {
+                    throw new Error("Upload Cancelled");
                 }
 
-                const loadedMB = (totalLoaded / (1024 * 1024)).toFixed(2);
-                const totalMBStr = (totalBytes / (1024 * 1024)).toFixed(2);
-                setUploadStats(`Uploaded: ${loadedMB} MB / ${totalMBStr} MB`);
-
+                setLiveActionText(`Uploading [${i + 1}/${filesToUpload.length}]: ${file.name.substring(0, 15)}...`);
+                fileProgressRef.current[file.name] = 0;
                 setFileProgressMap({ ...fileProgressRef.current });
-                lastTotalLoaded = totalLoaded; 
-            }, 500);
 
-            let currentIndex = 0;
-            const activePromises = new Set(); 
+                let attempt = 0;
+                const maxAttempts = 3;
+                let successData = null;
 
-            while (currentIndex < filesToUpload.length) {
-                const file = filesToUpload[currentIndex];
-                const globalIndex = currentIndex;
-                currentIndex++;
+                while (attempt < maxAttempts && !successData) {
+                    try {
+                        attempt++;
+                        loadedBytesArray[globalIndex] = 0; // Reset for retry
+                        
+                        const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                            fileName: file.name, 
+                            fileType: file.type, 
+                            fileSizeGB: file.size / (1024 * 1024 * 1024),
+                            targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
+                        }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
-                const isVid = file.type.startsWith('video/');
-                const concurrencyLimit = isVid ? 1 : 5; 
+                        let finalUrl = '';
 
-                while (activePromises.size >= concurrencyLimit) {
-                    await Promise.race(activePromises);
-                }
+                        if (sigRes.data.directUpload) {
+                            if (sigRes.data.provider === 'CLOUDINARY') {
+                                const cFormData = new FormData();
+                                cFormData.append('file', file);
+                                cFormData.append('api_key', sigRes.data.apiKey);
+                                cFormData.append('timestamp', sigRes.data.timestamp);
+                                cFormData.append('signature', sigRes.data.signature);
+                                cFormData.append('folder', sigRes.data.folder);
 
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                setLiveActionText(`Uploading ${file.name.substring(0, 15)}...`);
-
-                const uploadTask = (async () => {
-                    let attempt = 0;
-                    const maxAttempts = 3;
-                    let successData = null;
-
-                    while (attempt < maxAttempts) {
-                        try {
-                            attempt++;
-                            loadedBytesArray[globalIndex] = 0; 
-
-                            const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                                fileName: file.name, 
-                                fileType: file.type, 
-                                fileSizeGB: file.size / (1024 * 1024 * 1024),
-                                targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
-                            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
-
-                            if (sigRes.data.directUpload) {
-                                let finalUrl = '';
-                                
-                                if (sigRes.data.provider === 'CLOUDINARY') {
-                                    const cFormData = new FormData();
-                                    cFormData.append('file', file);
-                                    cFormData.append('api_key', sigRes.data.apiKey);
-                                    cFormData.append('timestamp', sigRes.data.timestamp);
-                                    cFormData.append('signature', sigRes.data.signature);
-                                    cFormData.append('folder', sigRes.data.folder);
-
-                                    // 🔥 THE CORS FIX: Native Fetch API to Bypass Global Axios CORS Headers
-                                    const fetchResponse = await fetch(`https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`, {
-                                        method: 'POST',
-                                        body: cFormData,
-                                        signal: controller.signal
-                                    });
-
-                                    if (!fetchResponse.ok) throw new Error(`Cloudinary Error: ${fetchResponse.statusText}`);
-                                    const cData = await fetchResponse.json();
-                                    finalUrl = cData.secure_url;
-                                } 
-                                else {
-                                    const fetchResponse = await fetch(sigRes.data.signedUrl, {
-                                        method: 'PUT',
-                                        headers: { 'Content-Type': file.type },
-                                        body: file,
-                                        signal: controller.signal
-                                    });
-
-                                    if (!fetchResponse.ok) throw new Error("AWS Error");
-                                    finalUrl = sigRes.data.publicUrl;
-                                }
-
-                                loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef.current[file.name] = 100;
-                                successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; 
-                            }
-                            else {
-                                if (file.size > 100 * 1024 * 1024) {
-                                    alert(`🚨 File too large for proxy!`);
-                                    throw new Error("File too large");
-                                }
-
-                                const fd = new FormData();
-                                fd.append('file', file);
-                                fd.append('skipPreview', 'true'); 
-
-                                const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                    headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                    signal: controller.signal, 
-                                    onUploadProgress: (e) => {
+                                // 🔥 USE XHR FOR ACCURATE PROGRESS & NO CORS ISSUES
+                                finalUrl = await new Promise((resolve, reject) => {
+                                    const xhr = new XMLHttpRequest();
+                                    xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                                    
+                                    xhr.upload.onprogress = (e) => {
                                         if (e.lengthComputable) {
                                             loadedBytesArray[globalIndex] = e.loaded;
                                             fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                            setFileProgressMap({ ...fileProgressRef.current });
+                                            
+                                            // Update Global Progress
+                                            const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
+                                            const percent = Math.round((tempTotalLoaded * 100) / totalBytes);
+                                            setUploadProgress(Math.min(percent, 99));
+                                            setUploadStats(`${(tempTotalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
                                         }
-                                    }
-                                });
-
-                                loadedBytesArray[globalIndex] = file.size;
-                                fileProgressRef.current[file.name] = 100;
-                                successData = isFeed ? proxyRes.data.url : { url: proxyRes.data.url, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                                break; 
-                            }
-                        } catch (err) {
-                            if (err.name === "AbortError" || axios.isCancel(err)) throw err; 
-                            if (!navigator.onLine) {
-                                setUploadSpeed('Paused (No Internet) ⚠️');
-                                attempt--; 
-                                await new Promise(res => {
-                                    const goOnline = () => { window.removeEventListener('online', goOnline); res(); };
-                                    window.addEventListener('online', goOnline);
+                                    };
+                                    xhr.onload = () => {
+                                        if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
+                                        else reject(new Error(`Cloudinary Error: ${xhr.status}`));
+                                    };
+                                    xhr.onerror = () => reject(new Error("Network Error"));
+                                    xhr.onabort = () => reject(new Error("Aborted"));
+                                    controller.signal.addEventListener('abort', () => xhr.abort());
+                                    xhr.send(cFormData);
                                 });
                             } else {
-                                console.error(`🚨 Error on [${file.name}]:`, err.message);
-                                if (attempt >= maxAttempts) { 
-                                    loadedBytesArray[globalIndex] = 0; 
-                                    fileProgressRef.current[file.name] = -1; // ❌ MARK AS FAILED
-                                    return null; 
+                                // AWS S3
+                                finalUrl = await new Promise((resolve, reject) => {
+                                    const xhr = new XMLHttpRequest();
+                                    xhr.open('PUT', sigRes.data.signedUrl);
+                                    xhr.setRequestHeader('Content-Type', file.type);
+                                    
+                                    xhr.upload.onprogress = (e) => {
+                                        if (e.lengthComputable) {
+                                            loadedBytesArray[globalIndex] = e.loaded;
+                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                            setFileProgressMap({ ...fileProgressRef.current });
+                                            
+                                            const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
+                                            setUploadProgress(Math.min(Math.round((tempTotalLoaded * 100) / totalBytes), 99));
+                                        }
+                                    };
+                                    xhr.onload = () => {
+                                        if (xhr.status === 200) resolve(sigRes.data.publicUrl);
+                                        else reject(new Error("AWS Error"));
+                                    };
+                                    xhr.onerror = () => reject(new Error("Network Error"));
+                                    xhr.onabort = () => reject(new Error("Aborted"));
+                                    controller.signal.addEventListener('abort', () => xhr.abort());
+                                    xhr.send(file);
+                                });
+                            }
+                        } else {
+                            // Proxy Upload
+                            if (file.size > 100 * 1024 * 1024) throw new Error("File too large for proxy");
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            fd.append('skipPreview', 'true'); 
+
+                            const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                                headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                                signal: controller.signal, 
+                                onUploadProgress: (e) => {
+                                    if (e.lengthComputable) {
+                                        loadedBytesArray[globalIndex] = e.loaded;
+                                        fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                        setFileProgressMap({ ...fileProgressRef.current });
+                                        
+                                        const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
+                                        setUploadProgress(Math.min(Math.round((tempTotalLoaded * 100) / totalBytes), 99));
+                                    }
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 3000));
-                            }
+                            });
+                            finalUrl = proxyRes.data.url;
+                        }
+
+                        // Mark as Success
+                        loadedBytesArray[globalIndex] = file.size;
+                        fileProgressRef.current[file.name] = 100;
+                        setFileProgressMap({ ...fileProgressRef.current });
+                        
+                        successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                        uploadedUrls.push(successData);
+                        
+                        if (!isFeed) {
+                            alreadyUploadedNames.push(file.name);
+                            const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
+                            localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
+                            setPendingResumeState(updatedDraft);
+                        }
+
+                    } catch (err) {
+                        if (err.name === "AbortError" || axios.isCancel(err) || err.message === "Aborted") throw err; 
+                        
+                        if (attempt >= maxAttempts) { 
+                            loadedBytesArray[globalIndex] = 0; 
+                            fileProgressRef.current[file.name] = -1; // ❌ MARK AS FAILED
+                            setFileProgressMap({ ...fileProgressRef.current });
+                            failCount++;
+                            failedFilesList.push(file.name);
+                        } else {
+                            await new Promise(resolve => setTimeout(resolve, 2000));
                         }
                     }
-                    return successData;
-                })();
-
-                const wrappedTask = (async () => {
-                    try {
-                        const data = await uploadTask;
-                        if (data) {
-                            uploadedUrls.push(data);
-                            if (!isFeed) {
-                                alreadyUploadedNames.push(file.name);
-                                const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
-                                localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
-                                setPendingResumeState(updatedDraft);
-                            }
-                        }
-                        return data;
-                    } finally {
-                        activePromises.delete(wrappedTask); 
-                    }
-                })();
-
-                activePromises.add(wrappedTask);
-            }
-
-            await Promise.all(activePromises);
-            clearInterval(speedTracker); 
+                } // end while attempt
+            } // end for loop
             
             const failedFilesList = filesToUpload.filter(f => fileProgressRef.current[f.name] === -1).map(f => f.name);
             const failedFilesCount = failedFilesList.length;
