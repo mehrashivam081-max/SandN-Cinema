@@ -4330,6 +4330,33 @@ app.post('/api/auth/delete-selection-image', authenticateToken, async (req, res)
     }
 });
 
+// ==========================================
+// 👑 GOD MODE: ADMIN FORCE UPDATE SMART ALBUM
+// ==========================================
+app.post('/api/auth/admin-force-update-album', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: "Unauthorized Action" });
+        }
+        
+        const { projectId, images, allImages, isFrozen } = req.body;
+        
+        await AlbumSelection.findByIdAndUpdate(projectId, {
+            $set: { 
+                images: images, 
+                allImages: allImages, 
+                isFrozen: isFrozen,
+                status: isFrozen ? 'Confirmed' : 'Pending' // Agar admin ne lock kiya to Confirm mark kar do
+            }
+        }, { strict: false });
+
+        res.json({ success: true, message: "Album updated permanently!" });
+    } catch (error) {
+        console.error("Force Update Error:", error);
+        res.status(500).json({ success: false, message: "Server error during album update." });
+    }
+});
+
 // --- START SERVER ---
 // 🛑 PURANA app.listen HATA DIYA, AB server.listen CHALEGA
 server.listen(PORT, async () => {
