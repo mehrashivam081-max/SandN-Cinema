@@ -1144,7 +1144,6 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             if (studioData) {
                 isPaid = studioData.storagePlan && studioData.storagePlan !== 'FREE';
                 if (settings && settings.cloudRouting) {
-                    // Check user's specific limit, but never exceed 100MB for proxy
                     const userPlanLimit = isPaid ? Number(settings.cloudRouting.paidMaxFileMB) : Number(settings.cloudRouting.freeMaxFileMB);
                     maxAllowedMB = Math.min(100, userPlanLimit); 
                 }
@@ -1154,7 +1153,6 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                     return res.status(413).json({ success: false, message: `File too large! Your plan allows max ${maxAllowedMB}MB per file in proxy mode.` });
                 }
 
-                // Check Total Storage Capacity
                 const allocated = studioData.allocatedStorageGB || (isPaid ? 5 : defaultFreeAlloc); 
                 const used = studioData.usedStorageGB || 0;
                 
@@ -1165,7 +1163,41 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             }
         }
 
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB);
+        // 🔥 THE FIX: SMART CLOUD AWARENESS (Project-specific OR Tier-specific)
+        const { projectId } = req.body; 
+        let activeCloud = null;
+
+        if (projectId && projectId !== 'undefined') {
+            const project = await AlbumSelection.findById(projectId);
+            if (project && project.storageConfigId) {
+                activeCloud = await StorageConfig.findById(project.storageConfigId);
+            }
+        }
+        
+        // Agar project ID nahi mili, toh Tier-based routing karo
+        if (!activeCloud) {
+            const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+            let targetCloudId = null;
+
+            if (req.user && req.user.mobile) {
+                const studio = await Studio.findOne({ mobile: req.user.mobile });
+                const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
+                
+                // Tier ke hisaab se Cloud ID uthao
+                if (settings && settings.cloudRouting) {
+                    targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
+                }
+            }
+
+            // Agar ID mil gayi, toh wo use karo, warna default active cloud
+            if (targetCloudId && mongoose.Types.ObjectId.isValid(targetCloudId)) {
+                activeCloud = await StorageConfig.findById(targetCloudId);
+                console.log(`💎 Tier-based Routing: Saved to [${activeCloud?.nickname || 'Default'}]`);
+            } else {
+                activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile);
+            }
+        }
+
         let uploadedUrl = '';
         let previewUrl = '';
 
