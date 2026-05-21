@@ -159,13 +159,101 @@ const OwnerDashboard = ({ user, onLogout }) => {
         totalFiles: 0, downloadedFiles: 0, progressPercent: 0, speed: '', eta: '', failedFiles: [] 
     });
     const abortControllerRef = useRef(null);
+    // ✅ NEW: VIEW CLIENT UI STATE (For Modal)
     const [previewProject, setPreviewProject] = useState(null);
-    const [renderLimit, setRenderLimit] = useState(50); // 🔥 NAYA: Infinite Scroll DOM Chunking (Speed Booster)
+    const [renderLimit, setRenderLimit] = useState(50); // 🔥 NAYA: Infinite Scroll DOM Chunking (Speed Booster)
 
-    // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
-    useEffect(() => {
-        if (previewProject) setRenderLimit(50);
-    }, [previewProject]);    
+    // 👑 GOD MODE EDIT STATES
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editDraftImages, setEditDraftImages] = useState([]);
+    const [albumIsFrozen, setAlbumIsFrozen] = useState(false);
+    const [removeMode, setRemoveMode] = useState(null); // 'FILE' ya 'FOLDER'
+    const [editUploading, setEditUploading] = useState(false);
+
+    // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
+    useEffect(() => {
+        if (previewProject) {
+            setRenderLimit(50);
+            setIsEditMode(false);
+            setRemoveMode(null);
+        }
+    }, [previewProject]);
+
+    // 🛠️ GOD MODE FUNCTIONS
+    const toggleEditMode = () => {
+        if (!isEditMode) {
+            setEditDraftImages([...previewProject.images]);
+            setAlbumIsFrozen(previewProject.isFrozen || false);
+        } else {
+            setRemoveMode(null);
+        }
+        setIsEditMode(!isEditMode);
+    };
+
+    const handleEditFileUpload = async (e, isFolder = false) => {
+        const selectedFiles = Array.from(e.target.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+        if(selectedFiles.length === 0) return;
+
+        setEditUploading(true);
+        const newImgs = [];
+        try {
+            for (let file of selectedFiles) {
+                let subF = 'Main Event';
+                if (isFolder && file.webkitRelativePath) {
+                    const parts = file.webkitRelativePath.split('/');
+                    if (parts.length >= 3) subF = parts[parts.length - 2];
+                }
+
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('skipPreview', 'true'); 
+                fd.append('projectId', previewProject._id); // 👈 YEH WALI LINE HONI CHAHIYE
+                
+                const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+                
+                if (res.data.url) {
+                    newImgs.push({
+                        url: res.data.url,
+                        previewUrl: res.data.previewUrl || res.data.url,
+                        status: 'active',
+                        selectedBy: [],
+                        subFolder: subF,
+                        deletedAt: null
+                    });
+                }
+            }
+            setEditDraftImages(prev => [...prev, ...newImgs]);
+            alert(`✅ ${newImgs.length} files added to draft! Click '💾 Save & Update Album' to finalize.`);
+        } catch (err) {
+            alert("Error uploading some files. Check connection.");
+        }
+        setEditUploading(false);
+        e.target.value = ''; // clear input
+    };
+
+    const saveGodModeChanges = async () => {
+        setLoading(true);
+        try {
+            const allUrls = editDraftImages.map(i => i.url);
+            const res = await axios.post(`${API_BASE}/admin-force-update-album`, {
+                projectId: previewProject._id,
+                images: editDraftImages,
+                allImages: allUrls,
+                isFrozen: albumIsFrozen
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+
+            if(res.data.success) {
+                alert("✅ Album Updated Successfully!");
+                setAllSelections(prev => prev.map(p => p._id === previewProject._id ? { ...p, images: editDraftImages, allImages: allUrls, isFrozen: albumIsFrozen } : p));
+                setPreviewProject({ ...previewProject, images: editDraftImages, allImages: allUrls, isFrozen: albumIsFrozen });
+                setIsEditMode(false);
+                setRemoveMode(null);
+            } else {
+                alert("❌ Failed: " + res.data.message);
+            }
+        } catch(e) { alert("Server Error"); }
+        setLoading(false);
+    };   
 
     // ==========================================
     // 🚀 ADMIN SMART DOWNLOADER & PREVIEW ENGINE
@@ -1763,88 +1851,146 @@ const OwnerDashboard = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ CLIENT DATA PREVIEW MODAL (DARK CATEGORIZED VIEW) */}
+            {/* ✅ CLIENT DATA PREVIEW MODAL (GOD MODE EDITOR) */}
             {previewProject && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-                    <div style={{ background: '#1a1a2e', padding: '20px', borderRadius: '15px', width: '90%', maxWidth: '900px', height: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', border: '1px solid #333' }}>
+                    <div style={{ background: '#1a1a2e', padding: '20px', borderRadius: '15px', width: '90%', maxWidth: '900px', height: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', border: isEditMode ? '2px solid #e74c3c' : '1px solid #333' }}>
+                        
+                        {/* HEADER */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
                             <div>
-                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>📂 Preview: {previewProject.folderName}</h2>
-                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#aaa' }}>Studio: {previewProject.studioMobile} | Client: {previewProject.clientMobile}</p>
+                                <h2 style={{ margin: 0, color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    📂 {previewProject.folderName} 
+                                    <button onClick={toggleEditMode} style={{ background: isEditMode ? '#34495e' : '#e74c3c', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '5px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                        {isEditMode ? '👁️ Exit Edit Mode' : '✏️ Edit Album'}
+                                    </button>
+                                </h2>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#aaa' }}>Client: {previewProject.clientMobile} | Total Images: {isEditMode ? editDraftImages.length : (previewProject.images?.length || 0)}</p>
                             </div>
-                            <button onClick={() => setPreviewProject(null)} style={{ background: 'transparent', border: 'none', fontSize: '24px', color: '#fff', cursor: 'pointer' }}>✖</button>
+                            <button disabled={editUploading || loading} onClick={() => setPreviewProject(null)} style={{ background: 'transparent', border: 'none', fontSize: '24px', color: '#fff', cursor: (editUploading || loading) ? 'not-allowed' : 'pointer' }}>✖</button>
                         </div>
+
+                        {/* 🔥 PRO-LEVEL GOD MODE TOOLBAR */}
+                        {isEditMode && (
+                            <div style={{ background: '#0f172a', padding: '20px', borderRadius: '16px', border: '1px solid #3498db', marginBottom: '20px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                    <h4 style={{ margin: 0, color: '#3498db', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>🛠️ Admin Control Center</h4>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '12px', color: '#aaa' }}>Visibility Mode:</span>
+                                        <button onClick={() => setAlbumIsFrozen(!albumIsFrozen)} style={{ background: albumIsFrozen ? '#e74c3c' : '#2ecc71', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            {albumIsFrozen ? '🔴 Locked (View Only)' : '🟢 Active (Editable)'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <button onClick={() => document.getElementById('edit-add-files').click()} disabled={editUploading} style={{ flex: 1, background: '#3498db', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        📄 Add Files
+                                    </button>
+                                    <button onClick={() => document.getElementById('edit-add-folder').click()} disabled={editUploading} style={{ flex: 1, background: '#8e44ad', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        🗂️ Add Folder
+                                    </button>
+                                    <button onClick={() => setRemoveMode(removeMode === 'FILE' ? null : 'FILE')} style={{ background: removeMode === 'FILE' ? '#c0392b' : '#e74c3c', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: removeMode === 'FILE' ? '2px solid #fff' : 'none' }}>
+                                        {removeMode === 'FILE' ? '⏹️ Stop Removing' : '🎯 Remove Files'}
+                                    </button>
+                                    <button onClick={() => {
+                                        const targetFolder = window.prompt("Enter exact Sub-Folder name to delete (e.g. Haldi):");
+                                        if (targetFolder) {
+                                            const filtered = editDraftImages.filter(img => (img.subFolder || 'Main Event') !== targetFolder);
+                                            setEditDraftImages(filtered);
+                                            alert(`Deleted folder: ${targetFolder}`);
+                                        }
+                                    }} style={{ flex: 1, background: '#d35400', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                        🗑️ Remove Folder
+                                    </button>
+                                </div>
+
+                                {/* ✅ ENHANCED PROGRESS BAR FOR GOD MODE UPLOADS */}
+                                {editUploading && (
+                                    <div style={{ marginTop: '20px', background: '#1a1a2e', padding: '15px', borderRadius: '10px', border: '1px solid #3498db' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#fff', fontSize: '12px' }}>
+                                            <strong>Uploading to Cloud...</strong>
+                                            <strong>{uploadProgress}%</strong>
+                                        </div>
+                                        <div style={{ width: '100%', height: '10px', background: '#333', borderRadius: '5px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${uploadProgress}%`, height: '100%', background: 'linear-gradient(90deg, #3498db, #2ecc71)', transition: 'width 0.3s ease' }}></div>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '11px', fontWeight: 'bold' }}>
+                                            <span style={{ color: '#f1c40f' }}>{uploadStats || 'Calculating...'}</span>
+                                            <span style={{ color: '#e67e22' }}>⏳ {uploadETA || 'Estimating time...'}</span>
+                                        </div>
+                                        <p style={{ color: '#aaa', fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>
+                                            Please do not close this window while files are processing.
+                                        </p>
+                                    </div>
+                                )}
+                                <input id="edit-add-files" type="file" multiple accept="image/*,video/*" onChange={(e) => handleEditFileUpload(e, false)} style={{ display: 'none' }} />
+                                <input id="edit-add-folder" type="file" webkitdirectory="true" directory="true" multiple onChange={(e) => handleEditFileUpload(e, true)} style={{ display: 'none' }} />
+                            </div>
+                        )}
+
+                        {removeMode === 'FILE' && <div style={{ background: '#e74c3c', color: '#fff', textAlign: 'center', padding: '8px', fontSize: '12px', fontWeight: 'bold', borderRadius: '5px', marginBottom: '10px', animation: 'pulse-red 1.5s infinite', border: '1px solid #c0392b' }}>🎯 SNIPER MODE: Click any image below to permanently remove it from the draft!</div>}
                         
-                        {/* 🔥 THE FIX: Simplified without IIFE to completely fix Syntax Error */}
+                        {/* IMAGES GRID */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }} onScroll={(e) => {
                             if (e.target.scrollHeight - e.target.scrollTop <= e.target.clientHeight + 400) {
-                                setRenderLimit(prev => Math.min(prev + 50, previewProject.images ? previewProject.images.length : prev));
+                                setRenderLimit(prev => Math.min(prev + 50, (isEditMode ? editDraftImages : previewProject.images)?.length || prev));
                             }
                         }}>
-                            {(!previewProject.images || previewProject.images.length === 0) ? (
-                                <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No images available yet.</p>
-                            ) : (
-                                <>
-                                    {Array.from(new Set(previewProject.images.map(img => img.albumTag || 'Album 1'))).sort().map((albumName) => {
-                                        // 1. Original Count for Header
-                                        const originalAlbumImgs = previewProject.images.filter(img => (img.albumTag || 'Album 1') === albumName);
-                                        const totalInAlbum = originalAlbumImgs.length;
-                                        
-                                        // 2. Chunked Limits Logic
-                                        const chunkedImgs = previewProject.images.slice(0, renderLimit).filter(img => (img.albumTag || 'Album 1') === albumName);
-                                        if (chunkedImgs.length === 0) return null; // Abhi tak scroll nahi hua
+                            {(() => {
+                                const dataSource = isEditMode ? editDraftImages : previewProject.images;
+                                if (!dataSource || dataSource.length === 0) return <p style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>No images available.</p>;
 
-                                        const subFolders = Array.from(new Set(chunkedImgs.map(img => img.subFolder || 'Main Event'))).sort();
+                                const displayImgs = dataSource.slice(0, renderLimit);
+                                const groupedData = {};
+                                displayImgs.forEach(img => {
+                                    const aTag = img.albumTag || 'Album 1';
+                                    const sTag = img.subFolder || 'Main Event';
+                                    if (!groupedData[aTag]) groupedData[aTag] = {};
+                                    if (!groupedData[aTag][sTag]) groupedData[aTag][sTag] = [];
+                                    groupedData[aTag][sTag].push(img);
+                                });
 
-                                        return (
-                                            <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
-                                                {/* 🔥 Premium Glow Effect */}
-                                                <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: albumName === 'Album 2' ? 'rgba(243, 156, 18, 0.15)' : 'rgba(52, 152, 219, 0.15)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
-                                                
-                                                <h3 style={{ 
-                                                    color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', 
-                                                    borderBottom: '1px solid rgba(255,255,255,0.05)', 
-                                                    paddingBottom: '10px', 
-                                                    marginBottom: '20px',
-                                                    display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', position: 'relative', zIndex: 2
-                                                }}>
-                                                    {albumName === 'Album 2' ? '📙' : '📘'} {albumName} 
-                                                    <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '3px 10px', borderRadius: '12px', marginLeft: 'auto' }}>
-                                                        {totalInAlbum} Photos
-                                                    </span>
-                                                </h3>
-                                                
-                                                {subFolders.map(folderName => {
-                                                    const folderImgs = chunkedImgs.filter(img => (img.subFolder || 'Main Event') === folderName);
-                                                    return (
-                                                        <div key={folderName} style={{ marginBottom: '25px', position: 'relative', zIndex: 2 }}>
-                                                            <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', letterSpacing: '0.5px' }}>
-                                                                📁 {folderName} <span style={{fontSize: '10px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: '#bdc3c7', padding: '3px 8px', borderRadius: '8px', fontWeight: 'bold'}}>{folderImgs.length} Items</span>
-                                                            </h4>
-                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
-                                                                {folderImgs.map((img, idx) => (
-                                                                    <div key={idx} style={{ position: 'relative', height: '100px', background: '#111', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}>
-                                                                        {/* 🔥 THE FIX: decoding="async" prevents UI freezes! */}
-                                                                        <img src={getCleanUrl(img.url, true)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={`img-${idx}`} />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
+                                return (
+                                    <>
+                                        {Object.keys(groupedData).sort().map((albumName) => (
+                                            <div key={albumName} style={{ marginBottom: '30px', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', padding: '20px', borderRadius: '15px', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, position: 'relative' }}>
+                                                <h3 style={{ color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', fontSize: '16px', marginBottom: '20px' }}>{albumName === 'Album 2' ? '📙' : '📘'} {albumName}</h3>
+                                                {Object.keys(groupedData[albumName]).sort().map(folderName => (
+                                                    <div key={folderName} style={{ marginBottom: '25px' }}>
+                                                        <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px' }}>📁 {folderName}</h4>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                                                            {groupedData[albumName][folderName].map((img, idx) => (
+                                                                <div key={idx} 
+                                                                    onClick={() => { if(removeMode === 'FILE') setEditDraftImages(prev => prev.filter(i => i.url !== img.url)); }}
+                                                                    style={{ position: 'relative', height: '100px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${albumName === 'Album 2' ? '#f39c12' : '#3498db'}`, cursor: removeMode === 'FILE' ? 'pointer' : 'default', opacity: (removeMode === 'FILE') ? 0.8 : 1 }}>
+                                                                    {removeMode === 'FILE' && <div style={{ position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', background: 'rgba(231,76,60,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', color: '#fff', zIndex: 10 }}>✖</div>}
+                                                                    <img src={getCleanUrl(img.url, true)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    )
-                                                })}
+                                                    </div>
+                                                ))}
                                             </div>
-                                        );
-                                    })}
-                                    
-                                    {/* 🔥 Auto-Loading Indicator */}
-                                    {previewProject.images.length > renderLimit && (
-                                        <div style={{textAlign: 'center', padding: '15px', color: '#f1c40f', fontWeight: 'bold'}}>
-                                            ⏳ Scroll down to load more images... ({renderLimit} / {previewProject.images.length})
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                                        ))}
+                                        {dataSource.length > renderLimit && (
+                                            <div style={{textAlign: 'center', padding: '15px', color: '#f1c40f', fontWeight: 'bold'}}>
+                                                ⏳ Scroll down to load more images... ({renderLimit} / {dataSource.length})
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
+
+                        {/* 💾 FINAL SAVE BUTTON (Only in Edit Mode) */}
+                        {isEditMode && (
+                            <div style={{ borderTop: '1px solid #333', paddingTop: '15px', marginTop: '10px', textAlign: 'center' }}>
+                                <button disabled={loading || editUploading} onClick={saveGodModeChanges} style={{ width: '100%', background: '#2ecc71', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: (loading || editUploading) ? 'not-allowed' : 'pointer', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.3)' }}>
+                                    {loading ? 'Saving to Database...' : '💾 Save & Update Album'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
