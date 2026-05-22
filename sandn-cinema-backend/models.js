@@ -277,6 +277,8 @@ const albumSelectionSchema = new mongoose.Schema({
     folderName: { type: String, required: true },
     uploadReport: { type: mongoose.Schema.Types.Mixed, default: {} },
     cloudProvider: { type: String, default: 'CLOUDINARY' },
+
+    storageConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'StorageConfig', default: null },
     
     // ⚙️ Limits & Pricing (For Extra Earning)
     sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain

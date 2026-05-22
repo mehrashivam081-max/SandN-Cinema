@@ -952,77 +952,57 @@ app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) =
     }
 });
 
-// ==============================================================
-// 🧠 SMART STORAGE AUTO-ROUTER LOGIC (FREE VS PAID ROUTING)
-// ==============================================================
-const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null) => {
+// 🧠 SMART STORAGE AUTO-ROUTER LOGIC (Admin Priority & Project Aware)
+const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null, userRole = null, projectId = null) => {
     try {
-        let targetCloudId = null;
-        
-        // 🚦 1. Check if user is FREE or PAID and fetch Assigned Cloud safely
-        const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
-        
-        if (userMobile && settings && settings.cloudRouting) {
-            const studio = await Studio.findOne({ mobile: userMobile });
-            const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
-            
-            // 🔥 FIX: Ensure ID is valid before assigning
-            const potentialId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
-            if (potentialId && mongoose.Types.ObjectId.isValid(potentialId)) {
-                targetCloudId = potentialId;
-            }
-        }
-
         let activeStorage = null;
 
-        // 🟢 2. Use Assigned Tier Cloud (If it has space)
-        if (targetCloudId) {
-            activeStorage = await StorageConfig.findById(targetCloudId);
-            if (activeStorage && (activeStorage.usedStorageGB + fileSizeGB) >= (activeStorage.maxLimitGB * 0.95)) {
-                console.log(`⚠️ Assigned cloud [${activeStorage.nickname}] is full! Falling back to default.`);
-                activeStorage = null; // Target is full, force fallback
+        // 1. Priority: Agar Project ID hai (Edit Mode), toh usi Cloud par jao
+        if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+            const project = await AlbumSelection.findById(projectId);
+            if (project?.storageConfigId) {
+                activeStorage = await StorageConfig.findById(project.storageConfigId);
+                // Agar Cloud full hai, toh reset karo
+                if (activeStorage && (activeStorage.usedStorageGB + fileSizeGB) >= (activeStorage.maxLimitGB * 0.95)) activeStorage = null;
             }
         }
 
-        // 🟠 3. Fallback to normal Active Cloud
+        // 2. Priority: Admin ko HAMESHA Paid/Premium Cloud do
         if (!activeStorage) {
-            activeStorage = await StorageConfig.findOne({ isActive: true });
+            const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
+            let targetCloudId = null;
+
+            if (settings?.cloudRouting) {
+                // Admin/Owner ko hamesha 'paidCloudId' par route karo
+                let isPaid = (userRole === 'ADMIN' || userRole === 'OWNER');
+                
+                // Agar Admin nahi hai, tabhi Studio ka plan check karo
+                if (!isPaid && userMobile) {
+                    const studio = await Studio.findOne({ mobile: userMobile });
+                    isPaid = (studio && studio.storagePlan && studio.storagePlan !== 'FREE');
+                }
+                
+                targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
+            }
+
+            if (targetCloudId && mongoose.Types.ObjectId.isValid(targetCloudId)) {
+                activeStorage = await StorageConfig.findById(targetCloudId);
+                // Agar ye full hai, to null hone do taaki fallback chale
+                if (activeStorage && (activeStorage.usedStorageGB + fileSizeGB) >= (activeStorage.maxLimitGB * 0.95)) activeStorage = null;
+            }
         }
 
-        // Backup: If no active storage, make the oldest one active
+        // 3. Fallback: Default Active Cloud
+        if (!activeStorage) activeStorage = await StorageConfig.findOne({ isActive: true });
+
+        // 4. Backup: No cloud? Sabse khaali wala dhoondo
         if (!activeStorage) {
             activeStorage = await StorageConfig.findOneAndUpdate(
                 { $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } }, 
                 { isActive: true },
                 { new: true, sort: { createdAt: 1 } }
             );
-            if (!activeStorage) throw new Error("CRITICAL: No storage accounts have free space!");
-            return activeStorage;
-        }
-
-        // 95% THRESHOLD AUTO-SWITCH LOGIC
-        const threshold = activeStorage.maxLimitGB * 0.95; 
-        if ((activeStorage.usedStorageGB + fileSizeGB) >= threshold) {
-            console.log(`⚠️ Storage [${activeStorage.nickname}] is almost full! Auto-switching...`);
-            
-            activeStorage.isActive = false;
-            await activeStorage.save();
-
-            const nextStorage = await StorageConfig.findOneAndUpdate(
-                { _id: { $ne: activeStorage._id }, $expr: { $lt: ["$usedStorageGB", "$maxLimitGB"] } },
-                { isActive: true },
-                { new: true, sort: { createdAt: 1 } }
-            );
-
-            if (!nextStorage) {
-                console.error("🚨 ALERT: ALL STORAGE ACCOUNTS ARE FULL!");
-                activeStorage.isActive = true; 
-                await activeStorage.save();
-                return activeStorage;
-            }
-
-            console.log(`✅ Auto-switched active storage to: [${nextStorage.nickname}]`);
-            return nextStorage;
+            if (!activeStorage) throw new Error("🚨 CRITICAL: No storage accounts have free space!");
         }
 
         return activeStorage;
@@ -1128,6 +1108,9 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
         const filePath = req.file.path; 
         const fileSizeMB = req.file.size / (1024 * 1024);
+
+        // 🔥 NAYA: Humne projectId pass kar di taaki backend wahi Cloud dhundhe
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId);
 
         // 🛑 SMART PROXY LIMIT CHECK
         const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
@@ -1315,7 +1298,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
         // 1. SMART ROUTER: Estimate size and update Active Storage
         // Default estimate: Assume each file is around 5MB (0.005 GB) if calculating directly from URLs
         const estimatedSizeGB = filePaths.length * 0.005; 
-        const activeCloud = await getOrUpdateActiveStorage(estimatedSizeGB);
+        const activeCloud = await getOrUpdateActiveStorage(estimatedSizeGB, req.user?.mobile, req.user?.role);
         
         // Update the usage counter dynamically
         activeCloud.usedStorageGB = parseFloat((activeCloud.usedStorageGB + estimatedSizeGB).toFixed(4));
