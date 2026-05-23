@@ -3357,23 +3357,27 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         // ✅ Extract raw URLs for fallback
         const rawUrls = imageObjects.map(img => img.url);
 
+        // 1. Pata karo abhi konsa cloud active hai (Taaki use lock kar sakein)
+        const activeCloud = await getOrUpdateActiveStorage(0.05, req.user?.mobile, req.user?.role);
+
         const newSelection = await AlbumSelection.create({
-            studioMobile: targetStudioMobile, // 🔥 THE LOCK: Ab studio ko nahi dikhega!
-            studioName: sName,
-            uploaderName: uploaderName || sName || 'Snevio Admin',
-            uploaderRole: uploaderRole || 'Studio Partner', // 🔥 NAYA
-            clientMobile: getCleanMobile(clientMobile),
-            clientEmail: clientEmail,
+            studioMobile: targetStudioMobile, 
+            studioName: sName,
+            uploaderName: uploaderName || sName || 'Snevio Admin',
+            uploaderRole: uploaderRole || 'Studio Partner', 
+            clientMobile: getCleanMobile(clientMobile),
+            clientEmail: clientEmail,
             folderName: folderName,
             sheetLimit: Number(sheetLimit) || 0,
             imagesPerSheet: Number(imagesPerSheet) || 0,
             costPerExtraSheet: Number(costPerExtraSheet) || 0,
             totalPhases: Number(totalPhases) || 3,
-            cloudProvider: cloudProvider || 'CLOUDINARY',
+            cloudProvider: activeCloud.provider || 'CLOUDINARY',
+            storageConfigId: activeCloud._id, // 🔥 YAHAN CLOUD ID SAVE HO RAHI HAI
             images: imageObjects,
             allImages: rawUrls
         });
-
+        
         // 📩 Fire Email to Client (The Magic Link)
         if (clientEmail && !clientEmail.includes('dummy_')) {
             const magicLink = `${WEBSITE_URL}client-dashboard`; // Yahan user login karke seedha select karega
