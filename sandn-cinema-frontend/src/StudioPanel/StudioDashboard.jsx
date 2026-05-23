@@ -2221,45 +2221,75 @@ const StudioDashboard = ({ user, onLogout }) => {
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {(() => {
-                                    // 🔥 ULTIMATE FIX: Fetching Real History directly from Backend Wallet Logs (Includes Normal + Smart Albums)
-                                    const uploadHistory = (studioProfile?.wallet?.history || []).filter(item => item.type === 'upload');
-                                    
-                                    const filteredLogs = uploadHistory.filter(log => log.action.toLowerCase().includes(uploadLogSearch.toLowerCase()) || (log.amount && log.amount.toLowerCase().includes(uploadLogSearch.toLowerCase())));
+    {(() => {
+        // 🔥 ULTIMATE FIX: Fetching Real History directly from Backend Wallet Logs
+        const uploadHistory = (studioProfile?.wallet?.history || []).filter(item => item.type === 'upload');
+        const filteredLogs = uploadHistory.filter(log => 
+            log.action.toLowerCase().includes(uploadLogSearch.toLowerCase()) || 
+            (log.amount && log.amount.toLowerCase().includes(uploadLogSearch.toLowerCase()))
+        );
 
-                                    if (filteredLogs.length === 0) return <p style={{ textAlign: 'center', color: '#999', fontSize: '12px', padding: '10px 0' }}>No upload history found.</p>;
+        if (filteredLogs.length === 0) return <p style={{ textAlign: 'center', color: '#999', fontSize: '12px', padding: '10px 0' }}>No upload history found.</p>;
 
-                                    return (
-                                        <>
-                                            {filteredLogs.slice(0, uploadLogLimit).map((log, idx) => (
-                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
-                                                    <div>
-                                                        <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>{log.action}</p>
-                                                        <p style={{ margin: 0, fontSize: '11px', color: '#7f8c8d' }}>🕒 {log.date}</p>
-                                                    </div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                                                        {log.amount && (
-                                                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', border: '1px solid rgba(142, 68, 173, 0.2)', padding: '5px 10px', borderRadius: '6px' }}>
-                                                                {log.amount}
-                                                            </div>
-                                                        )}
-                                                        {log.report && log.report.failed > 0 && (
-                                                            <button onClick={() => generateFailedReportPDF(log)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(231,76,60,0.3)' }}>
-                                                                📄 Download Error Report
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {filteredLogs.length > uploadLogLimit && (
-                                                <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>
-                                                    Show More 👇
-                                                </button>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+        return (
+            <>
+                {filteredLogs.slice(0, uploadLogLimit).map((log, idx) => {
+                    // 🔍 DEBUG: Log check karo ki amount sahi hai ya nahi
+                    const folderNameFromLog = log.amount ? log.amount.replace(/📁 |📂 /g, '').trim() : null;
+                    
+                    // 🔍 DEBUG: Check karo ki mySelections mein project hai ya nahi
+                    const associatedProject = mySelections.find(s => s.folderName === folderNameFromLog);
+                    if (!associatedProject) {
+                        console.log("Searching for project:", folderNameFromLog, "Found:", !!associatedProject);
+                    }
+
+                    return (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #8e44ad', boxShadow: '0 2px 5px rgba(0,0,0,0.02)' }}>
+                            <div>
+                                <p style={{ margin: '0 0 4px 0', fontSize: '13px', fontWeight: 'bold', color: '#2c3e50' }}>{log.action}</p>
+                                <p style={{ margin: 0, fontSize: '11px', color: '#7f8c8d' }}>🕒 {log.date}</p>
                             </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {log.amount && (
+                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8e44ad', background: 'rgba(142, 68, 173, 0.1)', border: '1px solid rgba(142, 68, 173, 0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                                            {log.amount}
+                                        </div>
+                                    )}
+                                    
+                                    {/* 🔥 EDIT BUTTON (Dikhna chahiye agar project mil gaya) */}
+                                    {associatedProject && (
+                                        <button 
+                                            onClick={() => {
+                                                setPreviewProject(associatedProject);
+                                                setIsEditMode(true);
+                                                setEditDraftImages([...associatedProject.images]);
+                                                setAlbumIsFrozen(associatedProject.isFrozen || false);
+                                            }} 
+                                            style={{ background: '#f39c12', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(243, 156, 18, 0.3)' }}
+                                        >
+                                            ✏️ Edit Folder
+                                        </button>
+                                    )}
+                                </div>
+                                {log.report && log.report.failed > 0 && (
+                                    <button onClick={() => generateFailedReportPDF(log)} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(231,76,60,0.3)' }}>
+                                        📄 Download Error Report
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+                {filteredLogs.length > uploadLogLimit && (
+                    <button onClick={() => setUploadLogLimit(prev => prev + 5)} style={{ width: '100%', marginTop: '10px', background: '#ecf0f1', color: '#34495e', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s' }}>
+                        Show More 👇
+                    </button>
+                )}
+            </>
+        );
+    })()}
+</div>
                         </div>
 
                     </div>
