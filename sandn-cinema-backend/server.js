@@ -1109,8 +1109,8 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         const filePath = req.file.path; 
         const fileSizeMB = req.file.size / (1024 * 1024);
 
-        // 🔥 NAYA: Humne projectId pass kar di taaki backend wahi Cloud dhundhe
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId);
+        // 🔥 THE FIX 1: Extract projectId FIRST before using it!
+        const { projectId, skipPreview } = req.body; 
 
         // 🛑 SMART PROXY LIMIT CHECK
         const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
@@ -1132,7 +1132,7 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                 }
 
                 if (fileSizeMB > maxAllowedMB) { 
-                    fs.unlinkSync(filePath);
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
                     return res.status(413).json({ success: false, message: `File too large! Your plan allows max ${maxAllowedMB}MB per file in proxy mode.` });
                 }
 
@@ -1140,45 +1140,20 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                 const used = studioData.usedStorageGB || 0;
                 
                 if (used + fileSizeGB > allocated) {
-                    fs.unlinkSync(filePath); 
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath); 
                     return res.status(403).json({ success: false, message: `Storage Limit Exceeded! You have used ${used.toFixed(2)}GB of your ${allocated}GB plan.` });
                 }
             }
         }
 
-        // 🔥 THE FIX: SMART CLOUD AWARENESS (Project-specific OR Tier-specific)
-        const { projectId } = req.body; 
-        let activeCloud = null;
+        // 🔥 THE FIX 2: Single clean call to active cloud router
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId);
 
-        if (projectId && projectId !== 'undefined') {
-            const project = await AlbumSelection.findById(projectId);
-            if (project && project.storageConfigId) {
-                activeCloud = await StorageConfig.findById(project.storageConfigId);
-            }
-        }
-        
-        // Agar project ID nahi mili, toh Tier-based routing karo
-        if (!activeCloud) {
-            const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
-            let targetCloudId = null;
-
-            if (req.user && req.user.mobile) {
-                const studio = await Studio.findOne({ mobile: req.user.mobile });
-                const isPaid = studio && studio.storagePlan && studio.storagePlan !== 'FREE';
-                
-                // Tier ke hisaab se Cloud ID uthao
-                if (settings && settings.cloudRouting) {
-                    targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
-                }
-            }
-
-            // Agar ID mil gayi, toh wo use karo, warna default active cloud
-            if (targetCloudId && mongoose.Types.ObjectId.isValid(targetCloudId)) {
-                activeCloud = await StorageConfig.findById(targetCloudId);
-                console.log(`💎 Tier-based Routing: Saved to [${activeCloud?.nickname || 'Default'}]`);
-            } else {
-                activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile);
-            }
+        // 🛑 THE FIX 3: IMGBB Video Crash Protector
+        if (activeCloud.provider === 'IMGBB' && !isImage) {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            console.error("🚨 CRASH AVOIDED: IMGBB rejected a video upload.");
+            return res.status(400).json({ success: false, message: "IMGBB does not support videos. Please set Cloudinary or S3 as your active storage." });
         }
 
         let uploadedUrl = '';
@@ -1186,11 +1161,10 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
 
         console.log(`☁️ Secure Proxy Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
 
-        const skipPreview = req.body.skipPreview === 'true';
         let watermarkedBuffer = null;
 
         // 🎨 WATERMARK PROCESSING
-        if (isImage && !skipPreview) {
+        if (isImage && skipPreview !== 'true') {
             const image = sharp(filePath);
             const metadata = await image.metadata();
             
@@ -1225,7 +1199,7 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             const result = await uploadToCloudinary(filePath);
             uploadedUrl = result.secure_url;
             
-            if (isImage && !skipPreview) {
+            if (isImage && skipPreview !== 'true') {
                 const uploadIndex = uploadedUrl.indexOf('/upload/');
                 previewUrl = `${uploadedUrl.slice(0, uploadIndex + 8)}c_scale,w_800,q_auto/l_text:Arial_60_bold:SNEVIO PREVIEW,co_white,o_50,a_-30/${uploadedUrl.slice(uploadIndex + 8)}`;
             } else {
@@ -1267,7 +1241,7 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         res.json({ success: true, url: uploadedUrl, previewUrl: previewUrl || uploadedUrl, provider: activeCloud.provider });
 
     } catch (error) {
-        console.error("🚨 CLOUD UPLOAD CRASHED!");
+        console.error("🚨 CLOUD UPLOAD CRASHED!", error);
         if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); 
         res.status(500).json({ success: false, message: "Secure upload failed. Check logs." });
     }
@@ -3377,7 +3351,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
             images: imageObjects,
             allImages: rawUrls
         });
-        
+
         // 📩 Fire Email to Client (The Magic Link)
         if (clientEmail && !clientEmail.includes('dummy_')) {
             const magicLink = `${WEBSITE_URL}client-dashboard`; // Yahan user login karke seedha select karega
