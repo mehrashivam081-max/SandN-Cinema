@@ -3335,6 +3335,12 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         const activeCloud = await getOrUpdateActiveStorage(0.05, req.user?.mobile, req.user?.role);
 
         const newSelection = await AlbumSelection.create({
+            // studioMobile: यह वो व्यक्ति है जिसने प्रोजेक्ट बनाया (Admin या Studio)
+            studioMobile: req.user.mobile, 
+            
+            // assignToStudio: यह वो Studio है जिसके पास यह काम गया है
+            assignToStudio: targetStudioMobile,
+
             studioMobile: targetStudioMobile, 
             studioName: sName,
             uploaderName: uploaderName || sName || 'Snevio Admin',
@@ -3419,28 +3425,33 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
 // 2. Fetch Selections (For Studio Dashboard)
 app.post('/api/auth/get-studio-selections', authenticateToken, async (req, res) => {
     try {
-        // Allow Owner, Admin, and Studio to fetch
         if(req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
             return res.json({ success: false, message: "Unauthorized Action" });
         }
         
-        // Mobile number ko clean string banao
         const cleanMobile = String(req.user.mobile).trim();
 
-        // 🔥 ULTIMATE FALLBACK QUERY: String, Number, aur AssignToStudio sab check karega!
-        const selections = await AlbumSelection.find({ 
-            $or: [
-                { studioMobile: cleanMobile },
-                { studioMobile: Number(cleanMobile) },
-                { assignToStudio: cleanMobile },
-                { assignToStudio: Number(cleanMobile) }
-            ]
-        }).sort({ createdAt: -1 });
+        let query = {};
 
+        // 🛡️ ADMIN/OWNER: Sab kuch dekho
+        if (req.user.role === 'ADMIN' || req.user.role === 'OWNER') {
+            query = {}; 
+        } 
+        // 👤 STUDIO: Woh sab dekho jo tumne banaya (studioMobile) YA jo tumhe mila (assignToStudio)
+        else {
+            query = {
+                $or: [
+                    { studioMobile: cleanMobile },
+                    { assignToStudio: cleanMobile }
+                ]
+            };
+        }
+
+        const selections = await AlbumSelection.find(query).sort({ createdAt: -1 });
         res.json({ success: true, data: selections });
     } catch (e) {
         console.error("Selection Fetch Error:", e);
-        res.status(500).json({ success: false, message: "Server error during selection fetch." });
+        res.status(500).json({ success: false, message: "Server error during fetch." });
     }
 });
 
