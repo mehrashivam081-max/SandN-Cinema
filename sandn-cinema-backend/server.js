@@ -1406,13 +1406,33 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
             await User.updateOne({ mobile: mobile }, { $push: { "wallet.history": { $each: [{ action: `Received ${filePaths.length} new files`, amount: `📁 ${finalFolderName}`, date: dateStr, type: "received" }], $position: 0 } }}, { strict: false });
         }
 
-        // 3. Email Notification to Uploader
+        // 3. Email Notification to Uploader (WITH DETAILED REPORT)
         if (req.user && req.user.role === 'STUDIO') {
             const uploader = await Studio.findOne({ mobile: req.user.mobile });
             if (uploader && uploader.email && !uploader.email.includes('dummy_')) {
-                sendBrevoEmail(uploader.email, `✅ Upload Successful: ${finalFolderName}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #2ecc71; border-radius: 8px;"><h2 style="color: #2ecc71;">Upload Successful!</h2><p>Data successfully sent and saved for client ${mobile}.</p></div>`).catch(()=>{});
-            }
-        }
+                
+                const rpt = req.body.uploadReport || {};
+                const failedListHtml = rpt.failed > 0 && rpt.failedNames ? 
+                    `<p style="color: #c0392b; font-size: 13px; font-weight: bold;">❌ Failed Files (${rpt.failed}):<br/><span style="font-weight: normal; font-size: 11px;">${rpt.failedNames.join('<br/>')}</span></p>` : '';
+
+                const uploaderHtml = `
+                    <div style="font-family: Arial; padding: 20px; border: 1px solid #3498db; border-radius: 8px;">
+                        <h2 style="color: #3498db;">Upload Completed! 🚀</h2>
+                        <p>Data has been successfully saved for the folder: <strong>${req.body.folderName || 'Client Project'}</strong></p>
+                        
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #eee;">
+                            <h4 style="margin: 0 0 10px 0; color: #2c3e50;">📊 System Report</h4>
+                            <p style="margin: 5px 0; font-size: 14px;">Total Files Attempted: <strong>${rpt.total || 0}</strong></p>
+                            <p style="margin: 5px 0; font-size: 14px; color: #27ae60;">✅ Successfully Uploaded: <strong>${rpt.success || 0}</strong></p>
+                            <p style="margin: 5px 0; font-size: 14px; color: #f39c12;">🔄 Files Retried: <strong>${rpt.retryCount || 0}</strong></p>
+                            <p style="margin: 5px 0; font-size: 14px; color: #e74c3c;">❌ Permanently Failed: <strong>${rpt.failed || 0}</strong></p>
+                            ${failedListHtml}
+                        </div>
+                    </div>
+                `;
+                sendBrevoEmail(uploader.email, `📊 Upload Report: ${req.body.folderName || 'Project'}`, uploaderHtml).catch(()=>{});
+            }
+        }
 
         // ⚡ SOCKET FIRE: Client ko real-time update bhejo!
         const io = req.app.get('io');
