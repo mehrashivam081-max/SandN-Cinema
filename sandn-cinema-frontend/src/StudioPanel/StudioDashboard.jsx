@@ -610,7 +610,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-// 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (5x HIGH-SPEED PARALLEL UPLOAD)
+// 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (SMART DEFERRED RETRY + CHUNKING)
     const handleUpload = async (isFeed = false) => {
         if (!isFeed && (!clientMobile || clientMobile.length !== 10)) return alert("Please enter a valid 10-digit mobile number.");
         const currentFiles = isFeed ? feedFiles : files;
@@ -640,7 +640,6 @@ const StudioDashboard = ({ user, onLogout }) => {
         setUploadETA('Calculating...');
 
         const totalBytes = filesToUpload.reduce((acc, file) => acc + file.size, 0);
-        const loadedBytesArray = new Array(filesToUpload.length).fill(0);
         const uploadedUrls = isResuming ? pendingResumeState.uploadedUrlsList || [] : [];
 
         let startTime = Date.now();
@@ -653,171 +652,229 @@ const StudioDashboard = ({ user, onLogout }) => {
         if (!fileProgressRef.current) fileProgressRef.current = {};
 
         try {
-            let fallbackSpeed = '0.00';
+            // 🔥 SMART QUEUE SYSTEM
+            let pendingQueue = [...filesToUpload];
+            let deferredQueue = []; 
+            let isRetryPhase = false;
+            let successNames = [];
+            let permanentlyFailed = [];
+            let retryCounter = 0;
+            let loadedBytesMap = {}; 
 
-            // 🛑 THE FIX: Sequential Upload Loop (Fixes "Same file uploading repeatedly" and "Stuck Progress" bugs)
-            let totalLoadedBytes = 0;
-            
-            for (let i = 0; i < filesToUpload.length; i++) {
-                const file = filesToUpload[i];
-                const globalIndex = i;
+            const updateGlobalProgress = () => {
+                const tempTotalLoaded = Object.values(loadedBytesMap).reduce((a, b) => a + b, 0);
+                const percent = Math.round((tempTotalLoaded * 100) / totalBytes);
+                setUploadProgress(Math.min(percent, 99));
+                setUploadStats(`${(tempTotalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
                 
-                if (controller.signal.aborted) {
-                    throw new Error("Upload Cancelled");
+                // Speed Calculation
+                const currentTime = Date.now();
+                if ((currentTime - lastTime) / 1000 > 0.5) { 
+                    const speedBps = (tempTotalLoaded - lastTotalLoaded) / ((currentTime - lastTime) / 1000);
+                    setUploadSpeed(`${(speedBps / (1024 * 1024)).toFixed(2)} MB/s`);
+                    const secs = (totalBytes - tempTotalLoaded) / speedBps;
+                    setUploadETA(secs > 60 ? `${Math.floor(secs / 60)}m left` : `${Math.floor(secs)}s left`);
+                    lastTotalLoaded = tempTotalLoaded; 
+                    lastTime = currentTime;
+                }
+            };
+
+            // 🛑 MAIN LOOP
+            while (pendingQueue.length > 0 || (!isRetryPhase && deferredQueue.length > 0)) {
+                if (pendingQueue.length === 0 && !isRetryPhase && deferredQueue.length > 0) {
+                    isRetryPhase = true;
+                    pendingQueue = [...deferredQueue];
+                    deferredQueue = [];
+                    setLiveActionText(`🔄 Retrying ${pendingQueue.length} failed files...`);
+                    await new Promise(res => setTimeout(res, 3000)); 
                 }
 
-                setLiveActionText(`Uploading [${i + 1}/${filesToUpload.length}]: ${file.name.substring(0, 15)}...`);
+                const file = pendingQueue.shift(); 
+                if (controller.signal.aborted) throw new Error("Upload Cancelled");
+
+                if (isRetryPhase) retryCounter++;
+
+                setLiveActionText(isRetryPhase ? `Retrying: ${file.name.substring(0, 15)}...` : `Uploading: ${file.name.substring(0, 15)}...`);
                 fileProgressRef.current[file.name] = 0;
                 setFileProgressMap({ ...fileProgressRef.current });
 
-                let attempt = 0;
-                const maxAttempts = 3;
-                let successData = null;
+                try {
+                    loadedBytesMap[file.name] = 0; 
+                    
+                    const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                        fileName: file.name, 
+                        fileType: file.type, 
+                        fileSizeGB: file.size / (1024 * 1024 * 1024),
+                        targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
+                    }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
 
-                while (attempt < maxAttempts && !successData) {
-                    try {
-                        attempt++;
-                        loadedBytesArray[globalIndex] = 0; // Reset for retry
-                        
-                        const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                            fileName: file.name, 
-                            fileType: file.type, 
-                            fileSizeGB: file.size / (1024 * 1024 * 1024),
-                            targetFolder: file.customSubFolder ? `${baseFolder}/${file.customSubFolder}` : baseFolder
-                        }, { headers: { 'Authorization': `Bearer ${getValidToken()}` }, signal: controller.signal });
+                    let finalUrl = '';
 
-                        let finalUrl = '';
+                    if (sigRes.data.directUpload) {
+                        if (sigRes.data.provider === 'CLOUDINARY') {
+                            // ✂️ CHUNKING LOGIC FOR CLOUDINARY (Solves the 500MB crash)
+                            finalUrl = await new Promise((resolve, reject) => {
+                                const chunkSize = 15 * 1024 * 1024; // 15MB ke tukde
+                                const uniqueUploadId = Math.random().toString(36).substring(2) + Date.now().toString(36);
+                                const totalSize = file.size;
+                                let currentChunk = 0;
+                                let totalChunks = Math.ceil(totalSize / chunkSize);
+                                let totalUploadedSoFar = 0;
 
-                        if (sigRes.data.directUpload) {
-                            if (sigRes.data.provider === 'CLOUDINARY') {
-                                const cFormData = new FormData();
-                                cFormData.append('file', file);
-                                cFormData.append('api_key', sigRes.data.apiKey);
-                                cFormData.append('timestamp', sigRes.data.timestamp);
-                                cFormData.append('signature', sigRes.data.signature);
-                                cFormData.append('folder', sigRes.data.folder);
+                                const uploadNextChunk = () => {
+                                    if (controller.signal.aborted) return reject(new Error("Aborted"));
 
-                                // 🔥 USE XHR FOR ACCURATE PROGRESS & NO CORS ISSUES
-                                finalUrl = await new Promise((resolve, reject) => {
+                                    const start = currentChunk * chunkSize;
+                                    const end = Math.min(start + chunkSize, totalSize);
+                                    const chunk = file.slice(start, end);
+
+                                    const cFormData = new FormData();
+                                    cFormData.append('file', chunk);
+                                    cFormData.append('api_key', sigRes.data.apiKey);
+                                    cFormData.append('timestamp', sigRes.data.timestamp);
+                                    cFormData.append('signature', sigRes.data.signature);
+                                    cFormData.append('folder', sigRes.data.folder);
+
                                     const xhr = new XMLHttpRequest();
                                     xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
-                                    
-                                    xhr.upload.onprogress = (e) => {
-                                        if (e.lengthComputable) {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
-                                            setFileProgressMap({ ...fileProgressRef.current });
-                                            
-                                            // Update Global Progress
-                                            const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
-                                            const percent = Math.round((tempTotalLoaded * 100) / totalBytes);
-                                            setUploadProgress(Math.min(percent, 99));
-                                            setUploadStats(`${(tempTotalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-                                        }
-                                    };
-                                    xhr.onload = () => {
-                                        if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
-                                        else reject(new Error(`Cloudinary Error: ${xhr.status}`));
-                                    };
-                                    xhr.onerror = () => reject(new Error("Network Error"));
-                                    xhr.onabort = () => reject(new Error("Aborted"));
-                                    controller.signal.addEventListener('abort', () => xhr.abort());
-                                    xhr.send(cFormData);
-                                });
-                            } else {
-                                // AWS S3
-                                finalUrl = await new Promise((resolve, reject) => {
-                                    const xhr = new XMLHttpRequest();
-                                    xhr.open('PUT', sigRes.data.signedUrl);
-                                    xhr.setRequestHeader('Content-Type', file.type);
-                                    
-                                    xhr.upload.onprogress = (e) => {
-                                        if (e.lengthComputable) {
-                                            loadedBytesArray[globalIndex] = e.loaded;
-                                            fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
-                                            setFileProgressMap({ ...fileProgressRef.current });
-                                            
-                                            const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
-                                            setUploadProgress(Math.min(Math.round((tempTotalLoaded * 100) / totalBytes), 99));
-                                        }
-                                    };
-                                    xhr.onload = () => {
-                                        if (xhr.status === 200) resolve(sigRes.data.publicUrl);
-                                        else reject(new Error("AWS Error"));
-                                    };
-                                    xhr.onerror = () => reject(new Error("Network Error"));
-                                    xhr.onabort = () => reject(new Error("Aborted"));
-                                    controller.signal.addEventListener('abort', () => xhr.abort());
-                                    xhr.send(file);
-                                });
-                            }
-                        } else {
-                            // Proxy Upload
-                            if (file.size > 100 * 1024 * 1024) throw new Error("File too large for proxy");
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            fd.append('skipPreview', 'true'); 
+                                    xhr.setRequestHeader('X-Unique-Upload-Id', uniqueUploadId);
+                                    xhr.setRequestHeader('Content-Range', `bytes ${start}-${end - 1}/${totalSize}`);
 
-                            const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
-                                headers: { 'Authorization': `Bearer ${getValidToken()}` },
-                                signal: controller.signal, 
-                                onUploadProgress: (e) => {
+                                    xhr.upload.onprogress = (e) => {
+                                        if (e.lengthComputable) {
+                                            const currentLoaded = totalUploadedSoFar + e.loaded;
+                                            loadedBytesMap[file.name] = currentLoaded;
+                                            fileProgressRef.current[file.name] = Math.round((currentLoaded * 100) / totalSize);
+                                            setFileProgressMap({ ...fileProgressRef.current });
+                                            updateGlobalProgress();
+                                        }
+                                    };
+
+                                    xhr.onload = () => {
+                                        if (xhr.status === 200 || xhr.status === 201) {
+                                            totalUploadedSoFar += chunk.size;
+                                            currentChunk++;
+                                            if (currentChunk < totalChunks) {
+                                                uploadNextChunk(); // Agla tukda bhejo
+                                            } else {
+                                                resolve(JSON.parse(xhr.responseText).secure_url); // Upload poora hua
+                                            }
+                                        } else {
+                                            reject(new Error(`Cloudinary Error: ${xhr.status}`));
+                                        }
+                                    };
+
+                                    xhr.onerror = () => reject(new Error("Network Error"));
+                                    xhr.onabort = () => reject(new Error("Aborted"));
+                                    controller.signal.addEventListener('abort', () => xhr.abort());
+                                    
+                                    xhr.send(cFormData);
+                                };
+
+                                uploadNextChunk(); // Process Start Karo
+                            });
+
+                        } else {
+                            // AWS S3
+                            finalUrl = await new Promise((resolve, reject) => {
+                                const xhr = new XMLHttpRequest();
+                                xhr.open('PUT', sigRes.data.signedUrl);
+                                xhr.setRequestHeader('Content-Type', file.type);
+                                
+                                xhr.upload.onprogress = (e) => {
                                     if (e.lengthComputable) {
-                                        loadedBytesArray[globalIndex] = e.loaded;
+                                        loadedBytesMap[file.name] = e.loaded;
                                         fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
                                         setFileProgressMap({ ...fileProgressRef.current });
-                                        
-                                        const tempTotalLoaded = loadedBytesArray.reduce((a, b) => a + b, 0);
-                                        setUploadProgress(Math.min(Math.round((tempTotalLoaded * 100) / totalBytes), 99));
+                                        updateGlobalProgress();
                                     }
-                                }
+                                };
+                                xhr.onload = () => {
+                                    if (xhr.status === 200) resolve(sigRes.data.publicUrl);
+                                    else reject(new Error("AWS Error"));
+                                };
+                                xhr.onerror = () => reject(new Error("Network Error"));
+                                xhr.onabort = () => reject(new Error("Aborted"));
+                                controller.signal.addEventListener('abort', () => xhr.abort());
+                                xhr.send(file);
                             });
-                            finalUrl = proxyRes.data.url;
                         }
+                    } else {
+                        // Proxy Upload
+                        if (file.size > 100 * 1024 * 1024) throw new Error("File too large for proxy");
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('skipPreview', 'true'); 
 
-                        // Mark as Success
-                        loadedBytesArray[globalIndex] = file.size;
-                        fileProgressRef.current[file.name] = 100;
-                        setFileProgressMap({ ...fileProgressRef.current });
-                        
-                        successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
-                        uploadedUrls.push(successData);
-                        
-                        if (!isFeed) {
-                            alreadyUploadedNames.push(file.name);
-                            const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
-                            localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
-                            setPendingResumeState(updatedDraft);
-                        }
-
-                    } catch (err) {
-                        if (err.name === "AbortError" || axios.isCancel(err) || err.message === "Aborted") throw err; 
-                        
-                        if (attempt >= maxAttempts) { 
-                            loadedBytesArray[globalIndex] = 0; 
-                            fileProgressRef.current[file.name] = -1; // ❌ MARK AS FAILED
-                            setFileProgressMap({ ...fileProgressRef.current });
-                            failCount++;
-                            failedFilesList.push(file.name);
-                        } else {
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                        }
+                        const proxyRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                            headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                            signal: controller.signal, 
+                            onUploadProgress: (e) => {
+                                if (e.lengthComputable) {
+                                    loadedBytesMap[file.name] = e.loaded;
+                                    fileProgressRef.current[file.name] = Math.round((e.loaded * 100) / e.total);
+                                    setFileProgressMap({ ...fileProgressRef.current });
+                                    updateGlobalProgress();
+                                }
+                            }
+                        });
+                        finalUrl = proxyRes.data.url;
                     }
-                } // end while attempt
-            } // end for loop
+
+                    // ✅ MARK AS SUCCESS
+                    loadedBytesMap[file.name] = file.size;
+                    fileProgressRef.current[file.name] = 100;
+                    setFileProgressMap({ ...fileProgressRef.current });
+                    
+                    const successData = isFeed ? finalUrl : { url: finalUrl, subFolder: file.customSubFolder || targetSubFolder || 'Main Event' };
+                    uploadedUrls.push(successData);
+                    successNames.push(file.name);
+                    
+                    if (!isFeed) {
+                        alreadyUploadedNames.push(file.name);
+                        const updatedDraft = { clientMobile, folderName: baseFolder, uploadedFiles: alreadyUploadedNames, uploadedUrlsList: uploadedUrls };
+                        localStorage.setItem('snevio_failed_upload', JSON.stringify(updatedDraft));
+                        setPendingResumeState(updatedDraft);
+                    }
+
+                } catch (err) {
+                    if (err.name === "AbortError" || axios.isCancel(err) || err.message === "Aborted") throw err; 
+                    
+                    if (!isRetryPhase) {
+                        console.log(`⚠️ File failed, saving for end retry: ${file.name}`);
+                        deferredQueue.push(file);
+                        loadedBytesMap[file.name] = 0; 
+                        fileProgressRef.current[file.name] = 0; 
+                        setFileProgressMap({ ...fileProgressRef.current });
+                    } else {
+                        permanentlyFailed.push(file.name);
+                        fileProgressRef.current[file.name] = -1; // ❌ MARK AS FAILED
+                        setFileProgressMap({ ...fileProgressRef.current });
+                    }
+                }
+            } // end while loop
             
-            const failedFilesList = filesToUpload.filter(f => fileProgressRef.current[f.name] === -1).map(f => f.name);
-            const failedFilesCount = failedFilesList.length;
-            
+            // 📊 GENERATE SMART REPORT
+            const failedFilesCount = permanentlyFailed.length;
+            const uploadReportData = { 
+                total: currentFiles.length, 
+                success: successNames.length, 
+                failed: failedFilesCount, 
+                retryCount: retryCounter, 
+                failedNames: permanentlyFailed,
+                successNames: successNames
+            };
+
             if (failedFilesCount > 0) {
                 setUploadSpeed(`⚠️ ${failedFilesCount} files failed`);
-                setUploadETA('Waiting for your permission...');
+                setUploadETA('Paused.');
                 setFileProgressMap({ ...fileProgressRef.current });
 
-                const userWantsRetry = window.confirm(`⚠️ ${failedFilesCount} files failed due to network drop.\n\nDo you want the system to Auto-Retry them right now?\n\n✅ Click 'OK' to Retry failed files.\n❌ Click 'Cancel' to skip them and save the successfully uploaded files to the database.`);
+                const userWantsToSave = window.confirm(`⚠️ ${failedFilesCount} files failed permanently after retrying.\n\nDo you want to save the successful files to the database anyway?\n\n✅ Click 'OK' to Save.\n❌ Click 'Cancel' to try uploading failed files again later.`);
                 
-                if (userWantsRetry) {
-                    return handleUpload(isFeed);
+                if (!userWantsToSave) {
+                    setLoading(false);
+                    return; 
                 }
             }
 
@@ -867,30 +924,27 @@ const StudioDashboard = ({ user, onLogout }) => {
                 return; 
             }
 
-            const uploadReportData = { total: currentFiles.length, success: uploadedUrls.length, failed: failedFilesCount, failedNames: failedFilesList };
-
             let dbResNormal;
             const uploaderNameText = studioProfile?.studioName || user?.name || 'Studio Partner';
 
             if (uploadType === 'SELECTION') {
-                const selPayload = {
-                    clientMobile, 
-                    clientEmail, 
-                    folderName: baseFolder, 
-                    uploadReport: uploadReportData,
-                    sheetLimit: selectionForm.sheetLimit,
-                    imagesPerSheet: selectionForm.imagesPerSheet,
-                    costPerExtraSheet: selectionForm.costPerExtraSheet,
-                    totalPhases: selectionForm.totalPhases,
-                    cloudProvider: 'CLOUDINARY',
-                    addedBy: studioProfile?.mobile || user?.mobile || 'STUDIO',
-                    // 🔥 THE FIX: Backend ko batana padega ki ye kis Studio ka project hai!
+                const selPayload = {
+                    clientMobile, 
+                    clientEmail, 
+                    folderName: baseFolder, 
+                    uploadReport: uploadReportData,
+                    sheetLimit: selectionForm.sheetLimit,
+                    imagesPerSheet: selectionForm.imagesPerSheet,
+                    costPerExtraSheet: selectionForm.costPerExtraSheet,
+                    totalPhases: selectionForm.totalPhases,
+                    cloudProvider: 'CLOUDINARY',
+                    addedBy: studioProfile?.mobile || user?.mobile || 'STUDIO',
                     studioMobile: studioProfile?.mobile || user?.mobile,
                     assignToStudio: studioProfile?.mobile || user?.mobile,
-                    uploaderName: uploaderNameText,
-                    uploaderRole: 'Studio Partner',
-                    fileUrls: uploadedUrls
-                };
+                    uploaderName: uploaderNameText,
+                    uploaderRole: 'Studio Partner',
+                    fileUrls: uploadedUrls
+                };
                 
                 dbResNormal = await axios.post(`${API_BASE}/create-album-selection`, selPayload, {
                     headers: { 'Authorization': `Bearer ${getValidToken()}` },
@@ -898,7 +952,8 @@ const StudioDashboard = ({ user, onLogout }) => {
                 });
             } else {
                 const payload = {
-                    mobile: clientMobile, name: clientName || 'Client', type: 'USER', uploadReport: uploadReportData,
+                    mobile: clientMobile, name: clientName || 'Client', type: 'USER', 
+                    uploadReport: uploadReportData, 
                     folderName: baseFolder, subFolderName: targetSubFolder, 
                     email: clientEmail, expiryDays: expiryDays || '30', downloadLimit: downloadLimit || '0',
                     addedBy: user?.mobile || 'ADMIN',
@@ -924,12 +979,11 @@ const StudioDashboard = ({ user, onLogout }) => {
                     setClientMobile(''); setClientName(''); setClientEmail(''); setFolderName(''); 
                     setExpiryDays(''); setDownloadLimit(''); setUseDateFolder(false);
                     setFiles([]); document.getElementById('file-input-field').value = '';
-                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
-                    fetchClients(); fetchMyProfile();
-                    // 🔥 THE FIX: Upload hote hi turant selections list refresh maaro!
+                    setFileStats(prev => ({ ...prev, photos: 0, videos: 0 }));
+                    fetchClients(); fetchMyProfile();
                     fetchStudioSelections();
-                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
-                    setLoading(false);
+                    if(studioRemoveUserObj && studioRemoveUserObj.mobile === clientMobile) searchUserForRemoval(clientMobile);
+                    setLoading(false);
                 }, 500);
             } else { 
                 alert(`❌ Error from Database: ${dbResNormal.data.message}`); 
