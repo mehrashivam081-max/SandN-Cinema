@@ -1244,14 +1244,21 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
                 previewUrl = uploadedUrl;
             }
         } else {
-            const originalBuffer = fs.readFileSync(filePath);
-            
             if (activeCloud.provider === 'IMGBB') {
-                const originalBase64 = originalBuffer.toString('base64');
-                const imgbbResOriginal = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: originalBase64 }));
-                uploadedUrl = imgbbResOriginal.data.data.url;
-                previewUrl = (isImage && watermarkedBuffer) ? (await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: watermarkedBuffer.toString('base64') }))).data.data.url : uploadedUrl;
+                // 🔥 MEMORY OPTIMIZATION FOR IMGBB (Prevents RAM Spikes)
+                const base64Data = fs.readFileSync(filePath, { encoding: 'base64' }); // Direct read as string
+                const imgbbRes = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: base64Data }));
+                uploadedUrl = imgbbRes.data.data.url;
+                
+                // Watermark logic
+                if (isImage && watermarkedBuffer) {
+                    const previewRes = await axios.post(`https://api.imgbb.com/1/upload?key=${activeCloud.credentials.apiKey}`, new URLSearchParams({ image: watermarkedBuffer.toString('base64') }));
+                    previewUrl = previewRes.data.data.url;
+                } else {
+                    previewUrl = uploadedUrl;
+                }
             } else if (activeCloud.provider === 'MEGA') {
+                const originalBuffer = fs.readFileSync(filePath); // Only load buffer if it's MEGA
                 const megaStorage = await new Storage({ email: activeCloud.credentials.apiKey, password: activeCloud.credentials.apiSecret }).ready;
                 const megaFile = await megaStorage.upload(req.file.originalname, originalBuffer).complete;
                 uploadedUrl = await megaFile.link();
