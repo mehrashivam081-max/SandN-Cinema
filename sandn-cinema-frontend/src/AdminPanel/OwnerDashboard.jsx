@@ -2066,9 +2066,9 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                     <button onClick={() => document.getElementById('edit-add-folder').click()} disabled={editUploading} style={{ flex: 1, background: '#8e44ad', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                                         🗂️ Add Folder
                                     </button>
-                                    <button onClick={() => setRemoveMode(removeMode === 'FILE' ? null : 'FILE')} style={{ background: removeMode === 'FILE' ? '#c0392b' : '#e74c3c', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: removeMode === 'FILE' ? '2px solid #fff' : 'none' }}>
-                                        {removeMode === 'FILE' ? '⏹️ Stop Removing' : '🎯 Remove Files'}
-                                    </button>
+                                    <button onClick={() => setRemoveMode(removeMode === 'FILE' ? null : 'FILE')} style={{ background: removeMode === 'FILE' ? '#c0392b' : '#e74c3c', color: '#fff', padding: '12px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: removeMode === 'FILE' ? '2px solid #fff' : 'none' }}>
+    {removeMode === 'FILE' ? '⏹️ Stop Removing' : '🎯 Remove Files'}
+</button>
                                     <button onClick={() => {
                                         const targetFolder = window.prompt("Enter exact Sub-Folder name to delete (e.g. Haldi):");
                                         if (targetFolder) {
