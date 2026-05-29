@@ -1149,6 +1149,13 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         // 🔥 THE FIX 2: Single clean call to active cloud router
         const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId);
 
+        // 🔥 BACKEND CRASH PROTECTOR: Agar cloud config nahi mili, toh crash hone se roko
+        if (!activeCloud) {
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath); // Temp file delete karo
+            console.error("🚨 CRASH AVOIDED: No active cloud storage found for this project.");
+            return res.status(400).json({ success: false, message: "Storage Configuration missing! Make sure a Cloud is active." });
+        }
+
         // 🛑 THE FIX 3: IMGBB Video Crash Protector
         if (activeCloud.provider === 'IMGBB' && !isImage) {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
