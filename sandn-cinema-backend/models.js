@@ -189,25 +189,32 @@ const platformSettingSchema = new mongoose.Schema({
     }],
 
     policies: {
-        terms: { type: String, default: "User content will be safely managed..." },
-        privacy: { type: String, default: "We do not sell data to 3rd parties..." },
-        shipping: { type: String, default: "No physical products shipped..." },
-        contact: { type: String, default: "Business Name: Snevio Cloud..." },
-        bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
-    },
+        terms: { type: String, default: "User content will be safely managed..." },
+        privacy: { type: String, default: "We do not sell data to 3rd parties..." },
+        shipping: { type: String, default: "No physical products shipped..." },
+        contact: { type: String, default: "Business Name: Snevio Cloud..." },
+        bestForYou: { type: String, default: "We provide cinematic quality at best prices..." }
+    },
 
-    // 🚦 SMART CLOUD ROUTING & UPLOAD LOGIC
+    // 🚦 SMART CLOUD ROUTING & UPLOAD LOGIC (Upgraded for Admin Cloud & RAM Batch Limit)
     cloudRouting: {
         freeCloudId: String,
         freeMaxFileMB: Number,
         freeUploadLogic: { type: String, default: 'STREAM' }, // 'STREAM' or 'DIRECT'
         defaultFreeStorageGB: Number,
+        
         paidCloudId: String,
         paidMaxFileMB: Number,
-        paidUploadLogic: { type: String, default: 'DIRECT' } // 'STREAM' or 'DIRECT'
+        paidUploadLogic: { type: String, default: 'DIRECT' }, // 'STREAM' or 'DIRECT'
+
+        adminCloudId: String,          // 🔥 NEW: Admin's Personal Cloud
+        adminMaxFileMB: Number,        // 🔥 NEW: Admin's Custom Size Limit
+        adminUploadLogic: { type: String, default: 'DIRECT' }, // 🔥 NEW: Admin's Upload Method
+        
+        maxBatchSizeGB: { type: String, default: '1.5' } // 🔥 NEW: RAM Crash Protector Limit
     },
 
-    // GLOBAL DEFAULT PRICING
+    // GLOBAL DEFAULT PRICING
     defaultPricing: {
         imageCost: { type: Number, default: 5 },
         videoCost: { type: Number, default: 10 }
