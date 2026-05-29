@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp'); // 🔥 NAYA: Auto-Watermark Engine
+sharp.cache(false); // 🛑 RAM PROTECTOR: Sharp ko RAM hold karne se rokega (No Memory Leaks)
+sharp.concurrency(1); // 🛑 RAM PROTECTOR: Server ko overload hone se bachayega
 const { Storage } = require('megajs'); // ✅ NEW: Mega Cloud Import
 const cron = require('node-cron'); // ✅ NEW: 72-Hour Timer Logic
 const JWT_SECRET = process.env.JWT_SECRET || 'snevio_super_secret_key_2024';
