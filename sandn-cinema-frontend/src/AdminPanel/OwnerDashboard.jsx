@@ -190,7 +190,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         setIsEditMode(!isEditMode);
     };
 
-    const handleEditFileUpload = async (e, isFolder = false) => {
+const handleEditFileUpload = async (e, isFolder = false) => {
         const selectedFiles = Array.from(e.target.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         if(selectedFiles.length === 0) return;
 
@@ -213,105 +213,180 @@ const OwnerDashboard = ({ user, onLogout }) => {
 
         let totalLoadedBytes = 0;
         let startTime = Date.now();
+        let successCount = 0;
+        let failCount = 0;
 
         try {
             for (let file of selectedFiles) {
-                let subF = 'Main Event';
-                
-                // 🔥 THE FOLDER FIX: Sahi se folder ka naam nikalna
-                if (isFolder && file.webkitRelativePath) {
-                    const parts = file.webkitRelativePath.split('/');
-                    if (parts.length >= 3) subF = parts[parts.length - 2];
-                    else if (parts.length === 2) subF = parts[0]; // Ye line miss thi!
-                }
+                // 🔥 INNER TRY-CATCH START: Ek file fail hui toh loop nahi tootega!
+                try {
+                    let subF = 'Main Event';
+                    
+                    // 🔥 THE FOLDER FIX: Sahi se folder ka naam nikalna
+                    if (isFolder && file.webkitRelativePath) {
+                        const parts = file.webkitRelativePath.split('/');
+                        if (parts.length >= 3) subF = parts[parts.length - 2];
+                        else if (parts.length === 2) subF = parts[0]; 
+                    }
 
-                // 1. Backend se Direct Upload Signature maango
-                const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                    fileName: file.name, 
-                    fileType: file.type, 
-                    fileSizeGB: file.size / (1024 * 1024 * 1024),
-                    targetFolder: `${previewProject.folderName}/${subF}`
-                }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+                    // 1. Backend se Direct Upload Signature maango
+                    const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                        fileName: file.name, 
+                        fileType: file.type, 
+                        fileSizeGB: file.size / (1024 * 1024 * 1024),
+                        targetFolder: `${previewProject.folderName}/${subF}`
+                    }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
-                let finalUrl = '';
-                let previewUrl = '';
+                    let finalUrl = '';
+                    let previewUrl = '';
 
-                // 2. Direct Cloudinary Upload (Bypasses Backend = No 500 Crash!)
-                if (sigRes.data.directUpload && sigRes.data.provider === 'CLOUDINARY') {
-                    const cFormData = new FormData();
-                    cFormData.append('file', file);
-                    cFormData.append('api_key', sigRes.data.apiKey);
-                    cFormData.append('timestamp', sigRes.data.timestamp);
-                    cFormData.append('signature', sigRes.data.signature);
-                    cFormData.append('folder', sigRes.data.folder);
-
-                    finalUrl = await new Promise((resolve, reject) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                    // 2. DIRECT CLOUD UPLOAD LOGIC
+                    if (sigRes.data.directUpload) {
                         
-                        xhr.upload.onprogress = (event) => {
-                            if (event.lengthComputable) {
-                                // Update Global Progress Bar smoothly
-                                const currentGlobalLoaded = totalLoadedBytes + event.loaded;
-                                const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
-                                setUploadProgress(Math.min(percent, 99));
-                                setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                        // 🟢 A) CLOUDINARY LOGIC
+                        if (sigRes.data.provider === 'CLOUDINARY') {
+                            const cFormData = new FormData();
+                            cFormData.append('file', file);
+                            cFormData.append('api_key', sigRes.data.apiKey);
+                            cFormData.append('timestamp', sigRes.data.timestamp);
+                            cFormData.append('signature', sigRes.data.signature);
+                            cFormData.append('folder', sigRes.data.folder);
+
+                            finalUrl = await new Promise((resolve, reject) => {
+                                const xhr = new XMLHttpRequest();
+                                xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
                                 
-                                const elapsed = (Date.now() - startTime) / 1000;
-                                if (elapsed > 1) {
-                                    const speed = currentGlobalLoaded / elapsed;
-                                    const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
-                                    setUploadETA(`${Math.floor(remaining)}s left`);
+                                xhr.upload.onprogress = (event) => {
+                                    if (event.lengthComputable) {
+                                        const currentGlobalLoaded = totalLoadedBytes + event.loaded;
+                                        const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
+                                        setUploadProgress(Math.min(percent, 99));
+                                        setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                                        
+                                        const elapsed = (Date.now() - startTime) / 1000;
+                                        if (elapsed > 1) {
+                                            const speed = currentGlobalLoaded / elapsed;
+                                            const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                            setUploadETA(`${Math.floor(remaining)}s left`);
+                                        }
+                                    }
+                                };
+                                
+                                xhr.onload = () => {
+                                    if (xhr.status === 200) {
+                                        totalLoadedBytes += file.size; // Commit size
+                                        resolve(JSON.parse(xhr.responseText).secure_url);
+                                    } else reject(new Error("Cloudinary Error"));
+                                };
+                                xhr.onerror = () => reject(new Error("Network Error"));
+                                xhr.send(cFormData);
+                            });
+                            previewUrl = finalUrl;
+                        } 
+                        // 🟠 B) AWS S3 / CLOUDFLARE R2 LOGIC
+                        else {
+                            // 🔥 THE FIX: Use XHR instead of Fetch so we can track LIVE progress
+                            finalUrl = await new Promise((resolve, reject) => {
+                                const xhr = new XMLHttpRequest();
+                                xhr.open('PUT', sigRes.data.signedUrl);
+                                xhr.setRequestHeader('Content-Type', file.type);
+                                
+                                xhr.upload.onprogress = (event) => {
+                                    if (event.lengthComputable) {
+                                        const currentGlobalLoaded = totalLoadedBytes + event.loaded;
+                                        const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
+                                        setUploadProgress(Math.min(percent, 99));
+                                        setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                                        
+                                        const elapsed = (Date.now() - startTime) / 1000;
+                                        if (elapsed > 1) {
+                                            const speed = currentGlobalLoaded / elapsed;
+                                            const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                            setUploadETA(`${Math.floor(remaining)}s left`);
+                                        }
+                                    }
+                                };
+                                
+                                xhr.onload = () => {
+                                    if (xhr.status === 200) {
+                                        totalLoadedBytes += file.size; // Commit size
+                                        resolve(sigRes.data.publicUrl);
+                                    } else reject(new Error("AWS Error"));
+                                };
+                                xhr.onerror = () => reject(new Error("Network Error"));
+                                xhr.send(file);
+                            });
+                            previewUrl = finalUrl;
+                        }
+                    } 
+                    // 3. FALLBACK PROXY UPLOAD (IMGBB / MEGA)
+                    else {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('skipPreview', 'true'); 
+                        if (previewProject && previewProject._id) {
+                            fd.append('projectId', previewProject._id);
+                        }
+                        
+                        // 🔥 THE FIX: Added onUploadProgress tracker for Axios Proxy Call
+                        const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { 
+                            headers: { 'Authorization': `Bearer ${getValidToken()}` },
+                            onUploadProgress: (event) => {
+                                if (event.lengthComputable) {
+                                    const currentGlobalLoaded = totalLoadedBytes + event.loaded;
+                                    const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
+                                    setUploadProgress(Math.min(percent, 99));
+                                    setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                                    
+                                    const elapsed = (Date.now() - startTime) / 1000;
+                                    if (elapsed > 1) {
+                                        const speed = currentGlobalLoaded / elapsed;
+                                        const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                        setUploadETA(`${Math.floor(remaining)}s left`);
+                                    }
                                 }
                             }
-                        };
-                        
-                        xhr.onload = () => {
-                            if (xhr.status === 200) {
-                                totalLoadedBytes += file.size; // Commit size
-                                resolve(JSON.parse(xhr.responseText).secure_url);
-                            } else reject(new Error("Cloudinary Error"));
-                        };
-                        xhr.onerror = () => reject(new Error("Network Error"));
-                        xhr.send(cFormData);
-                    });
-                    previewUrl = finalUrl;
-                } else {
-                    // 3. Fallback to Proxy
-                    const fd = new FormData();
-                    fd.append('file', file);
-                    fd.append('skipPreview', 'true'); 
-                    if (previewProject && previewProject._id) {
-                        fd.append('projectId', previewProject._id);
+                        });
+                        finalUrl = res.data.url;
+                        previewUrl = res.data.previewUrl || finalUrl;
+                        totalLoadedBytes += file.size; // Commit bytes
                     }
-                    
-                    const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
-                    finalUrl = res.data.url;
-                    previewUrl = res.data.previewUrl || finalUrl;
-                    totalLoadedBytes += file.size;
-                }
 
-                if (finalUrl) {
-                    newImgs.push({
-                        url: finalUrl,
-                        previewUrl: previewUrl,
-                        status: 'active',
-                        selectedBy: [],
-                        subFolder: subF,
-                        deletedAt: null
-                    });
+                    if (finalUrl) {
+                        newImgs.push({
+                            url: finalUrl,
+                            previewUrl: previewUrl,
+                            status: 'active',
+                            selectedBy: [],
+                            subFolder: subF,
+                            deletedAt: null
+                        });
+                        successCount++;
+                    }
+
+                } catch (innerError) {
+                    console.error(`🚨 Failed to upload file: ${file.name}`, innerError);
+                    failCount++;
+                    totalLoadedBytes += file.size; // Skip bytes to keep progress moving
                 }
+                // 🔥 INNER TRY-CATCH END
             }
             
+            // Loop ke baahar final updates
             setEditDraftImages(prev => [...prev, ...newImgs]);
             setUploadProgress(100);
             setUploadStats('Completed!');
             setUploadETA('Done');
-            alert(`✅ ${newImgs.length} files added to draft! Click '💾 Save & Update Album' to finalize.`);
+            
+            if (failCount > 0) {
+                alert(`⚠️ ${successCount} files added to draft, but ${failCount} files failed.\nClick '💾 Save & Update Album' to finalize the successful ones.`);
+            } else {
+                alert(`✅ All ${successCount} files added to draft! Click '💾 Save & Update Album' to finalize.`);
+            }
             
         } catch (err) {
-            console.error("Edit Upload Error:", err);
-            alert("❌ Error uploading files. Your server or internet might have timed out.");
+            console.error("Edit Upload Fatal Error:", err);
+            alert("❌ Fatal error occurred. Please refresh and try again.");
         }
         
         setEditUploading(false);
