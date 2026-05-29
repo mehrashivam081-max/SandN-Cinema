@@ -1168,6 +1168,38 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
 
         console.log(`☁️ Secure Proxy Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
 
+        // 🔥 THE ULTIMATE FIX: Smart Auto-Compress for MAX Quality (Target ~9.5MB)
+        if (activeCloud.provider === 'CLOUDINARY' && isImage && fileSizeMB > 9.5) {
+            console.log(`⚠️ Heavy Image Detected (${fileSizeMB.toFixed(2)}MB). Finding perfect quality to keep it under 9.5MB...`);
+            const compressedPath = filePath + '_comp.jpg';
+            let currentQuality = 95; // 95% High Quality se shuru karo
+            let finalSizeMB = fileSizeMB;
+
+            // Jab tak size 9.5MB se neeche nahi aata, loop chalega (Max quality drop limit 50% rakhi hai)
+            while (currentQuality >= 50) {
+                await sharp(filePath)
+                    .resize({ width: 4500, withoutEnlargement: true }) // High resolution maintain karega (4K+)
+                    .jpeg({ quality: currentQuality })
+                    .toFile(compressedPath);
+                
+                const stats = fs.statSync(compressedPath);
+                finalSizeMB = stats.size / (1024 * 1024);
+                
+                // Agar 9.5MB ke andar aa gaya, toh loop tod do (Perfect match!)
+                if (finalSizeMB <= 9.5) {
+                    console.log(`✅ Perfect Quality Found: ${currentQuality}%. New Size: ${finalSizeMB.toFixed(2)} MB`);
+                    break;
+                }
+                
+                // Agar abhi bhi 9.5MB se bada hai, toh agle round me quality 10% kam karke try karo
+                currentQuality -= 10; 
+            }
+
+            // Original file hatao aur highest quality wali compressed file rakh lo
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            filePath = compressedPath; 
+        }
+
         let watermarkedBuffer = null;
 
         // 🎨 WATERMARK PROCESSING
