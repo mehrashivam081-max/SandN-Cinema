@@ -613,7 +613,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
         credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
     });
-    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5', freeUploadLogic: 'STREAM', paidUploadLogic: 'DIRECT', maxBatchSizeGB: '1.5' });
+    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', adminCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', adminMaxFileMB: '50000', defaultFreeStorageGB: '5', freeUploadLogic: 'STREAM', paidUploadLogic: 'DIRECT', adminUploadLogic: 'DIRECT', maxBatchSizeGB: '1.5' });
 
     // ✅ Dynamic Location Counter
 
@@ -794,11 +794,14 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                     setCloudRoutingForm(prev => ({
                         freeCloudId: res.data.data.cloudRouting.freeCloudId || '',
                         paidCloudId: res.data.data.cloudRouting.paidCloudId || '',
+                        adminCloudId: res.data.data.cloudRouting.adminCloudId || '',
                         freeMaxFileMB: res.data.data.cloudRouting.freeMaxFileMB || prev.freeMaxFileMB,
                         paidMaxFileMB: res.data.data.cloudRouting.paidMaxFileMB || prev.paidMaxFileMB,
+                        adminMaxFileMB: res.data.data.cloudRouting.adminMaxFileMB || prev.adminMaxFileMB,
                         defaultFreeStorageGB: res.data.data.cloudRouting.defaultFreeStorageGB || prev.defaultFreeStorageGB,
                         freeUploadLogic: res.data.data.cloudRouting.freeUploadLogic || 'STREAM',
                         paidUploadLogic: res.data.data.cloudRouting.paidUploadLogic || 'DIRECT',
+                        adminUploadLogic: res.data.data.cloudRouting.adminUploadLogic || 'DIRECT',
                         maxBatchSizeGB: res.data.data.cloudRouting.maxBatchSizeGB || '1.5'
                     }));
                 }
@@ -3846,6 +3849,23 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                         </select>
                                         <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
                                         <input type="number" required value={cloudRoutingForm.paidMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
+                                    </div>
+
+                                    {/* 🔥 NEW: ADMIN CLOUD ROUTE */}
+                                    <div style={{ flex: 1, background: '#fff', padding: '15px', borderRadius: '8px', border: '2px solid #e74c3c', minWidth: '200px' }}>
+                                        <h4 style={{ margin: '0 0 10px 0', color: '#c0392b' }}>👑 ADMIN / OWNER</h4>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Assign Cloud Account</label>
+                                        <select value={cloudRoutingForm.adminCloudId} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, adminCloudId: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px'}}>
+                                            <option value="">-- Fallback to Paid Route --</option>
+                                            {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>{acc.nickname} ({acc.provider})</option>)}
+                                        </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Upload Method (Logic)</label>
+                                        <select value={cloudRoutingForm.adminUploadLogic} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, adminUploadLogic: e.target.value})} className="custom-admin-input" style={{marginBottom:'10px', marginTop:'5px', color: '#e74c3c', fontWeight: 'bold'}}>
+                                            <option value="DIRECT">Direct Cloud (Fast, No limits, No Watermarks)</option>
+                                            <option value="STREAM">Proxy Stream (Safe, with Limits)</option>
+                                        </select>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
+                                        <input type="number" required value={cloudRoutingForm.adminMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, adminMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
                                     </div>
 
                                     {/* 🔥 NEW: ADMIN CONTROL FOR RAM BATCH LIMIT */}

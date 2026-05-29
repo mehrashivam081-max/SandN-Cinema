@@ -970,22 +970,23 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null, us
             }
         }
 
-        // 2. Priority: Admin ko HAMESHA Paid/Premium Cloud do
+        // 2. Priority: Route based on Role & Plan (Admin, Paid, Free)
         if (!activeStorage) {
             const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
             let targetCloudId = null;
 
             if (settings?.cloudRouting) {
-                // Admin/Owner ko hamesha 'paidCloudId' par route karo
-                let isPaid = (userRole === 'ADMIN' || userRole === 'OWNER');
-                
-                // Agar Admin nahi hai, tabhi Studio ka plan check karo
-                if (!isPaid && userMobile) {
-                    const studio = await Studio.findOne({ mobile: userMobile });
-                    isPaid = (studio && studio.storagePlan && studio.storagePlan !== 'FREE');
+                if (userRole === 'ADMIN' || userRole === 'OWNER') {
+                    // 🔥 NAYA: Admin Cloud ID (Agar set nahi hai toh Paid me bhej do)
+                    targetCloudId = settings.cloudRouting.adminCloudId || settings.cloudRouting.paidCloudId || settings.cloudRouting.freeCloudId;
+                } else {
+                    let isPaid = false;
+                    if (userMobile) {
+                        const studio = await Studio.findOne({ mobile: userMobile });
+                        isPaid = (studio && studio.storagePlan && studio.storagePlan !== 'FREE');
+                    }
+                    targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
                 }
-                
-                targetCloudId = isPaid ? settings.cloudRouting.paidCloudId : settings.cloudRouting.freeCloudId;
             }
 
             if (targetCloudId && mongoose.Types.ObjectId.isValid(targetCloudId)) {
@@ -1037,9 +1038,9 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
         let maxAllowedMB = 5000; // default 5GB for Direct
         let isPaid = false;
 
-        // 🔥 FIX: Let ADMIN/OWNER bypass limits
+        // 🔥 FIX: Let ADMIN/OWNER bypass limits based on Admin Settings
         if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'OWNER')) {
-            maxAllowedMB = 50000; // Give admins 50GB limit
+            maxAllowedMB = settings?.cloudRouting?.adminMaxFileMB ? Number(settings.cloudRouting.adminMaxFileMB) : 50000; 
         } 
         else if (req.user && req.user.role === 'STUDIO') {
             const studio = await Studio.findOne({ mobile: req.user.mobile });
