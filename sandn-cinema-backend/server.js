@@ -1168,34 +1168,33 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
 
         console.log(`☁️ Secure Proxy Stream: Uploading to ${activeCloud.provider} (${activeCloud.nickname})`);
 
-        // 🔥 THE ULTIMATE FIX: Smart Auto-Compress for MAX Quality (Target ~9.5MB)
-        if (activeCloud.provider === 'CLOUDINARY' && isImage && fileSizeMB > 9.5) {
-            console.log(`⚠️ Heavy Image Detected (${fileSizeMB.toFixed(2)}MB). Finding perfect quality to keep it under 9.5MB...`);
+        // 🔥 THE ULTIMATE FIX: Smart Auto-Compress for MAX Quality (Target 7.5MB - 9.0MB)
+        // 🛑 RULE: Agar file pehle se 9.0 MB se chhoti hai, toh yeh IF block chalega hi nahi! (100% Original file jayegi)
+        if (activeCloud.provider === 'CLOUDINARY' && isImage && fileSizeMB > 9.0) {
+            console.log(`⚠️ Heavy Image Detected (${fileSizeMB.toFixed(2)}MB). Compressing to sweet spot (7.5MB - 9.0MB)...`);
             const compressedPath = filePath + '_comp.jpg';
-            let currentQuality = 95; // 95% High Quality se shuru karo
+            let currentQuality = 100; 
             let finalSizeMB = fileSizeMB;
 
-            // Jab tak size 9.5MB se neeche nahi aata, loop chalega (Max quality drop limit 50% rakhi hai)
+            // Jab tak size 9.0MB se bada hai, quality ko bohot thoda-thoda (4%) kam karenge
             while (currentQuality >= 50) {
                 await sharp(filePath)
-                    .resize({ width: 4500, withoutEnlargement: true }) // High resolution maintain karega (4K+)
-                    .jpeg({ quality: currentQuality })
+                    .jpeg({ quality: currentQuality, chromaSubsampling: '4:4:4' }) 
                     .toFile(compressedPath);
                 
                 const stats = fs.statSync(compressedPath);
                 finalSizeMB = stats.size / (1024 * 1024);
                 
-                // Agar 9.5MB ke andar aa gaya, toh loop tod do (Perfect match!)
-                if (finalSizeMB <= 9.5) {
-                    console.log(`✅ Perfect Quality Found: ${currentQuality}%. New Size: ${finalSizeMB.toFixed(2)} MB`);
+                // Agar file 9.0 MB ke neeche aa gayi (mostly 8.something ya 7.something par aayegi), toh loop rok do!
+                if (finalSizeMB <= 9.0) {
+                    console.log(`✅ Perfect Size Reached: ${currentQuality}%. New Size: ${finalSizeMB.toFixed(2)} MB`);
                     break;
                 }
                 
-                // Agar abhi bhi 9.5MB se bada hai, toh agle round me quality 10% kam karke try karo
-                currentQuality -= 10; 
+                currentQuality -= 4; // 🔥 Sirf 4% ka drop, taaki file ekdum se 3MB ki na ho jaye
             }
 
-            // Original file hatao aur highest quality wali compressed file rakh lo
+            // Original file hatao aur compressed file rakh lo
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             filePath = compressedPath; 
         }
