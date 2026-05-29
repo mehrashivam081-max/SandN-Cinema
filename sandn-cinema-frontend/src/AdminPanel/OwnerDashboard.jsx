@@ -195,26 +195,96 @@ const OwnerDashboard = ({ user, onLogout }) => {
         if(selectedFiles.length === 0) return;
 
         setEditUploading(true);
+        setUploadProgress(0);
+        setUploadStats('Starting...');
+        setUploadETA('Calculating...');
+        
         const newImgs = [];
+        const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+        let totalLoadedBytes = 0;
+        let startTime = Date.now();
+
         try {
             for (let file of selectedFiles) {
                 let subF = 'Main Event';
+                
+                // 🔥 THE FOLDER FIX: Sahi se folder ka naam nikalna
                 if (isFolder && file.webkitRelativePath) {
                     const parts = file.webkitRelativePath.split('/');
                     if (parts.length >= 3) subF = parts[parts.length - 2];
+                    else if (parts.length === 2) subF = parts[0]; // Ye line miss thi!
                 }
 
-                const fd = new FormData();
-                fd.append('file', file);
-                fd.append('skipPreview', 'true'); 
-                fd.append('projectId', previewProject._id); // 👈 YEH WALI LINE HONI CHAHIYE
-                
-                const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
-                
-                if (res.data.url) {
+                // 1. Backend se Direct Upload Signature maango
+                const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
+                    fileName: file.name, 
+                    fileType: file.type, 
+                    fileSizeGB: file.size / (1024 * 1024 * 1024),
+                    targetFolder: `${previewProject.folderName}/${subF}`
+                }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+
+                let finalUrl = '';
+                let previewUrl = '';
+
+                // 2. Direct Cloudinary Upload (Bypasses Backend = No 500 Crash!)
+                if (sigRes.data.directUpload && sigRes.data.provider === 'CLOUDINARY') {
+                    const cFormData = new FormData();
+                    cFormData.append('file', file);
+                    cFormData.append('api_key', sigRes.data.apiKey);
+                    cFormData.append('timestamp', sigRes.data.timestamp);
+                    cFormData.append('signature', sigRes.data.signature);
+                    cFormData.append('folder', sigRes.data.folder);
+
+                    finalUrl = await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                        
+                        xhr.upload.onprogress = (event) => {
+                            if (event.lengthComputable) {
+                                // Update Global Progress Bar smoothly
+                                const currentGlobalLoaded = totalLoadedBytes + event.loaded;
+                                const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
+                                setUploadProgress(Math.min(percent, 99));
+                                setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
+                                
+                                const elapsed = (Date.now() - startTime) / 1000;
+                                if (elapsed > 1) {
+                                    const speed = currentGlobalLoaded / elapsed;
+                                    const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                    setUploadETA(`${Math.floor(remaining)}s left`);
+                                }
+                            }
+                        };
+                        
+                        xhr.onload = () => {
+                            if (xhr.status === 200) {
+                                totalLoadedBytes += file.size; // Commit size
+                                resolve(JSON.parse(xhr.responseText).secure_url);
+                            } else reject(new Error("Cloudinary Error"));
+                        };
+                        xhr.onerror = () => reject(new Error("Network Error"));
+                        xhr.send(cFormData);
+                    });
+                    previewUrl = finalUrl;
+                } else {
+                    // 3. Fallback to Proxy
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('skipPreview', 'true'); 
+                    if (previewProject && previewProject._id) {
+                        fd.append('projectId', previewProject._id);
+                    }
+                    
+                    const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+                    finalUrl = res.data.url;
+                    previewUrl = res.data.previewUrl || finalUrl;
+                    totalLoadedBytes += file.size;
+                }
+
+                if (finalUrl) {
                     newImgs.push({
-                        url: res.data.url,
-                        previewUrl: res.data.previewUrl || res.data.url,
+                        url: finalUrl,
+                        previewUrl: previewUrl,
                         status: 'active',
                         selectedBy: [],
                         subFolder: subF,
@@ -222,12 +292,20 @@ const OwnerDashboard = ({ user, onLogout }) => {
                     });
                 }
             }
+            
             setEditDraftImages(prev => [...prev, ...newImgs]);
+            setUploadProgress(100);
+            setUploadStats('Completed!');
+            setUploadETA('Done');
             alert(`✅ ${newImgs.length} files added to draft! Click '💾 Save & Update Album' to finalize.`);
+            
         } catch (err) {
-            alert("Error uploading some files. Check connection.");
+            console.error("Edit Upload Error:", err);
+            alert("❌ Error uploading files. Your server or internet might have timed out.");
         }
+        
         setEditUploading(false);
+        setUploadProgress(0);
         e.target.value = ''; // clear input
     };
 
