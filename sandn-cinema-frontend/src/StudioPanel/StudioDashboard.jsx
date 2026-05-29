@@ -77,10 +77,11 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     const [showFolderSuggestions, setShowFolderSuggestions] = useState(false);
     const [showMobileSuggestions, setShowMobileSuggestions] = useState(false);
-    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
+    const [fileStats, setFileStats] = useState({ photos: 0, videos: 0, feedPhotos: 0, feedVideos: 0 }); 
+    const [maxBatchLimitGB, setMaxBatchLimitGB] = useState(1.5); // 🔥 NAYA: Admin controlled limit, default 1.5GB
 
-    // ✅ NEW: SMART DOWNLOADER STATES
-    const [downloadManager, setDownloadManager] = useState({ 
+    // ✅ NEW: SMART DOWNLOADER STATES
+    const [downloadManager, setDownloadManager] = useState({
         active: false, paused: false, projectId: null, clientName: '', 
         totalFiles: 0, downloadedFiles: 0, progressPercent: 0, speed: '', eta: '', failedFiles: [] 
     });
@@ -253,17 +254,28 @@ const StudioDashboard = ({ user, onLogout }) => {
     });
 
     // --- 1. FETCH LOGIC & 🔥 REAL-TIME WEBSOCKETS ---
-    useEffect(() => {
-        if (user && user.mobile) {
-            // Initial Fetch
-            fetchMyProfile();
-            fetchClients();
-            fetchStudioBookings();
-            fetchSubPlans(); // Fetch dynamic plans
-            if (studioProfile.isFeedApproved) fetchMyFeedPosts();
-            fetchStudioSelections(); // 🔥 ADD THIS LINE FOR INITIAL LOAD!
+    useEffect(() => {
+        if (user && user.mobile) {
+            // Initial Fetch
+            fetchMyProfile();
+            fetchClients();
+            fetchStudioBookings();
+            fetchSubPlans(); // Fetch dynamic plans
+            if (studioProfile.isFeedApproved) fetchMyFeedPosts();
+            fetchStudioSelections(); 
 
-            // 🚀 SOCKET.IO REAL-TIME CONNECTION
+            // 🔥 FETCH ADMIN CLOUD ROUTING LIMITS
+            const fetchSettings = async () => {
+                try {
+                    const res = await axios.get(`${API_BASE}/get-platform-settings`);
+                    if (res.data.success && res.data.data?.cloudRouting) {
+                        setMaxBatchLimitGB(parseFloat(res.data.data.cloudRouting.maxBatchSizeGB) || 1.5);
+                    }
+                } catch(e) { console.log("Failed to fetch limits"); }
+            };
+            fetchSettings();
+
+            // 🚀 SOCKET.IO REAL-TIME CONNECTION
             const socket = io(SERVER_URL); 
 
             // Connect hone par apna mobile number bhej kar private "Room" me jud jao
@@ -640,6 +652,14 @@ const StudioDashboard = ({ user, onLogout }) => {
         setUploadETA('Calculating...');
 
         const totalBytes = filesToUpload.reduce((acc, file) => acc + file.size, 0);
+        
+        // 🔥 SERVER RAM PROTECTOR (Admin Controlled)
+        const totalGB = totalBytes / (1024 * 1024 * 1024);
+        if (totalGB > maxBatchLimitGB) {
+            setLoading(false);
+            return alert(`🚨 Upload Limit Exceeded!\n\nTo ensure smooth uploads, the Admin has allowed a maximum of ${maxBatchLimitGB} GB per batch.\nYou selected ${totalGB.toFixed(2)} GB.\n\nPlease select fewer files and try uploading in parts.`);
+        }
+
         const uploadedUrls = isResuming ? pendingResumeState.uploadedUrlsList || [] : [];
 
         let startTime = Date.now();

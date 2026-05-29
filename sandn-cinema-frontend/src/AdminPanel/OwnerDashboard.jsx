@@ -201,6 +201,16 @@ const OwnerDashboard = ({ user, onLogout }) => {
         
         const newImgs = [];
         const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+        
+        // 🔥 DYNAMIC SERVER RAM PROTECTOR (EDIT MODE)
+        const maxBatchGB = parseFloat(cloudRoutingForm.maxBatchSizeGB) || 1.5;
+        const totalGB = totalBytes / (1024 * 1024 * 1024);
+        if (totalGB > maxBatchGB) {
+            setEditUploading(false);
+            e.target.value = ''; 
+            return alert(`🚨 Upload Limit Exceeded!\n\nYou selected ${totalGB.toFixed(2)} GB. Max allowed per batch is ${maxBatchGB} GB. Please select fewer files.`);
+        }
+
         let totalLoadedBytes = 0;
         let startTime = Date.now();
 
@@ -528,7 +538,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
         nickname: '', provider: 'CLOUDINARY', maxLimitGB: 5, setAsActive: false,
         credentials: { cloudName: '', apiKey: '', apiSecret: '', region: '', bucketName: '' }
     });
-    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5', freeUploadLogic: 'STREAM', paidUploadLogic: 'DIRECT' });
+    const [cloudRoutingForm, setCloudRoutingForm] = useState({ freeCloudId: '', paidCloudId: '', freeMaxFileMB: '100', paidMaxFileMB: '2048', defaultFreeStorageGB: '5', freeUploadLogic: 'STREAM', paidUploadLogic: 'DIRECT', maxBatchSizeGB: '1.5' });
 
     // ✅ Dynamic Location Counter
 
@@ -713,7 +723,8 @@ const OwnerDashboard = ({ user, onLogout }) => {
                         paidMaxFileMB: res.data.data.cloudRouting.paidMaxFileMB || prev.paidMaxFileMB,
                         defaultFreeStorageGB: res.data.data.cloudRouting.defaultFreeStorageGB || prev.defaultFreeStorageGB,
                         freeUploadLogic: res.data.data.cloudRouting.freeUploadLogic || 'STREAM',
-                        paidUploadLogic: res.data.data.cloudRouting.paidUploadLogic || 'DIRECT'
+                        paidUploadLogic: res.data.data.cloudRouting.paidUploadLogic || 'DIRECT',
+                        maxBatchSizeGB: res.data.data.cloudRouting.maxBatchSizeGB || '1.5'
                     }));
                 }
             }
@@ -1237,6 +1248,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
         }
 
         const totalBytes = currentFiles.reduce((acc, file) => acc + file.size, 0);
+        
+        // 🔥 DYNAMIC SERVER RAM PROTECTOR: Admin controlled batch limit
+        const maxBatchGB = parseFloat(cloudRoutingForm.maxBatchSizeGB) || 1.5;
+        const totalGB = totalBytes / (1024 * 1024 * 1024);
+        if (totalGB > maxBatchGB) {
+            setLoading(false);
+            return alert(`🚨 Upload Limit Exceeded!\n\nYou are trying to upload ${totalGB.toFixed(2)} GB at once.\nTo prevent server crash, the maximum allowed size per batch is ${maxBatchGB} GB.\n\nPlease select fewer files and try again.`);
+        }
+
         const loadedBytesArray = new Array(currentFiles.length).fill(0);
         const uploadedUrls = [];
 
@@ -3752,6 +3772,15 @@ const OwnerDashboard = ({ user, onLogout }) => {
                                         <label style={{fontSize:'12px', fontWeight:'bold'}}>Max File Size Limit (MB)</label>
                                         <input type="number" required value={cloudRoutingForm.paidMaxFileMB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, paidMaxFileMB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px'}} />
                                     </div>
+
+                                    {/* 🔥 NEW: ADMIN CONTROL FOR RAM BATCH LIMIT */}
+                                    <div style={{ flex: '1 1 100%', background: '#fdfefe', padding: '15px', borderRadius: '8px', border: '1px dashed #e74c3c' }}>
+                                        <h4 style={{ margin: '0 0 10px 0', color: '#c0392b' }}>🛑 Anti-Crash RAM Protector</h4>
+                                        <label style={{fontSize:'12px', fontWeight:'bold'}}>Max Batch Upload Limit (GB per request)</label>
+                                        <input type="number" step="0.1" required value={cloudRoutingForm.maxBatchSizeGB} onChange={e=>setCloudRoutingForm({...cloudRoutingForm, maxBatchSizeGB: e.target.value})} className="custom-admin-input" style={{marginTop:'5px', fontWeight: 'bold', color: '#e74c3c'}} />
+                                        <p style={{fontSize: '11px', color: '#777', margin: '3px 0 0 0'}}>Set the total GB allowed per upload batch. Prevents user browsers & your server from running "Out of Memory" (Recommended: 1.5 to 2.5 GB).</p>
+                                    </div>
+
                                 </div>
                                 <button type="submit" disabled={loading} className="global-update-btn" style={{ background: '#d35400', padding: '15px', fontSize: '15px', fontWeight: 'bold' }}>
                                     {loading ? 'Saving...' : '💾 Save Smart Routing Rules'}
