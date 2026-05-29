@@ -1106,7 +1106,7 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         
         const isImage = req.file.mimetype.startsWith('image/');
         const fileSizeGB = req.file.size / (1024 * 1024 * 1024);
-        const filePath = req.file.path; 
+        let filePath = req.file.path;  // 🔥 FIX: 'const' ko 'let' kar diya!
         const fileSizeMB = req.file.size / (1024 * 1024);
 
         // 🔥 THE FIX 1: Extract projectId FIRST before using it!
