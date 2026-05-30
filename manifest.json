@@ -1,6 +1,6 @@
 {
   "short_name": "Snevio",
-  "name": "Snevio Digital Cloud",
+  "name": "Snevio Digital Studio Cloud",
   "icons": [
     {
       "src": "favicon.ico",
@@ -9,7 +9,7 @@
     },
     {
       "src": "logo192.jpeg",
-      "type": "image/png",
+      "type": "image/jpeg",
       "sizes": "192x192"
     },
     {
