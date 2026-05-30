@@ -1286,8 +1286,19 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         setShowFolderSuggestions(false);
     };
 
+// 🧹 GARBAGE COLLECTOR HELPER (Auto-Deletes Orphaned Cloud Files)
+    const rollbackGhostFiles = async (urlsToTrash) => {
+        if (!urlsToTrash || urlsToTrash.length === 0) return;
+        try {
+            console.log(`🧹 ROLLBACK: Attempting to trash ${urlsToTrash.length} ghost files from cloud...`);
+            // Backend Rollback API ko hit karo
+            await axios.post(`${API_BASE}/rollback-uploads`, { fileUrls: urlsToTrash }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            console.log("✅ Ghost files trashed successfully. Cloud space saved!");
+        } catch (e) { console.error("❌ Rollback failed:", e); }
+    };
+
 // 🚀 ENTERPRISE BACKGROUND UPLOAD QUEUE (MULTI-TASKING)
-    const handleUpload = async (isFeed = false) => {
+    const handleUpload = async (isFeed = false) => {
         const activeMobile = formData.mobile;
         const activeFiles = formData.files;
         const activeFolderName = formData.folderName;
@@ -1556,16 +1567,16 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                 setUploadProgress(100); setUploadSpeed('Finalizing...'); setUploadETA('Saving Data to Server...');
             }
 
-            // 💾 3. SAVE TO DATABASE (🔥 FIX: Removed Extra Payload Data to prevent 400 Bad Request)
-            
-            if (activeUploadMode === 'SELECTION') { // 🔥 THE FIX: Hamesha Smart Album hi banega!
-                const selPayload = {
-                    clientMobile: activeMobile, 
-                    clientEmail: activeEmail, 
-                    folderName: baseFolder, 
-                    addedBy: user?.mobile || 'ADMIN',
+            // 💾 3. SAVE TO DATABASE (WITH ROLLBACK LOGIC)
+            
+            if (activeUploadMode === 'SELECTION') { // 🔥 THE FIX: Hamesha Smart Album hi banega!
+                const selPayload = {
+                    clientMobile: activeMobile, 
+                    clientEmail: activeEmail, 
+                    folderName: baseFolder, 
+                    addedBy: user?.mobile || 'ADMIN',
                     assignToStudio: formData.assignToStudio, // 🔥 BHEJO BACKEND KO
-                    sheetLimit: '30',
+                    sheetLimit: '30',
                     imagesPerSheet: '4',
                     costPerExtraSheet: '150',
                     totalPhases: '3',
@@ -1580,6 +1591,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                     fetchAccounts();
                 } else { 
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${dbRes1.data.message}` } : job));
+                    rollbackGhostFiles(uploadedUrls); // 🔥 NAYA: Rollback on DB Error
                 }
 
             } else if (isFeed) {
@@ -1603,16 +1615,17 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                 } else {
                     alert(`❌ Error: ${dbRes2.data.message}`); 
                     setLoading(false);
+                    rollbackGhostFiles(uploadedUrls); // 🔥 NAYA: Rollback on Feed DB Error
                 }
             } else {
-                // NORMAL UPLOAD
-                const normalPayloadData = {
-                    mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
-                    folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
-                    expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
-                    addedBy: user?.mobile || 'ADMIN', 
-                    imageCost: formData.imageCost || '5', videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
-                    uploadType: activeUploadMode, // 🔥 THE FIX: Ab ye Normal hi jayega
+                // NORMAL UPLOAD
+                const normalPayloadData = {
+                    mobile: activeMobile, name: activeName || 'Client', type: formData.type || 'USER',
+                    folderName: baseFolder, subFolderName: targetSubFolder, email: activeEmail,
+                    expiryDays: formData.expiryDays, downloadLimit: formData.downloadLimit,
+                    addedBy: user?.mobile || 'ADMIN', 
+                    imageCost: formData.imageCost || '5', videoCost: formData.videoCost || '10', unlockValidity: formData.unlockValidity || '24 Hours',
+                    uploadType: activeUploadMode, // 🔥 THE FIX: Ab ye Normal hi jayega
                     fileUrls: uploadedUrls.map(obj => ({ url: obj.url || obj }))
                 };
 
@@ -1625,13 +1638,21 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                     fetchAccounts();
                 } else { 
                     setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: `❌ DB Error: ${dbRes3.data.message}` } : job));
+                    rollbackGhostFiles(uploadedUrls); // 🔥 NAYA: Rollback on Normal DB Error
                 }
             }
         } catch (error) { 
-            if (error.name === "AbortError" || axios.isCancel(error)) return console.log('Upload aborted.');
-            console.error(error);
-            if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Network Error.' } : job));
-            else { alert("Upload Failed. Check internet connection."); setLoading(false); }
+            // 🔥 NAYA CATCH BLOCK: Cancel/Stop button ya Network crash par bhi Garbage Collection chalega
+            if (error.name === "AbortError" || axios.isCancel(error)) {
+                console.log('🛑 Upload manually aborted. Trashing incomplete files...');
+                rollbackGhostFiles(uploadedUrls); 
+                if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '🛑 Cancelled. Cleaned up cloud.' } : job));
+                return;
+            }
+            console.error("Upload Loop Error:", error);
+            rollbackGhostFiles(uploadedUrls); // 🔥 Kisi aur error par bhi kachra saaf!
+            if (!isFeed) setUploadJobs(prev => prev.map(job => job.id === jobId ? { ...job, status: '❌ Failed. Cleaned up cloud.' } : job));
+            else { alert("Upload Failed. Cleaning up cloud space..."); setLoading(false); }
         } 
     };
 
