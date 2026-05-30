@@ -956,9 +956,17 @@ app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) =
 });
 
 // 🧠 SMART STORAGE AUTO-ROUTER LOGIC (Admin Priority & Project Aware)
-const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null, userRole = null, projectId = null) => {
+const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null, userRole = null, projectId = null, overrideCloudId = null) => {
     try {
         let activeStorage = null;
+
+        // 0. 🔥 ULTIMATE PRIORITY: Admin Forced Override Cloud (ImgBB/AWS etc.)
+        if (overrideCloudId && mongoose.Types.ObjectId.isValid(overrideCloudId)) {
+            activeStorage = await StorageConfig.findById(overrideCloudId);
+            if (activeStorage && (activeStorage.usedStorageGB + fileSizeGB) < (activeStorage.maxLimitGB * 0.95)) {
+                return activeStorage; // 🔥 Return Immediately! Ignore Project's old cloud.
+            }
+        }
 
         // 1. Priority: Agar Project ID hai (Edit Mode), toh usi Cloud par jao
         if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
@@ -1026,8 +1034,8 @@ const { Readable } = require('stream');
 // 🚀 NEW API: GENERATE DIRECT UPLOAD SIGNATURE (For 12GB+ Files on Cloudinary/AWS)
 app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, res) => {
     try {
-        // 🔥 NAYA: Front-end ab targetFolder bhi bhejega
-        const { fileName, fileType, fileSizeGB, targetFolder } = req.body;
+        // 🔥 NAYA: Front-end ab targetFolder aur overrideCloudId bhi bhejega
+        const { fileName, fileType, fileSizeGB, targetFolder, overrideCloudId } = req.body;
         
         // Cloudinary ke hisaab se folder ka naam saaf karo (special chars hatao)
         const safeFolderName = targetFolder ? targetFolder.replace(/[^a-zA-Z0-9_-]/g, '_') : 'Uncategorized';
@@ -1054,8 +1062,8 @@ app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, r
             return res.status(413).json({ success: false, directUpload: false, message: `File too large! Your current plan allows max ${maxAllowedMB}MB per file.` });
         }
 
-        // 1. Storage Router se Active Cloud Pata Karo
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB || 0.05, req.user?.mobile);
+        // 1. Storage Router se Active Cloud Pata Karo (With Override Logic)
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB || 0.05, req.user?.mobile, req.user?.role, null, overrideCloudId);
 
         // 2. 🟢 CLOUDINARY DIRECT UPLOAD
         if (activeCloud.provider === 'CLOUDINARY') {
@@ -1113,8 +1121,8 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
         let filePath = req.file.path;  // 🔥 FIX: 'const' ko 'let' kar diya!
         const fileSizeMB = req.file.size / (1024 * 1024);
 
-        // 🔥 THE FIX 1: Extract projectId FIRST before using it!
-        const { projectId, skipPreview } = req.body; 
+        // 🔥 THE FIX 1: Extract projectId & overrideCloudId
+        const { projectId, skipPreview, overrideCloudId } = req.body; 
 
         // 🛑 SMART PROXY LIMIT CHECK
         const settings = await PlatformSetting.findOne({ settingId: 'GLOBAL' });
@@ -1150,8 +1158,8 @@ app.post('/api/auth/proxy-upload', authenticateToken, upload.single('file'), asy
             }
         }
 
-        // 🔥 THE FIX 2: Single clean call to active cloud router
-        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId);
+        // 🔥 THE FIX 2: Single clean call to active cloud router (with Override)
+        const activeCloud = await getOrUpdateActiveStorage(fileSizeGB, req.user?.mobile, req.user?.role, projectId, overrideCloudId);
 
         // 🔥 BACKEND CRASH PROTECTOR: Agar cloud config nahi mili, toh crash hone se roko
         if (!activeCloud) {
