@@ -309,28 +309,13 @@ const StudioDashboard = ({ user, onLogout }) => {
         if (activeTab === 'SELECTION_PROJECTS') fetchStudioSelections(); // 🔥 ADD THIS LINE!
     }, [activeTab]);
 
-    // ✅ 1. SMART NETWORK MONITOR & 5-MIN GRACE PERIOD
+    // ✅ 1. SMART NETWORK MONITOR (Infinite Wait - No Auto Logout)
     const [isNetworkDown, setIsNetworkDown] = useState(!navigator.onLine);
     const [pendingResumeState, setPendingResumeState] = useState(null);
 
     useEffect(() => {
-        let logoutTimer;
-        const handleOffline = () => {
-            setIsNetworkDown(true);
-            // 5 Minutes (300,000 ms) wait before forcing logout
-            logoutTimer = setTimeout(() => {
-                alert("⚠️ Connection timeout! You have been logged out for security. Your upload progress has been saved.");
-                sessionStorage.removeItem('user'); 
-                localStorage.removeItem('user');
-                if (onLogout) onLogout();
-                else window.location.href = "/SandN-Cinema/"; 
-            }, 300000); 
-        };
-
-        const handleOnline = () => {
-            setIsNetworkDown(false);
-            if (logoutTimer) clearTimeout(logoutTimer);
-        };
+        const handleOffline = () => setIsNetworkDown(true);
+        const handleOnline = () => setIsNetworkDown(false);
 
         window.addEventListener('offline', handleOffline);
         window.addEventListener('online', handleOnline);
@@ -342,9 +327,8 @@ const StudioDashboard = ({ user, onLogout }) => {
         return () => {
             window.removeEventListener('offline', handleOffline);
             window.removeEventListener('online', handleOnline);
-            if (logoutTimer) clearTimeout(logoutTimer);
         };
-    }, [onLogout]);
+    }, []);
 
     // ✅ 2. RESUME UPLOAD CLICK HANDLER
     const handleResumeClick = () => {

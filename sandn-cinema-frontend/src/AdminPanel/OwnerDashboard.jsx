@@ -640,18 +640,21 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         return acc;
     }, {});
 
-    // ✅ FEATURE 1: OFFLINE SECURITY (Auto-Logout on Connection Lost)
+    // ✅ FEATURE 1: SMART NETWORK MONITOR (No Auto-Logout)
+    const [isNetworkDown, setIsNetworkDown] = useState(!navigator.onLine);
+
     useEffect(() => {
-        const handleOffline = () => {
-            alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
-            sessionStorage.removeItem('user'); 
-            localStorage.removeItem('user');
-            if (onLogout) onLogout();
-            else window.location.href = "/Snevio/"; // Updated Redirect Path
-        };
+        const handleOffline = () => setIsNetworkDown(true);
+        const handleOnline = () => setIsNetworkDown(false);
+
         window.addEventListener('offline', handleOffline);
-        return () => window.removeEventListener('offline', handleOffline);
-    }, [onLogout]);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, []);
 
     // ✅ REFS FOR BACK BUTTON STATE (To avoid history loop)
     const backStateRef = useRef({ activeTab, uploadSubTab, showDenyModal, showProposalModal, showLogoutPopup, globalRemoveUserObj });
@@ -2035,6 +2038,13 @@ const handleEditFileUpload = async (e, isFolder = false) => {
 
     return (
         <div className="owner-dashboard-container">
+        {/* 🔴 AUTO-RESUME NETWORK ALERT */}
+            {isNetworkDown && (
+                <div style={{ position: 'fixed', top: '0', left: '0', width: '100%', background: '#e74c3c', color: '#fff', textAlign: 'center', padding: '10px', zIndex: 9999999, fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}>
+                    ⚠️ Internet Connection Lost! Uploads and tasks are paused. Waiting to reconnect...
+                </div>
+            )}
+        
             
             {/* ✅ FLOATING SMART DOWNLOAD MANAGER */}
             {downloadManager.active && (

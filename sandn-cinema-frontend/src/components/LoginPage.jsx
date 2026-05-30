@@ -23,6 +23,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const [confirmPassword, setConfirmPassword] = useState(''); 
     const [newEmail, setNewEmail] = useState(''); 
     const [referralCode, setReferralCode] = useState(''); // 👈 NAYA: Referral Code State
+    const [rememberMe, setRememberMe] = useState(true); // Default true
     
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -145,9 +146,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         if (activeTab === 'code') {
             if (cleanPassword === "shivam@9111") {
                 const adminData = { name: "Owner", role: "ADMIN", status: "VIP" };
-                localStorage.setItem('user', JSON.stringify(adminData));
-                localStorage.setItem('authToken', 'super_admin_bypass_token_999'); // Fallback token for owner
-                sessionStorage.clear(); 
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem('user', JSON.stringify(adminData));
+                storage.setItem('authToken', 'super_admin_bypass_token_999');
                 if (onLoginSuccess) onLoginSuccess(adminData);
                 else navigate('/'); 
                 return;
@@ -160,12 +161,17 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 password: cleanPassword,
                 roleFilter: activeTab.toUpperCase() 
             });
+
             if (res.data.success) {
-                // 🔒 SAVE JWT TOKEN AND USER
-                localStorage.setItem('user', JSON.stringify(res.data.user));
-                if (res.data.token) localStorage.setItem('authToken', res.data.token); 
+                // 🔒 SMART PERSISTENCE LOGIC
+                const storage = rememberMe ? localStorage : sessionStorage;
                 
-                sessionStorage.clear(); 
+                // Clear opposite storage
+                (rememberMe ? sessionStorage : localStorage).clear();
+
+                storage.setItem('user', JSON.stringify(res.data.user));
+                if (res.data.token) storage.setItem('authToken', res.data.token);
+                
                 if (onLoginSuccess) onLoginSuccess(res.data.user);
                 else navigate('/'); 
             } else {
@@ -173,7 +179,9 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
             }
         } catch (e) { 
             setError(e.response?.data?.message || "Login Failed. Try again."); 
-        } finally { setLoading(false); }
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const handleSetupAccount = async () => {
@@ -193,11 +201,15 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
             if (res.data.success) {
                 alert("Account Setup Complete! 🎉 Logging you in...");
-                // 🔒 SAVE JWT TOKEN AND USER
-                localStorage.setItem('user', JSON.stringify(res.data.user));
-                if (res.data.token) localStorage.setItem('authToken', res.data.token);
+                // 🔒 SMART PERSISTENCE LOGIC
+                const storage = rememberMe ? localStorage : sessionStorage;
                 
-                sessionStorage.clear(); 
+                // Clear opposite storage so no conflict occurs
+                (rememberMe ? sessionStorage : localStorage).clear();
+
+                storage.setItem('user', JSON.stringify(res.data.user));
+                if (res.data.token) storage.setItem('authToken', res.data.token);
+                
                 if (onLoginSuccess) onLoginSuccess(res.data.user);
                 else navigate('/'); 
             } else {
@@ -291,8 +303,13 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                                 <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={(e) => setPassword(e.target.value)} />
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
-                        </div>
-                        <button type="submit" className="login-btn" disabled={loading}>LOGIN NOW</button>
+                    {/* 🔥 NEW: PERSISTENCE CHECKBOX */}
+                    <div style={{ margin: '10px 0', fontSize: '12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember" style={{cursor: 'pointer'}} />
+                        <label htmlFor="remember" style={{cursor: 'pointer'}}>Keep me logged in</label>
+                    </div>
+                </div>
+                <button type="submit" className="login-btn" disabled={loading}>LOGIN NOW</button>
                         <p className="resend-text" onClick={handleStepBack} style={{cursor: 'pointer'}}>← Back</p>
                     </form>
                 )}
@@ -337,7 +354,13 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             />
                         </div>
 
-                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Setting up...' : 'COMPLETE SETUP & LOGIN'}</button>
+                        {/* 🔥 NEW: PERSISTENCE CHECKBOX FOR NEW USERS */}
+                        <div style={{ margin: '10px 0 15px', fontSize: '12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember-new" style={{cursor: 'pointer'}} />
+                            <label htmlFor="remember-new" style={{cursor: 'pointer'}}>Keep me logged in</label>
+                        </div>
+
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Setting up...' : 'COMPLETE SETUP & LOGIN'}</button>
                     </form>
                 )}
 
