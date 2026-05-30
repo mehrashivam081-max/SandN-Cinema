@@ -169,15 +169,17 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [albumIsFrozen, setAlbumIsFrozen] = useState(false);
     const [removeMode, setRemoveMode] = useState(null); // 'FILE' ya 'FOLDER'
     const [editUploading, setEditUploading] = useState(false);
+    const [editTargetCloud, setEditTargetCloud] = useState('SAME_AS_ALBUM'); // 🔥 NEW: Target Cloud for Edit Mode
 
     // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
-    useEffect(() => {
-        if (previewProject) {
+    useEffect(() => {
+        if (previewProject) {
             setRenderLimit(50);
             setIsEditMode(false);
             setRemoveMode(null);
+            setEditTargetCloud('SAME_AS_ALBUM'); // 🔥 Reset to default
         }
-    }, [previewProject]);
+    }, [previewProject]);
 
     // 🛠️ GOD MODE FUNCTIONS
     const toggleEditMode = () => {
@@ -234,7 +236,8 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                         fileName: file.name, 
                         fileType: file.type, 
                         fileSizeGB: file.size / (1024 * 1024 * 1024),
-                        targetFolder: `${previewProject.folderName}/${subF}`
+                        targetFolder: `${previewProject.folderName}/${subF}`,
+                        overrideCloudId: editTargetCloud !== 'SAME_AS_ALBUM' ? editTargetCloud : null // 🔥 NAYA: Force Cloud Logic
                     }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
                     let finalUrl = '';
@@ -319,13 +322,16 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                             previewUrl = finalUrl;
                         }
                     } 
-                    // 3. FALLBACK PROXY UPLOAD (IMGBB / MEGA)
                     else {
+                        // 3. Fallback to Proxy
                         const fd = new FormData();
                         fd.append('file', file);
                         fd.append('skipPreview', 'true'); 
                         if (previewProject && previewProject._id) {
                             fd.append('projectId', previewProject._id);
+                        }
+                        if (editTargetCloud !== 'SAME_AS_ALBUM') {
+                            fd.append('overrideCloudId', editTargetCloud); // 🔥 NAYA: Force Cloud Logic
                         }
                         
                         // 🔥 THE FIX: Added onUploadProgress tracker for Axios Proxy Call
@@ -2049,10 +2055,16 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                         {/* 🔥 PRO-LEVEL GOD MODE TOOLBAR */}
                         {isEditMode && (
                             <div style={{ background: '#0f172a', padding: '20px', borderRadius: '16px', border: '1px solid #3498db', marginBottom: '20px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
                                     <h4 style={{ margin: 0, color: '#3498db', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>🛠️ Admin Control Center</h4>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{ fontSize: '12px', color: '#aaa' }}>Visibility Mode:</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        {/* 🔥 NEW: Cloud Selector Dropdown */}
+                                        <select value={editTargetCloud} onChange={e => setEditTargetCloud(e.target.value)} disabled={editUploading} style={{ background: '#1a1a2e', color: '#f1c40f', border: '1px solid #f1c40f', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', outline: 'none', cursor: editUploading ? 'not-allowed' : 'pointer' }}>
+                                            <option value="SAME_AS_ALBUM">🔄 Same Cloud as Album</option>
+                                            {storageAccounts.map(acc => <option key={acc._id} value={acc._id}>☁️ Force: {acc.nickname}</option>)}
+                                        </select>
+                                        
+                                        <span style={{ fontSize: '12px', color: '#aaa', marginLeft: '5px' }}>Visibility:</span>
                                         <button onClick={() => setAlbumIsFrozen(!albumIsFrozen)} style={{ background: albumIsFrozen ? '#e74c3c' : '#2ecc71', color: '#fff', border: 'none', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                                             {albumIsFrozen ? '🔴 Locked (View Only)' : '🟢 Active (Editable)'}
                                         </button>
