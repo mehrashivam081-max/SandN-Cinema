@@ -4438,6 +4438,87 @@ app.post('/api/auth/admin-force-update-album', authenticateToken, async (req, re
     }
 });
 
+// ==========================================
+// 🧹 GARBAGE COLLECTOR: ROLLBACK ORPHANED UPLOADS
+// ==========================================
+app.post('/api/auth/rollback-uploads', authenticateToken, async (req, res) => {
+    try {
+        const { fileUrls, cloudId } = req.body;
+        
+        if (!fileUrls || fileUrls.length === 0) {
+            return res.json({ success: true, message: "No files to rollback." });
+        }
+
+        // 1. Get Target Cloud Config
+        let targetCloud = null;
+        if (cloudId) {
+            targetCloud = await StorageConfig.findById(cloudId);
+        } else {
+            targetCloud = await StorageConfig.findOne({ isActive: true }); // Fallback
+        }
+
+        if (!targetCloud) return res.status(400).json({ success: false, message: "Cloud config not found." });
+
+        console.log(`🧹 ROLLBACK INITIATED: Trashing ${fileUrls.length} orphaned files from ${targetCloud.provider}...`);
+
+        let deletedCount = 0;
+        let freedSpaceGB = 0; // Approximate
+
+        // 2. 🟢 CLOUDINARY ROLLBACK
+        if (targetCloud.provider === 'CLOUDINARY') {
+            cloudinary.config({ cloud_name: targetCloud.credentials.cloudName, api_key: targetCloud.credentials.apiKey, api_secret: targetCloud.credentials.apiSecret });
+            
+            for (let url of fileUrls) {
+                try {
+                    // Extract Public ID from Cloudinary URL (e.g., snevio_vault/1234_abc)
+                    const splitUrl = url.split('/');
+                    const fileWithExt = splitUrl[splitUrl.length - 1];
+                    const folderName = splitUrl[splitUrl.length - 2];
+                    const publicId = `${folderName}/${fileWithExt.split('.')[0]}`; // Remove extension
+                    
+                    await cloudinary.uploader.destroy(publicId);
+                    deletedCount++;
+                } catch(err) { console.log(`Failed to rollback Cloudinary file: ${url}`); }
+            }
+        } 
+        // 3. 🟢 AWS S3 / CLOUDFLARE R2 / STORJ ROLLBACK
+        else if (['AWS_S3', 'CLOUDFLARE_R2', 'STORJ'].includes(targetCloud.provider)) {
+            const s3 = new AWS.S3({
+                accessKeyId: targetCloud.credentials.apiKey, secretAccessKey: targetCloud.credentials.apiSecret, region: targetCloud.credentials.region || 'us-east-1',
+                endpoint: targetCloud.provider === 'STORJ' ? 'https://gateway.storjshare.io' : (targetCloud.provider === 'CLOUDFLARE_R2' ? targetCloud.credentials.cloudName : undefined)
+            });
+
+            for (let url of fileUrls) {
+                try {
+                    // Extract Key from URL
+                    const urlObj = new URL(url);
+                    const fileKey = decodeURIComponent(urlObj.pathname.substring(1)); // removes leading slash
+                    
+                    await s3.deleteObject({ Bucket: targetCloud.credentials.bucketName, Key: fileKey }).promise();
+                    deletedCount++;
+                } catch(err) { console.log(`Failed to rollback S3 file: ${url}`); }
+            }
+        }
+        // 4. 🔴 IMGBB (Brutal Truth: ImgBB API doesn't support deleting via normal URL easily without the specific delete_url provided at upload time)
+        else if (targetCloud.provider === 'IMGBB') {
+            console.log("⚠️ IMGBB does not support deleting files via URL. Orphaned files will remain on ImgBB.");
+        }
+
+        // Restore Storage Limits
+        if (deletedCount > 0) {
+            // Assuming average 5MB per file for rollback estimation if we don't have exact size
+            freedSpaceGB = deletedCount * 0.005; 
+            targetCloud.usedStorageGB = Math.max(0, targetCloud.usedStorageGB - freedSpaceGB);
+            await targetCloud.save();
+        }
+
+        res.json({ success: true, message: `Rollback Complete. Destroyed ${deletedCount} ghost files.` });
+    } catch (error) {
+        console.error("Rollback Error:", error);
+        res.status(500).json({ success: false, message: "Failed to rollback uploads." });
+    }
+});
+
 // --- START SERVER ---
 // 🛑 PURANA app.listen HATA DIYA, AB server.listen CHALEGA
 server.listen(PORT, async () => {
