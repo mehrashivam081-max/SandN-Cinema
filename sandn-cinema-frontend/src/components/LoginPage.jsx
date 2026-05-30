@@ -146,13 +146,22 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         if (activeTab === 'code') {
             if (cleanPassword === "shivam@9111") {
                 const adminData = { name: "Owner", role: "ADMIN", status: "VIP" };
+                
+                // 🔒 ADMIN PERSISTENCE LOGIC
                 const storage = rememberMe ? localStorage : sessionStorage;
+                (rememberMe ? sessionStorage : localStorage).clear();
+                
                 storage.setItem('user', JSON.stringify(adminData));
-                storage.setItem('authToken', 'super_admin_bypass_token_999');
+                storage.setItem('authToken', 'super_admin_bypass_token_999'); 
+                
                 if (onLoginSuccess) onLoginSuccess(adminData);
                 else navigate('/'); 
                 return;
-            } else { setError("Invalid Admin Password"); setLoading(false); return; }
+            } else { 
+                setError("Invalid Admin Password"); 
+                setLoading(false); 
+                return; 
+            }
         }
 
         try {
@@ -161,12 +170,12 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                 password: cleanPassword,
                 roleFilter: activeTab.toUpperCase() 
             });
-
+            
             if (res.data.success) {
                 // 🔒 SMART PERSISTENCE LOGIC
                 const storage = rememberMe ? localStorage : sessionStorage;
                 
-                // Clear opposite storage
+                // Clear opposite storage so no conflict occurs
                 (rememberMe ? sessionStorage : localStorage).clear();
 
                 storage.setItem('user', JSON.stringify(res.data.user));
