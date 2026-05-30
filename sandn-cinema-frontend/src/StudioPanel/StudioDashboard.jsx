@@ -609,18 +609,29 @@ const StudioDashboard = ({ user, onLogout }) => {
 
 
 // 🛑 STOP UPLOAD LOGIC
-    const handleStopUpload = () => {
-        if (uploadController) {
-            uploadController.abort(); // API Request ko turant rok dega
-            setUploadController(null);
-            setLoading(false);
-            setUploadProgress(0);
-            setUploadStats('');
-            setUploadSpeed('');
-            setUploadETA('');
-            alert("⚠️ Upload stopped by user.");
-        }
-    };
+    const handleStopUpload = () => {
+        if (uploadController) {
+            uploadController.abort(); // API Request ko turant rok dega
+            setUploadController(null);
+            setLoading(false);
+            setUploadProgress(0);
+            setUploadStats('');
+            setUploadSpeed('');
+            setUploadETA('');
+            alert("⚠️ Upload stopped by user.");
+        }
+    };
+
+    // 🧹 GARBAGE COLLECTOR HELPER (Auto-Deletes Orphaned Cloud Files)
+    const rollbackGhostFiles = async (urlsToTrash) => {
+        if (!urlsToTrash || urlsToTrash.length === 0) return;
+        try {
+            console.log(`🧹 ROLLBACK: Attempting to trash ${urlsToTrash.length} ghost files from cloud...`);
+            // Backend Rollback API ko hit karo
+            await axios.post(`${API_BASE}/rollback-uploads`, { fileUrls: urlsToTrash }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            console.log("✅ Ghost files trashed successfully. Cloud space saved!");
+        } catch (e) { console.error("❌ Rollback failed:", e); }
+    };
 
 // 🚀 DIRECT CLOUDINARY UPLOAD FUNCTION (SMART DEFERRED RETRY + CHUNKING)
     const handleUpload = async (isFeed = false) => {
@@ -940,6 +951,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 } else {
                     alert(`❌ Error: ${feedRes.data.message}`); 
                     setLoading(false);
+                    rollbackGhostFiles(uploadedUrls); // 🔥 NAYA: Feed DB error rollback
                 }
                 return; 
             }
@@ -1009,11 +1021,19 @@ const StudioDashboard = ({ user, onLogout }) => {
                 alert(`❌ Error from Database: ${dbResNormal.data.message}`); 
                 fetchMyProfile(); 
                 setLoading(false);
+                rollbackGhostFiles(uploadedUrls); // 🔥 NAYA: Normal DB error rollback
             }
         } catch (error) { 
-            if (error.name === "AbortError" || axios.isCancel(error)) return console.log('Upload aborted.');
+            // 🔥 NAYA CATCH BLOCK: Cancel/Stop button ya Network crash par Garbage Collection
+            if (error.name === "AbortError" || axios.isCancel(error)) {
+                console.log('🛑 Upload manually aborted. Trashing incomplete files...');
+                rollbackGhostFiles(uploadedUrls); 
+                setLoading(false);
+                return;
+            }
             alert("Upload Failed. Check internet connection."); 
-            console.error(error);
+            console.error("Upload Loop Error:", error);
+            rollbackGhostFiles(uploadedUrls); // 🔥 Kisi aur error par bhi kachra saaf!
             fetchMyProfile(); 
             setLoading(false);
         } 
