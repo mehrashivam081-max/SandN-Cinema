@@ -170,6 +170,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [removeMode, setRemoveMode] = useState(null); // 'FILE' ya 'FOLDER'
     const [editUploading, setEditUploading] = useState(false);
     const [editTargetCloud, setEditTargetCloud] = useState('SAME_AS_ALBUM'); // 🔥 NEW: Target Cloud for Edit Mode
+    const [editUploadCounts, setEditUploadCounts] = useState({ success: 0, failed: 0, queued: 0 }); // 🔥 NAYA: Live Edit Mode Stats
 
     // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
     useEffect(() => {
@@ -200,10 +201,12 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         setUploadProgress(0);
         setUploadStats('Starting...');
         setUploadETA('Calculating...');
-        
+        setUploadSpeed('0.00 MB/s'); // 🔥 NAYA: Speed reset
+        setEditUploadCounts({ success: 0, failed: 0, queued: selectedFiles.length }); // 🔥 NAYA: Live Tracker
+
         const newImgs = [];
         const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
-        
+
         // 🔥 DYNAMIC SERVER RAM PROTECTOR (EDIT MODE)
         const maxBatchGB = parseFloat(cloudRoutingForm.maxBatchSizeGB) || 1.5;
         const totalGB = totalBytes / (1024 * 1024 * 1024);
@@ -223,7 +226,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                 // 🔥 INNER TRY-CATCH START: Ek file fail hui toh loop nahi tootega!
                 try {
                     let subF = 'Main Event';
-                    
+
                     // 🔥 THE FOLDER FIX: Sahi se folder ka naam nikalna
                     if (isFolder && file.webkitRelativePath) {
                         const parts = file.webkitRelativePath.split('/');
@@ -245,7 +248,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
 
                     // 2. DIRECT CLOUD UPLOAD LOGIC
                     if (sigRes.data.directUpload) {
-                        
+
                         // 🟢 A) CLOUDINARY LOGIC
                         if (sigRes.data.provider === 'CLOUDINARY') {
                             const cFormData = new FormData();
@@ -258,23 +261,24 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                             finalUrl = await new Promise((resolve, reject) => {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
-                                
+
                                 xhr.upload.onprogress = (event) => {
                                     if (event.lengthComputable) {
                                         const currentGlobalLoaded = totalLoadedBytes + event.loaded;
                                         const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
                                         setUploadProgress(Math.min(percent, 99));
                                         setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-                                        
+
                                         const elapsed = (Date.now() - startTime) / 1000;
                                         if (elapsed > 1) {
                                             const speed = currentGlobalLoaded / elapsed;
                                             const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
                                             setUploadETA(`${Math.floor(remaining)}s left`);
                                         }
                                     }
                                 };
-                                
+
                                 xhr.onload = () => {
                                     if (xhr.status === 200) {
                                         totalLoadedBytes += file.size; // Commit size
@@ -293,23 +297,24 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('PUT', sigRes.data.signedUrl);
                                 xhr.setRequestHeader('Content-Type', file.type);
-                                
+
                                 xhr.upload.onprogress = (event) => {
                                     if (event.lengthComputable) {
                                         const currentGlobalLoaded = totalLoadedBytes + event.loaded;
                                         const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
                                         setUploadProgress(Math.min(percent, 99));
                                         setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-                                        
+
                                         const elapsed = (Date.now() - startTime) / 1000;
                                         if (elapsed > 1) {
                                             const speed = currentGlobalLoaded / elapsed;
                                             const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
                                             setUploadETA(`${Math.floor(remaining)}s left`);
                                         }
                                     }
                                 };
-                                
+
                                 xhr.onload = () => {
                                     if (xhr.status === 200) {
                                         totalLoadedBytes += file.size; // Commit size
@@ -333,7 +338,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                         if (editTargetCloud !== 'SAME_AS_ALBUM') {
                             fd.append('overrideCloudId', editTargetCloud); // 🔥 NAYA: Force Cloud Logic
                         }
-                        
+
                         // 🔥 THE FIX: Added onUploadProgress tracker for Axios Proxy Call
                         const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { 
                             headers: { 'Authorization': `Bearer ${getValidToken()}` },
@@ -343,11 +348,12 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                     const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
                                     setUploadProgress(Math.min(percent, 99));
                                     setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-                                    
+
                                     const elapsed = (Date.now() - startTime) / 1000;
                                     if (elapsed > 1) {
                                         const speed = currentGlobalLoaded / elapsed;
                                         const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
+                                        setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
                                         setUploadETA(`${Math.floor(remaining)}s left`);
                                     }
                                 }
@@ -368,33 +374,36 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                             deletedAt: null
                         });
                         successCount++;
+                        setEditUploadCounts(prev => ({ ...prev, success: successCount, queued: prev.queued - 1 })); // 🔥 NAYA: Success Update
                     }
 
                 } catch (innerError) {
                     console.error(`🚨 Failed to upload file: ${file.name}`, innerError);
                     failCount++;
                     totalLoadedBytes += file.size; // Skip bytes to keep progress moving
+                    setEditUploadCounts(prev => ({ ...prev, failed: failCount, queued: prev.queued - 1 })); // 🔥 NAYA: Fail Update
                 }
                 // 🔥 INNER TRY-CATCH END
             }
-            
+
             // Loop ke baahar final updates
             setEditDraftImages(prev => [...prev, ...newImgs]);
             setUploadProgress(100);
             setUploadStats('Completed!');
             setUploadETA('Done');
-            
+            setUploadSpeed('0.00 MB/s');
+
             if (failCount > 0) {
                 alert(`⚠️ ${successCount} files added to draft, but ${failCount} files failed.\nClick '💾 Save & Update Album' to finalize the successful ones.`);
             } else {
                 alert(`✅ All ${successCount} files added to draft! Click '💾 Save & Update Album' to finalize.`);
             }
-            
+
         } catch (err) {
             console.error("Edit Upload Fatal Error:", err);
             alert("❌ Fatal error occurred. Please refresh and try again.");
         }
-        
+
         setEditUploading(false);
         setUploadProgress(0);
         e.target.value = ''; // clear input
@@ -2126,9 +2135,18 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '11px', fontWeight: 'bold' }}>
                                             <span style={{ color: '#f1c40f' }}>{uploadStats || 'Calculating...'}</span>
+                                            <span style={{ color: '#3498db' }}>⚡ {uploadSpeed || '0.00 MB/s'}</span>
                                             <span style={{ color: '#e67e22' }}>⏳ {uploadETA || 'Estimating time...'}</span>
                                         </div>
-                                        <p style={{ color: '#aaa', fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>
+
+                                        {/* 🔥 NAYA: Live Success / Failed / Queued Trackers */}
+                                        <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                                            <div style={{ flex: 1, background: '#e8f8f5', border: '1px solid #2ecc71', color: '#27ae60', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>✅ {editUploadCounts.success} Uploaded</div>
+                                            <div style={{ flex: 1, background: '#fdedec', border: '1px solid #e74c3c', color: '#c0392b', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>❌ {editUploadCounts.failed} Failed</div>
+                                            <div style={{ flex: 1, background: '#ebf5fb', border: '1px solid #3498db', color: '#2980b9', padding: '6px', borderRadius: '6px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold' }}>⏳ {editUploadCounts.queued} Queued</div>
+                                        </div>
+
+                                        <p style={{ color: '#aaa', fontSize: '11px', marginTop: '10px', textAlign: 'center' }}>
                                             Please do not close this window while files are processing.
                                         </p>
                                     </div>
