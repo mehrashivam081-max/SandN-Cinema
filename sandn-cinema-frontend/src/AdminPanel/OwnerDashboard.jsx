@@ -171,7 +171,12 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [editUploading, setEditUploading] = useState(false);
     const [editTargetCloud, setEditTargetCloud] = useState('SAME_AS_ALBUM'); // 🔥 NEW: Target Cloud for Edit Mode
     const [editUploadCounts, setEditUploadCounts] = useState({ success: 0, failed: 0, queued: 0 }); // 🔥 NAYA: Live Edit Mode Stats
-
+    const [activeExplicitFolder, setActiveExplicitFolder] = useState(null); // 🔥 NAYA: Track Folder specific click
+    const [globalEditFiles, setGlobalEditFiles] = useState([]); // 🔥 NAYA: Hold files for Global Dropdown
+    const [showFolderSelectModal, setShowFolderSelectModal] = useState(false); // 🔥 NAYA: Dropdown popup modal state
+    const [selectedGlobalFolder, setSelectedGlobalFolder] = useState('');
+    const [customGlobalFolder, setCustomGlobalFolder] = useState('');
+    
     // Jab bhi Preview Modal naya khule, limit wapas 50 pe reset kar do
     useEffect(() => {
         if (previewProject) {
@@ -197,22 +202,39 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         const selectedFiles = Array.from(e.target.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
         if(selectedFiles.length === 0) return;
 
+        // 🔥 LOGIC 3: Global Button [Add Files] clicked (No specific folder chosen yet)
+        if (!isFolder && !activeExplicitFolder) {
+            setGlobalEditFiles(selectedFiles);
+            const existingFoldersList = Array.from(new Set((isEditMode ? editDraftImages : previewProject.images || []).map(img => img.subFolder || 'Main Event')));
+            setSelectedGlobalFolder(existingFoldersList[0] || 'Main Event');
+            setCustomGlobalFolder('');
+            setShowFolderSelectModal(true);
+            e.target.value = ''; 
+            return;
+        }
+
+        // 🔥 LOGIC 1 & 2: Grid Plus / Header Button clicked (Direct Fast Upload)
+        await executeActualEditUpload(selectedFiles, isFolder, activeExplicitFolder);
+        setActiveExplicitFolder(null); // Reset after use
+        e.target.value = ''; 
+    };
+
+    // 🚀 ACTUAL UPLOAD ENGINE (Original Logic Untouched - File Name Preserved!)
+    const executeActualEditUpload = async (selectedFiles, isFolder, explicitFolder) => {
         setEditUploading(true);
         setUploadProgress(0);
         setUploadStats('Starting...');
         setUploadETA('Calculating...');
-        setUploadSpeed('0.00 MB/s'); // 🔥 NAYA: Speed reset
-        setEditUploadCounts({ success: 0, failed: 0, queued: selectedFiles.length }); // 🔥 NAYA: Live Tracker
+        setUploadSpeed('0.00 MB/s'); 
+        setEditUploadCounts({ success: 0, failed: 0, queued: selectedFiles.length }); 
 
         const newImgs = [];
         const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
 
-        // 🔥 DYNAMIC SERVER RAM PROTECTOR (EDIT MODE)
         const maxBatchGB = parseFloat(cloudRoutingForm.maxBatchSizeGB) || 1.5;
         const totalGB = totalBytes / (1024 * 1024 * 1024);
         if (totalGB > maxBatchGB) {
             setEditUploading(false);
-            e.target.value = ''; 
             return alert(`🚨 Upload Limit Exceeded!\n\nYou selected ${totalGB.toFixed(2)} GB. Max allowed per batch is ${maxBatchGB} GB. Please select fewer files.`);
         }
 
@@ -223,33 +245,28 @@ const handleEditFileUpload = async (e, isFolder = false) => {
 
         try {
             for (let file of selectedFiles) {
-                // 🔥 INNER TRY-CATCH START: Ek file fail hui toh loop nahi tootega!
                 try {
                     let subF = 'Main Event';
-
-                    // 🔥 THE FOLDER FIX: Sahi se folder ka naam nikalna
-                    if (isFolder && file.webkitRelativePath) {
+                    if (explicitFolder) {
+                        subF = explicitFolder; // 🔥 Inject target folder natively
+                    } else if (isFolder && file.webkitRelativePath) {
                         const parts = file.webkitRelativePath.split('/');
                         if (parts.length >= 3) subF = parts[parts.length - 2];
                         else if (parts.length === 2) subF = parts[0]; 
                     }
 
-                    // 1. Backend se Direct Upload Signature maango
                     const sigRes = await axios.post(`${API_BASE}/generate-upload-signature`, {
-                        fileName: file.name, 
+                        fileName: file.name, // 🛡️ ORIGINAL FILE NAME SAFE & SECURE
                         fileType: file.type, 
                         fileSizeGB: file.size / (1024 * 1024 * 1024),
                         targetFolder: `${previewProject.folderName}/${subF}`,
-                        overrideCloudId: editTargetCloud !== 'SAME_AS_ALBUM' ? editTargetCloud : null // 🔥 NAYA: Force Cloud Logic
+                        overrideCloudId: editTargetCloud !== 'SAME_AS_ALBUM' ? editTargetCloud : null 
                     }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
                     let finalUrl = '';
                     let previewUrl = '';
 
-                    // 2. DIRECT CLOUD UPLOAD LOGIC
                     if (sigRes.data.directUpload) {
-
-                        // 🟢 A) CLOUDINARY LOGIC
                         if (sigRes.data.provider === 'CLOUDINARY') {
                             const cFormData = new FormData();
                             cFormData.append('file', file);
@@ -261,150 +278,102 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                             finalUrl = await new Promise((resolve, reject) => {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
-
                                 xhr.upload.onprogress = (event) => {
                                     if (event.lengthComputable) {
                                         const currentGlobalLoaded = totalLoadedBytes + event.loaded;
-                                        const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
-                                        setUploadProgress(Math.min(percent, 99));
+                                        setUploadProgress(Math.min(Math.round((currentGlobalLoaded * 100) / totalBytes), 99));
                                         setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-
                                         const elapsed = (Date.now() - startTime) / 1000;
                                         if (elapsed > 1) {
                                             const speed = currentGlobalLoaded / elapsed;
-                                            const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
-                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
-                                            setUploadETA(`${Math.floor(remaining)}s left`);
+                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`);
+                                            setUploadETA(`${Math.floor(Math.max(0, (totalBytes - currentGlobalLoaded) / speed))}s left`);
                                         }
                                     }
                                 };
-
                                 xhr.onload = () => {
-                                    if (xhr.status === 200) {
-                                        totalLoadedBytes += file.size; // Commit size
-                                        resolve(JSON.parse(xhr.responseText).secure_url);
-                                    } else reject(new Error("Cloudinary Error"));
+                                    if (xhr.status === 200) { totalLoadedBytes += file.size; resolve(JSON.parse(xhr.responseText).secure_url); } 
+                                    else reject(new Error("Cloudinary Error"));
                                 };
                                 xhr.onerror = () => reject(new Error("Network Error"));
                                 xhr.send(cFormData);
                             });
                             previewUrl = finalUrl;
-                        } 
-                        // 🟠 B) AWS S3 / CLOUDFLARE R2 LOGIC
-                        else {
-                            // 🔥 THE FIX: Use XHR instead of Fetch so we can track LIVE progress
+                        } else {
                             finalUrl = await new Promise((resolve, reject) => {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('PUT', sigRes.data.signedUrl);
                                 xhr.setRequestHeader('Content-Type', file.type);
-
                                 xhr.upload.onprogress = (event) => {
                                     if (event.lengthComputable) {
                                         const currentGlobalLoaded = totalLoadedBytes + event.loaded;
-                                        const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
-                                        setUploadProgress(Math.min(percent, 99));
+                                        setUploadProgress(Math.min(Math.round((currentGlobalLoaded * 100) / totalBytes), 99));
                                         setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-
                                         const elapsed = (Date.now() - startTime) / 1000;
                                         if (elapsed > 1) {
                                             const speed = currentGlobalLoaded / elapsed;
-                                            const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
-                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
-                                            setUploadETA(`${Math.floor(remaining)}s left`);
+                                            setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`);
+                                            setUploadETA(`${Math.floor(Math.max(0, (totalBytes - currentGlobalLoaded) / speed))}s left`);
                                         }
                                     }
                                 };
-
                                 xhr.onload = () => {
-                                    if (xhr.status === 200) {
-                                        totalLoadedBytes += file.size; // Commit size
-                                        resolve(sigRes.data.publicUrl);
-                                    } else reject(new Error("AWS Error"));
+                                    if (xhr.status === 200) { totalLoadedBytes += file.size; resolve(sigRes.data.publicUrl); } 
+                                    else reject(new Error("AWS Error"));
                                 };
                                 xhr.onerror = () => reject(new Error("Network Error"));
                                 xhr.send(file);
                             });
                             previewUrl = finalUrl;
                         }
-                    } 
-                    else {
-                        // 3. Fallback to Proxy
+                    } else {
                         const fd = new FormData();
                         fd.append('file', file);
                         fd.append('skipPreview', 'true'); 
-                        if (previewProject && previewProject._id) {
-                            fd.append('projectId', previewProject._id);
-                        }
-                        if (editTargetCloud !== 'SAME_AS_ALBUM') {
-                            fd.append('overrideCloudId', editTargetCloud); // 🔥 NAYA: Force Cloud Logic
-                        }
+                        if (previewProject && previewProject._id) fd.append('projectId', previewProject._id);
+                        if (editTargetCloud !== 'SAME_AS_ALBUM') fd.append('overrideCloudId', editTargetCloud);
 
-                        // 🔥 THE FIX: Added onUploadProgress tracker for Axios Proxy Call
                         const res = await axios.post(`${API_BASE}/proxy-upload`, fd, { 
                             headers: { 'Authorization': `Bearer ${getValidToken()}` },
                             onUploadProgress: (event) => {
                                 if (event.lengthComputable) {
                                     const currentGlobalLoaded = totalLoadedBytes + event.loaded;
-                                    const percent = Math.round((currentGlobalLoaded * 100) / totalBytes);
-                                    setUploadProgress(Math.min(percent, 99));
+                                    setUploadProgress(Math.min(Math.round((currentGlobalLoaded * 100) / totalBytes), 99));
                                     setUploadStats(`${(currentGlobalLoaded / (1024 * 1024)).toFixed(2)} MB / ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`);
-
                                     const elapsed = (Date.now() - startTime) / 1000;
                                     if (elapsed > 1) {
                                         const speed = currentGlobalLoaded / elapsed;
-                                        const remaining = Math.max(0, (totalBytes - currentGlobalLoaded) / speed);
-                                        setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`); // 🔥 NAYA: MB/s Track
-                                        setUploadETA(`${Math.floor(remaining)}s left`);
+                                        setUploadSpeed(`${(speed / (1024 * 1024)).toFixed(2)} MB/s`);
+                                        setUploadETA(`${Math.floor(Math.max(0, (totalBytes - currentGlobalLoaded) / speed))}s left`);
                                     }
                                 }
                             }
                         });
                         finalUrl = res.data.url;
                         previewUrl = res.data.previewUrl || finalUrl;
-                        totalLoadedBytes += file.size; // Commit bytes
+                        totalLoadedBytes += file.size;
                     }
 
                     if (finalUrl) {
-                        newImgs.push({
-                            url: finalUrl,
-                            previewUrl: previewUrl,
-                            status: 'active',
-                            selectedBy: [],
-                            subFolder: subF,
-                            deletedAt: null
-                        });
+                        newImgs.push({ url: finalUrl, previewUrl: previewUrl, status: 'active', selectedBy: [], subFolder: subF, deletedAt: null });
                         successCount++;
-                        setEditUploadCounts(prev => ({ ...prev, success: successCount, queued: prev.queued - 1 })); // 🔥 NAYA: Success Update
+                        setEditUploadCounts(prev => ({ ...prev, success: successCount, queued: prev.queued - 1 })); 
                     }
-
                 } catch (innerError) {
-                    console.error(`🚨 Failed to upload file: ${file.name}`, innerError);
                     failCount++;
-                    totalLoadedBytes += file.size; // Skip bytes to keep progress moving
-                    setEditUploadCounts(prev => ({ ...prev, failed: failCount, queued: prev.queued - 1 })); // 🔥 NAYA: Fail Update
+                    totalLoadedBytes += file.size; 
+                    setEditUploadCounts(prev => ({ ...prev, failed: failCount, queued: prev.queued - 1 })); 
                 }
-                // 🔥 INNER TRY-CATCH END
             }
 
-            // Loop ke baahar final updates
             setEditDraftImages(prev => [...prev, ...newImgs]);
-            setUploadProgress(100);
-            setUploadStats('Completed!');
-            setUploadETA('Done');
-            setUploadSpeed('0.00 MB/s');
+            setUploadProgress(100); setUploadStats('Completed!'); setUploadETA('Done'); setUploadSpeed('0.00 MB/s');
 
-            if (failCount > 0) {
-                alert(`⚠️ ${successCount} files added to draft, but ${failCount} files failed.\nClick '💾 Save & Update Album' to finalize the successful ones.`);
-            } else {
-                alert(`✅ All ${successCount} files added to draft! Click '💾 Save & Update Album' to finalize.`);
-            }
+            if (failCount > 0) alert(`⚠️ ${successCount} files added to draft, but ${failCount} files failed.\nClick '💾 Save & Update Album' to finalize the successful ones.`);
+            else alert(`✅ All ${successCount} files added to draft! Click '💾 Save & Update Album' to finalize.`);
 
-        } catch (err) {
-            console.error("Edit Upload Fatal Error:", err);
-            alert("❌ Fatal error occurred. Please refresh and try again.");
-        }
-
-        setEditUploading(false);
+        } catch (err) { alert("❌ Fatal error occurred. Please refresh and try again."); }
+        setEditUploading(false); 
         setUploadProgress(0);
         e.target.value = ''; // clear input
     };
@@ -2195,8 +2164,33 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                                 <h3 style={{ color: albumName === 'Album 2' ? '#f1c40f' : '#3498db', fontSize: '16px', marginBottom: '20px' }}>{albumName === 'Album 2' ? '📙' : '📘'} {albumName}</h3>
                                                 {Object.keys(groupedData[albumName]).sort().map(folderName => (
                                                     <div key={folderName} style={{ marginBottom: '25px' }}>
-                                                        <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px' }}>📁 {folderName}</h4>
+                                                        {/* 🔥 LOGIC 2: HEADER ACTION BUTTON */}
+                                                        <h4 style={{ margin: '0 0 12px 0', color: '#e0e0e0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            📁 {folderName}
+                                                            {isEditMode && (
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => { setActiveExplicitFolder(folderName); document.getElementById('edit-add-files').click(); }}
+                                                                    style={{ background: '#3498db', color: '#fff', border: 'none', padding: '3px 10px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 5px rgba(52,152,219,0.3)' }}
+                                                                >
+                                                                    ➕ Add Here
+                                                                </button>
+                                                            )}
+                                                        </h4>
+                                                        
                                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px' }}>
+                                                            
+                                                            {/* 🔥 LOGIC 1: THE GRID PLUS BOX */}
+                                                            {isEditMode && (
+                                                                <div 
+                                                                    onClick={() => { setActiveExplicitFolder(folderName); document.getElementById('edit-add-files').click(); }}
+                                                                    style={{ height: '100px', borderRadius: '8px', border: '2px dashed #f1c40f', background: 'rgba(241, 196, 15, 0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                                                                >
+                                                                    <span style={{ fontSize: '22px', color: '#f1c40f' }}>➕</span>
+                                                                    <span style={{ fontSize: '9px', color: '#f1c40f', fontWeight: 'bold', marginTop: '4px', textAlign: 'center', padding: '0 4px', textTransform: 'uppercase' }}>Add to {folderName}</span>
+                                                                </div>
+                                                            )}
+
                                                             {groupedData[albumName][folderName].map((img, idx) => (
                                                                 <div key={idx} 
                                                                     onClick={() => { if(removeMode === 'FILE') setEditDraftImages(prev => prev.filter(i => i.url !== img.url)); }}
@@ -2228,6 +2222,68 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                 </button>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* 🔥 LOGIC 3: SMART GLOBAL DROPDOWN POPUP MODAL */}
+            {showFolderSelectModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 99999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '25px', borderRadius: '15px', width: '90%', maxWidth: '400px', border: '1px solid #3498db', boxShadow: '0 15px 40px rgba(0,0,0,0.5)', textAlign: 'left' }}>
+                        <h3 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>📂 Select Target Folder</h3>
+                        <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 20px 0' }}>You selected <strong style={{color:'#fff'}}>{globalEditFiles.length} files</strong>. Choose where to inject them:</p>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div>
+                                <label style={{ color: '#aaa', fontSize: '11px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Choose Destination</label>
+                                <select 
+                                    value={selectedGlobalFolder} 
+                                    onChange={(e) => { setSelectedGlobalFolder(e.target.value); if(e.target.value !== 'CUSTOM_NEW') setCustomGlobalFolder(''); }}
+                                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#0f172a', color: '#fff', border: '1px solid #333', fontWeight: 'bold', outline: 'none', cursor: 'pointer' }}
+                                >
+                                    {Array.from(new Set((isEditMode ? editDraftImages : previewProject.images || []).map(img => img.subFolder || 'Main Event'))).map((fName, idx) => (
+                                        <option key={idx} value={fName}>📁 {fName}</option>
+                                    ))}
+                                    <option value="CUSTOM_NEW">✍️ Or Type a New Folder Name...</option>
+                                </select>
+                            </div>
+
+                            {selectedGlobalFolder === 'CUSTOM_NEW' && (
+                                <div style={{ background: 'rgba(243, 156, 18, 0.05)', padding: '12px', borderRadius: '8px', border: '1px solid #f39c12' }}>
+                                    <label style={{ color: '#f39c12', fontSize: '11px', display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Create New Sub-Folder</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. Sangeet, Reception" 
+                                        value={customGlobalFolder} 
+                                        onChange={(e) => setCustomGlobalFolder(e.target.value)} 
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#1a1a2e', color: '#fff', border: '1px solid #f39c12', outline: 'none', fontWeight: '500' }} 
+                                    />
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                                <button 
+                                    type="button"
+                                    onClick={() => { setShowFolderSelectModal(false); setGlobalEditFiles([]); }} 
+                                    style={{ flex: 1, background: '#34495e', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={async () => {
+                                        const finalFolder = selectedGlobalFolder === 'CUSTOM_NEW' ? customGlobalFolder.trim() : selectedGlobalFolder;
+                                        if (!finalFolder) return alert("Please select or type a valid folder name!");
+                                        setShowFolderSelectModal(false);
+                                        await executeActualEditUpload(globalEditFiles, false, finalFolder);
+                                        setGlobalEditFiles([]);
+                                    }} 
+                                    style={{ flex: 1, background: '#2ecc71', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+                                >
+                                    🚀 Upload Now
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
