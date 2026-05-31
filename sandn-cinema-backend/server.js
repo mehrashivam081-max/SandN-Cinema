@@ -2099,13 +2099,49 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     }
 });
 
-// Add Coins when user watches an Ad
-app.post('/api/auth/add-coins', async (req, res) => {
-    const mobile = getCleanMobile(req.body.mobile);
-    const { amount, reason } = req.body;
+// 🔒 SECURE: Add Coins when user watches an Ad
+app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
+    // 🔥 SECURITY LEVEL 1: Token se verified mobile nikalenge, body se nahi! (Prevents spoofing)
+    const mobile = getCleanMobile(req.user.mobile);
+    let { amount, reason } = req.body;
+
+    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
+    // Koi Hacker Postman se amount 50,000 bhej de toh server use override karke wapas 5 kar dega!
+    if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
+        amount = 5; // Fixed reward, front-end ki value pe bharosa mat karo
+    }
 
     try {
         const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        
+        // Add Coins
+        wallet.coins += parseInt(amount);
+
+        // Add to history
+        const historyEntry = {
+            action: reason || "Watched Ad Video",
+            amount: `+${amount} Coins`,
+            date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        }
+
+        res.json({ success: true, wallet });
+    } catch (e) {
+        console.error("Coin Addition Error:", e);
+        res.status(500).json({ success: false, message: "Server error adding coins" });
+    }
+});
         if(!account) return res.json({ success: false, message: "Account not found" });
 
         let wallet = account.data.wallet || { coins: 0, history: [] };
