@@ -2107,35 +2107,38 @@ app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
 
     // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 1; // 👈 5 ki jagah 1 kar diya. Har ad par sirf 1 coin milega!
+        amount = 1; // 👈 Fixed: Har ad par sirf 1 coin milega!
     }
 
     try {
         const account = await findAccount(mobile);
         if(!account) return res.json({ success: false, message: "Account not found" });
 
-        let wallet = account.data.wallet || { coins: 0, history: [] };
-        
-        // Add Coins
-        wallet.coins += parseInt(amount);
+        const parsedAmount = parseInt(amount);
 
-        // Add to history
+        // History entry banayenge
         const historyEntry = {
             action: reason || "Watched Ad Video",
-            amount: `+${amount} Coins`,
+            amount: `+${parsedAmount} Coin`,
             date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
             type: "credit"
         };
-        wallet.history = [historyEntry, ...(wallet.history || [])];
 
-        // Safe DB Update
+        // 🔥 THE FIX: "$inc" (Increment) ka matlab hai Current Coins me Naye Coins ko Jodna!
+        const updateQuery = {
+            $inc: { "wallet.coins": parsedAmount }, // 👈 Ye database ko bolega "Jitne bhi coins hain, usme +1 kar do"
+            $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
+        };
+
+        let updatedDoc;
+        // findOneAndUpdate se updated coins wali nayi detail return hogi
         if (account.type === 'STUDIO') {
-            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+            updatedDoc = await Studio.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
         } else {
-            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+            updatedDoc = await User.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
         }
 
-        res.json({ success: true, wallet });
+        res.json({ success: true, wallet: updatedDoc.wallet });
     } catch (e) {
         console.error("Coin Addition Error:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });
