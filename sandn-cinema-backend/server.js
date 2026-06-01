@@ -2101,44 +2101,41 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
 
 // 🔒 SECURE: Add Coins when user watches an Ad
 app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
-    // 🔥 SECURITY LEVEL 1: Token se verified mobile nikalenge, body se nahi! (Prevents spoofing)
     const mobile = getCleanMobile(req.user.mobile);
     let { amount, reason } = req.body;
 
-    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 1; // 👈 Fixed: Har ad par sirf 1 coin milega!
+        amount = 1;
     }
 
     try {
         const account = await findAccount(mobile);
-        if(!account) return res.json({ success: false, message: "Account not found" });
+        
+        // 🔥 FIX: Check if account exists
+        if (!account || !account.data) {
+            console.error("Account not found for mobile:", mobile);
+            return res.status(404).json({ success: false, message: "Account not found" });
+        }
 
-        const parsedAmount = parseInt(amount);
+        // 🔥 FIX: Safe wallet access
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        wallet.coins += parseInt(amount);
 
-        // History entry banayenge
         const historyEntry = {
             action: reason || "Watched Ad Video",
-            amount: `+${parsedAmount} Coin`,
+            amount: `+${amount} Coins`,
             date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
             type: "credit"
         };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
 
-        // 🔥 THE FIX: "$inc" (Increment) ka matlab hai Current Coins me Naye Coins ko Jodna!
-        const updateQuery = {
-            $inc: { "wallet.coins": parsedAmount }, // 👈 Ye database ko bolega "Jitne bhi coins hain, usme +1 kar do"
-            $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
-        };
-
-        let updatedDoc;
-        // findOneAndUpdate se updated coins wali nayi detail return hogi
         if (account.type === 'STUDIO') {
-            updatedDoc = await Studio.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         } else {
-            updatedDoc = await User.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         }
 
-        res.json({ success: true, wallet: updatedDoc.wallet });
+        res.json({ success: true, wallet });
     } catch (e) {
         console.error("Coin Addition Error:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });
