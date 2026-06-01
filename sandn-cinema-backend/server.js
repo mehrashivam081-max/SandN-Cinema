@@ -2106,9 +2106,8 @@ app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
     let { amount, reason } = req.body;
 
     // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
-    // Koi Hacker Postman se amount 50,000 bhej de toh server use override karke wapas 5 kar dega!
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 5; // Fixed reward, front-end ki value pe bharosa mat karo
+        amount = 1; // 👈 5 ki jagah 1 kar diya. Har ad par sirf 1 coin milega!
     }
 
     try {

@@ -12,8 +12,8 @@ const userSchema = new mongoose.Schema({
     addedBy: { type: String, default: 'SELF' }, 
     
     // UPGRADED: Mixed type allows flexible folder structures (including imageCost & videoCost)
-    uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
-    
+    uploadedData: { type: mongoose.Schema.Types.Mixed, default: [] },
+    
     // 🔥 NEW: 24-Hour Unlock Tracker (FOMO Logic)
     unlockedMedia: [{
         url: { type: String, required: true },
@@ -27,16 +27,22 @@ const userSchema = new mongoose.Schema({
     city: String,
     location: { lat: Number, long: Number }, 
     
-    // 🪙 UPGRADED: Wallet & Coins (Structured for Monetization & Ads)
+    // 🪙 UPGRADED & SECURE: User Wallet
     wallet: {
         coins: { type: Number, default: 0 },
-        history: [{ 
-            action: String,       // e.g. "Watched Ad Video", "Unlocked File"
-            amount: String,       // e.g. "+1 Coin", "-5 Coins"
-            date: String,         // e.g. "21/03/2026"
-            type: { type: String } // e.g. 'credit', 'debit', 'neutral'
+        currentStreak: { type: Number, default: 0 },
+        lastRewardDate: { type: String, default: "" },
+        unlockedFiles: [{
+            fileUrl: String,
+            unlockTime: Date,
+            expiry: String
         }],
-        // ✅ NEW: To track which mini-events the user has already completed
+        history: [{ 
+            action: String,       // e.g. "Watched Ad Video"
+            amount: String,       // e.g. "+1 Coin"
+            date: String,         // e.g. "21/03/2026"
+            type: { type: String } // e.g. 'credit', 'debit'
+        }],
         claimedEvents: [{ type: String }]
     },
     
@@ -77,23 +83,43 @@ const studioSchema = new mongoose.Schema({
     location: { lat: Number, long: Number }, 
     
     // Business
-    rating: { type: Number, default: 0 },
-    revenue: {
-        current: { type: Number, default: 0 },
-        total: { type: Number, default: 0 },
-        history: [{ amount: Number, date: Date, status: String }]
-    },
-    
-    // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
-    storagePlan: { type: String, default: 'FREE' },
-    allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
-    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
-    planExpiryDate: { type: Date, default: null },    // When the current plan expires
-    autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
+    rating: { type: Number, default: 0 },
+    revenue: {
+        current: { type: Number, default: 0 },
+        total: { type: Number, default: 0 },
+        history: [{ amount: Number, date: Date, status: String }]
+    },
+    
+    // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
+    storagePlan: { type: String, default: 'FREE' },
+    allocatedStorageGB: { type: Number, default: 5 },
+    usedStorageGB: { type: Number, default: 0 },
+    planExpiryDate: { type: Date, default: null },
+    autoDowngradeToFree: { type: Boolean, default: true },
 
-    otp: String,
-    otpExpires: Date,
-    joinedDate: { type: Date, default: Date.now }
+    // 🪙 UPGRADED & SECURE: Studio Wallet (With Revenue)
+    wallet: {
+        coins: { type: Number, default: 0 },
+        revenue: { type: Number, default: 0 }, // 👈 Studio ke asli paise (₹)
+        currentStreak: { type: Number, default: 0 },
+        lastRewardDate: { type: String, default: "" },
+        unlockedFiles: [{
+            fileUrl: String,
+            unlockTime: Date,
+            expiry: String
+        }],
+        history: [{ 
+            action: String,
+            amount: String,
+            date: String,
+            type: { type: String }
+        }],
+        claimedEvents: [{ type: String }]
+    },
+
+    otp: String,
+    otpExpires: Date,
+    joinedDate: { type: Date, default: Date.now }
 });
 
 // --- 3. ADMIN SCHEMA ---
@@ -215,7 +241,7 @@ const platformSettingSchema = new mongoose.Schema({
     },
 
     // GLOBAL DEFAULT PRICING
-    defaultPricing: {
+    defaultPricing: {
         imageCost: { type: Number, default: 5 },
         videoCost: { type: Number, default: 10 }
     },
@@ -250,14 +276,14 @@ const serviceSchema = new mongoose.Schema({
 
 // --- 10. VACANCY SCHEMA (For Admin Controlled Jobs) ---
 const vacancySchema = new mongoose.Schema({
-    role: { type: String, required: true },       // e.g. Video Editor
-    type: { type: String, required: true },       // e.g. Long Term / Short Term
-    time: { type: String },                       // e.g. Full Time (10-7)
-    salary: { type: String },                     // e.g. ₹20k - ₹35k
-    urgent: { type: Boolean, default: false },
-    description: { type: String },                // Optional extra details
-    isActive: { type: Boolean, default: true },   // Admin can hide/show
-    createdAt: { type: Date, default: Date.now }
+    role: { type: String, required: true },       // e.g. Video Editor
+    type: { type: String, required: true },       // e.g. Long Term / Short Term
+    time: { type: String },                       // e.g. Full Time (10-7)
+    salary: { type: String },                     // e.g. ₹20k - ₹35k
+    urgent: { type: Boolean, default: false },
+    description: { type: String },                // Optional extra details
+    isActive: { type: Boolean, default: true },   // Admin can hide/show
+    createdAt: { type: Date, default: Date.now }
 });
 
 // --- 11. SUBSCRIPTION PLAN SCHEMA (For Studio Cloud Storage) ---
@@ -275,51 +301,51 @@ const subscriptionPlanSchema = new mongoose.Schema({
 
 // --- 12. SMART ALBUM SELECTION SCHEMA (NEW) ---
 const albumSelectionSchema = new mongoose.Schema({
-    studioMobile: { type: String, required: true },
-    studioName: { type: String, default: '' },
+    studioMobile: { type: String, required: true },
+    studioName: { type: String, default: '' },
     uploaderName: { type: String, default: 'Snevio Partner' }, // 🔥 NAYA: Track who uploaded
     uploaderRole: { type: String, default: 'Studio Partner' }, // 🔥 NAYA: Admin vs Studio
-    clientMobile: { type: String, required: true },
-    clientEmail: { type: String, default: '' },
-    folderName: { type: String, required: true },
+    clientMobile: { type: String, required: true },
+    clientEmail: { type: String, default: '' },
+    folderName: { type: String, required: true },
     uploadReport: { type: mongoose.Schema.Types.Mixed, default: {} },
     cloudProvider: { type: String, default: 'CLOUDINARY' },
 
     storageConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'StorageConfig', default: null },
-    
-    // ⚙️ Limits & Pricing (For Extra Earning)
-    sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain
-    imagesPerSheet: { type: Number, default: 0 },   // Ek sheet me kitni photos aayengi
-    costPerExtraSheet: { type: Number, default: 0 },// Extra sheet charge
-    
-    // 🔄 Workflow & Phase State
-    totalPhases: { type: Number, default: 3 },      // 1, 2, or 3
-    currentPhase: { type: Number, default: 1 },
-    status: { type: String, enum: ['Pending', 'Phase1', 'Phase2', 'Reviewing', 'PaymentPending', 'Submitted', 'Split Mode', 'Confirmed', 'Completed'], default: 'Pending' },
+    
+    // ⚙️ Limits & Pricing (For Extra Earning)
+    sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain
+    imagesPerSheet: { type: Number, default: 0 },   // Ek sheet me kitni photos aayengi
+    costPerExtraSheet: { type: Number, default: 0 },// Extra sheet charge
+    
+    // 🔄 Workflow & Phase State
+    totalPhases: { type: Number, default: 3 },      // 1, 2, or 3
+    currentPhase: { type: Number, default: 1 },
+    status: { type: String, enum: ['Pending', 'Phase1', 'Phase2', 'Reviewing', 'PaymentPending', 'Submitted', 'Split Mode', 'Confirmed', 'Completed'], default: 'Pending' },
 
-    // 👇 SPLIT WORKFLOW LOGIC (NEW) 👇
-    finalSubmissionDate: { type: Date }, // First time submit time
-    isSplitRequested: { type: Boolean, default: false },
+    // 👇 SPLIT WORKFLOW LOGIC (NEW) 👇
+    finalSubmissionDate: { type: Date }, // First time submit time
+    isSplitRequested: { type: Boolean, default: false },
     isFrozen: { type: Boolean, default: false }, // 🔥 NAYA: Manual Lock tracking
-    splitCompleted: { type: Boolean, default: false },
-    extraCharges: { type: Number, default: 0 },
-    splitDetails: {
-        hasSplit: { type: Boolean, default: false },
-        album1Count: { type: Number, default: 0 },
-        album2Count: { type: Number, default: 0 }
-    },
-    // 👆 END SPLIT WORKFLOW LOGIC 👆
+    splitCompleted: { type: Boolean, default: false },
+    extraCharges: { type: Number, default: 0 },
+    splitDetails: {
+        hasSplit: { type: Boolean, default: false },
+        album1Count: { type: Number, default: 0 },
+        album2Count: { type: Number, default: 0 }
+    },
+    // 👆 END SPLIT WORKFLOW LOGIC 👆
 
     // 📸 Data Arrays (Stateful Image Tracking)
-    images: [{
-        url: String,
+    images: [{
+        url: String,
         previewUrl: { type: String, default: '' },
-        status: { type: String, enum: ['active', 'selected', 'rejected'], default: 'active' },
-        selectedBy: [{ type: String }], // Array of mobile numbers (Jo family member select karega uska number)
-        subFolder: { type: String, default: 'Main Event' }, // ✅ Added subFolder support for Multi-Folder Uploads
-        deletedAt: { type: Date, default: null }, // 7-Day Soft Delete / Recovery ke liye
+        status: { type: String, enum: ['active', 'selected', 'rejected'], default: 'active' },
+        selectedBy: [{ type: String }], // Array of mobile numbers (Jo family member select karega uska number)
+        subFolder: { type: String, default: 'Main Event' }, // ✅ Added subFolder support for Multi-Folder Uploads
+        deletedAt: { type: Date, default: null }, // 7-Day Soft Delete / Recovery ke liye
         albumTag: { type: String, default: 'Album 1' } // ✅ For Split Mode categorization
-    }],
+    }],
 
     // 👨‍👩‍👧‍👦 Family Collaboration System
     sharedWith: [{
