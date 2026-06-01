@@ -2142,35 +2142,6 @@ app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
         res.status(500).json({ success: false, message: "Server error adding coins" });
     }
 });
-        if(!account) return res.json({ success: false, message: "Account not found" });
-
-        let wallet = account.data.wallet || { coins: 0, history: [] };
-        
-        // Add Coins
-        wallet.coins += parseInt(amount);
-
-        // Add to history
-        const historyEntry = {
-            action: reason || "Watched Ad Video",
-            amount: `+${amount} Coin`,
-            date: new Date().toLocaleDateString(),
-            type: "credit"
-        };
-        wallet.history = [historyEntry, ...(wallet.history || [])];
-
-        // Safe DB Update
-        if (account.type === 'STUDIO') {
-            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
-        } else {
-            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
-        }
-
-        res.json({ success: true, wallet });
-    } catch (e) {
-        console.error("Coin Addition Error:", e);
-        res.status(500).json({ success: false, message: "Server error adding coins" });
-    }
-});
 
 // ==========================================
 // 💰 ADVANCED MONETIZATION (REAL MONEY & EVENTS)
