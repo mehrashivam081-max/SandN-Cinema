@@ -2099,43 +2099,53 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     }
 });
 
-// 🔒 SECURE: Add Coins when user watches an Ad
+// 🔒 GOD-LEVEL SECURE: Add Coins (Atomic Update via strict _id)
 app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.user.mobile);
     let { amount, reason } = req.body;
 
+    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 1;
+        amount = 1; 
     }
 
     try {
         const account = await findAccount(mobile);
         
-        // 🔥 FIX: Check if account exists
-        if (!account || !account.data) {
-            console.error("Account not found for mobile:", mobile);
+        if (!account || !account.data || !account.data._id) {
             return res.status(404).json({ success: false, message: "Account not found" });
         }
 
-        // 🔥 FIX: Safe wallet access
-        let wallet = account.data.wallet || { coins: 0, history: [] };
-        wallet.coins += parseInt(amount);
+        const parsedAmount = parseInt(amount) || 0;
 
         const historyEntry = {
             action: reason || "Watched Ad Video",
-            amount: `+${amount} Coins`,
+            amount: `+${parsedAmount} Coin`,
             date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
             type: "credit"
         };
-        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        // 🔥 THE MAGIC: $inc will ADD to existing coins securely
+        const updateQuery = {
+            $inc: { "wallet.coins": parsedAmount },
+            $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
+        };
+
+        let updatedDoc;
+        const targetId = account.data._id; // 👈 BULLETPROOF FIX: Exact Database ID ka istemaal
 
         if (account.type === 'STUDIO') {
-            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+            updatedDoc = await Studio.findByIdAndUpdate(targetId, updateQuery, { new: true, strict: false });
         } else {
-            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+            updatedDoc = await User.findByIdAndUpdate(targetId, updateQuery, { new: true, strict: false });
         }
 
-        res.json({ success: true, wallet });
+        // Agar fir bhi update fail hua toh crash hone se bachao
+        if (!updatedDoc) {
+            return res.status(500).json({ success: false, message: "Failed to update database!" });
+        }
+
+        res.json({ success: true, wallet: updatedDoc.wallet });
     } catch (e) {
         console.error("Coin Addition Error:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });
