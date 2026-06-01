@@ -2099,29 +2099,31 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     }
 });
 
-// 🔍 X-RAY DEBUG MODE: Add Coins API
+// 🔒 GOD-LEVEL SECURE: Add Coins (Atomic Update + Multi-Role Fix)
 app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
-    console.log("\n========== 🛠️ DEBUG: ADD COINS START ==========");
+    // 🔥 NAYI SECURITY: Sirf "USER" role ko hi Ad se coin milenge!
+    if (req.user.role !== 'USER') {
+        console.log(`🛡️ Blocked ${req.user.role} from watching Ads.`);
+        return res.status(403).json({ success: false, message: "Ads and Free Coins are only available for Normal Users." });
+    }
+
     const mobile = getCleanMobile(req.user.mobile);
     let { amount, reason } = req.body;
-    
-    console.log("👉 1. Mobile from Token:", mobile);
-    console.log("👉 2. Amount requested:", amount, "| Reason:", reason);
 
+    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 1; 
+        amount = 1; // Strict 1 coin for ads
     }
 
     try {
         const account = await findAccount(mobile);
-        console.log("👉 3. Account found in DB?:", account ? `YES (Role: ${account.type})` : "NO");
-
-        if (!account || !account.data) {
-            console.log("❌ ERROR: Account is completely missing in DB.");
+        
+        if (!account || !account.data || !account.data._id) {
             return res.status(404).json({ success: false, message: "Account not found" });
         }
 
         const parsedAmount = parseInt(amount) || 0;
+
         const historyEntry = {
             action: reason || "Watched Ad Video",
             amount: `+${parsedAmount} Coin`,
@@ -2134,31 +2136,15 @@ app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
             $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
         };
 
-        console.log("👉 4. Running findOneAndUpdate for Role:", account.type);
-        let updatedDoc;
-
-        if (account.type === 'STUDIO') {
-            updatedDoc = await Studio.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
-        } else if (account.type === 'ADMIN') {
-            // 🔥 Yahan shayad pehle fas raha tha agar tum admin account se test kar rahe the!
-            updatedDoc = await Admin.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
-        } else {
-            updatedDoc = await User.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
-        }
-
-        console.log("👉 5. Result of updatedDoc:", updatedDoc ? "SUCCESS (Doc Found)" : "NULL (Update Failed)");
+        let updatedDoc = await User.findByIdAndUpdate(account.data._id, updateQuery, { new: true, strict: false });
 
         if (!updatedDoc) {
-            console.log("❌ CRITICAL ERROR: updatedDoc null hai! Matlab findOneAndUpdate fail ho gaya.");
-            return res.status(500).json({ success: false, message: "DB Update Failed (Doc Null)" });
+            return res.status(500).json({ success: false, message: "Failed to update database!" });
         }
-
-        console.log("👉 6. Final Wallet State:", updatedDoc.wallet);
-        console.log("========== 🛠️ DEBUG: ADD COINS END ==========\n");
 
         res.json({ success: true, wallet: updatedDoc.wallet });
     } catch (e) {
-        console.error("❌ CATCH BLOCK ERROR:", e);
+        console.error("Coin Addition Error:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });
     }
 });
