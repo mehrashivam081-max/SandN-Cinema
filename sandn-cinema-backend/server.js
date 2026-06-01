@@ -2099,25 +2099,29 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     }
 });
 
-// 🔒 GOD-LEVEL SECURE: Add Coins (Atomic Update via strict _id)
+// 🔍 X-RAY DEBUG MODE: Add Coins API
 app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
+    console.log("\n========== 🛠️ DEBUG: ADD COINS START ==========");
     const mobile = getCleanMobile(req.user.mobile);
     let { amount, reason } = req.body;
+    
+    console.log("👉 1. Mobile from Token:", mobile);
+    console.log("👉 2. Amount requested:", amount, "| Reason:", reason);
 
-    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
     if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
         amount = 1; 
     }
 
     try {
         const account = await findAccount(mobile);
-        
-        if (!account || !account.data || !account.data._id) {
+        console.log("👉 3. Account found in DB?:", account ? `YES (Role: ${account.type})` : "NO");
+
+        if (!account || !account.data) {
+            console.log("❌ ERROR: Account is completely missing in DB.");
             return res.status(404).json({ success: false, message: "Account not found" });
         }
 
         const parsedAmount = parseInt(amount) || 0;
-
         const historyEntry = {
             action: reason || "Watched Ad Video",
             amount: `+${parsedAmount} Coin`,
@@ -2125,29 +2129,36 @@ app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
             type: "credit"
         };
 
-        // 🔥 THE MAGIC: $inc will ADD to existing coins securely
         const updateQuery = {
             $inc: { "wallet.coins": parsedAmount },
             $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
         };
 
+        console.log("👉 4. Running findOneAndUpdate for Role:", account.type);
         let updatedDoc;
-        const targetId = account.data._id; // 👈 BULLETPROOF FIX: Exact Database ID ka istemaal
 
         if (account.type === 'STUDIO') {
-            updatedDoc = await Studio.findByIdAndUpdate(targetId, updateQuery, { new: true, strict: false });
+            updatedDoc = await Studio.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
+        } else if (account.type === 'ADMIN') {
+            // 🔥 Yahan shayad pehle fas raha tha agar tum admin account se test kar rahe the!
+            updatedDoc = await Admin.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
         } else {
-            updatedDoc = await User.findByIdAndUpdate(targetId, updateQuery, { new: true, strict: false });
+            updatedDoc = await User.findOneAndUpdate({ mobile }, updateQuery, { new: true, strict: false });
         }
 
-        // Agar fir bhi update fail hua toh crash hone se bachao
+        console.log("👉 5. Result of updatedDoc:", updatedDoc ? "SUCCESS (Doc Found)" : "NULL (Update Failed)");
+
         if (!updatedDoc) {
-            return res.status(500).json({ success: false, message: "Failed to update database!" });
+            console.log("❌ CRITICAL ERROR: updatedDoc null hai! Matlab findOneAndUpdate fail ho gaya.");
+            return res.status(500).json({ success: false, message: "DB Update Failed (Doc Null)" });
         }
+
+        console.log("👉 6. Final Wallet State:", updatedDoc.wallet);
+        console.log("========== 🛠️ DEBUG: ADD COINS END ==========\n");
 
         res.json({ success: true, wallet: updatedDoc.wallet });
     } catch (e) {
-        console.error("Coin Addition Error:", e);
+        console.error("❌ CATCH BLOCK ERROR:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });
     }
 });
