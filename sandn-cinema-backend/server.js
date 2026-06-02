@@ -2099,50 +2099,37 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
     }
 });
 
-// 🔒 GOD-LEVEL SECURE: Add Coins (Atomic Update + Multi-Role Fix)
-app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
-    // 🔥 NAYI SECURITY: Sirf "USER" role ko hi Ad se coin milenge!
-    if (req.user.role !== 'USER') {
-        console.log(`🛡️ Blocked ${req.user.role} from watching Ads.`);
-        return res.status(403).json({ success: false, message: "Ads and Free Coins are only available for Normal Users." });
-    }
-
-    const mobile = getCleanMobile(req.user.mobile);
-    let { amount, reason } = req.body;
-
-    // 🔥 SECURITY LEVEL 2: Server-Side Amount Lock 
-    if (reason === "Watched Direct Ad" || reason === "Watched Ad Video") {
-        amount = 1; // Strict 1 coin for ads
-    }
+// Add Coins when user watches an Ad
+app.post('/api/auth/add-coins', async (req, res) => {
+    const mobile = getCleanMobile(req.body.mobile);
+    const { amount, reason } = req.body;
 
     try {
         const account = await findAccount(mobile);
+        if(!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
         
-        if (!account || !account.data || !account.data._id) {
-            return res.status(404).json({ success: false, message: "Account not found" });
-        }
+        // Add Coins
+        wallet.coins += parseInt(amount);
 
-        const parsedAmount = parseInt(amount) || 0;
-
+        // Add to history
         const historyEntry = {
             action: reason || "Watched Ad Video",
-            amount: `+${parsedAmount} Coin`,
-            date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+            amount: `+${amount} Coin`,
+            date: new Date().toLocaleDateString(),
             type: "credit"
         };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
 
-        const updateQuery = {
-            $inc: { "wallet.coins": parsedAmount },
-            $push: { "wallet.history": { $each: [historyEntry], $position: 0 } }
-        };
-
-        let updatedDoc = await User.findByIdAndUpdate(account.data._id, updateQuery, { new: true, strict: false });
-
-        if (!updatedDoc) {
-            return res.status(500).json({ success: false, message: "Failed to update database!" });
+        // Safe DB Update
+        if (account.type === 'STUDIO') {
+            await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        } else {
+            await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
         }
 
-        res.json({ success: true, wallet: updatedDoc.wallet });
+        res.json({ success: true, wallet });
     } catch (e) {
         console.error("Coin Addition Error:", e);
         res.status(500).json({ success: false, message: "Server error adding coins" });

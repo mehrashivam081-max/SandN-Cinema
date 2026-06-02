@@ -27,22 +27,16 @@ const userSchema = new mongoose.Schema({
     city: String,
     location: { lat: Number, long: Number }, 
     
-    // 🪙 UPGRADED & SECURE: User Wallet
+    // 🪙 UPGRADED: Wallet & Coins (Structured for Monetization & Ads)
     wallet: {
         coins: { type: Number, default: 0 },
-        currentStreak: { type: Number, default: 0 }, // ✅ Missing: Daily login streak
-        lastRewardDate: { type: String, default: "" }, // ✅ Missing: Aaj ka reward liya ya nahi
-        unlockedFiles: [{ 
-            fileUrl: { type: mongoose.Schema.Types.Mixed }, // 👈 Ab ye String aur Object dono ko allow karega
-            unlockTime: Date,
-            expiry: String
-        }],
         history: [{ 
             action: String,       // e.g. "Watched Ad Video", "Unlocked File"
             amount: String,       // e.g. "+1 Coin", "-5 Coins"
             date: String,         // e.g. "21/03/2026"
             type: { type: String } // e.g. 'credit', 'debit', 'neutral'
         }],
+        // ✅ NEW: To track which mini-events the user has already completed
         claimedEvents: [{ type: String }]
     },
     
@@ -91,33 +85,12 @@ const studioSchema = new mongoose.Schema({
     },
     
     // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
-    storagePlan: { type: String, default: 'FREE' },
-    allocatedStorageGB: { type: Number, default: 5 },
-    usedStorageGB: { type: Number, default: 0 },
-    planExpiryDate: { type: Date, default: null },
-    autoDowngradeToFree: { type: Boolean, default: true },
+    storagePlan: { type: String, default: 'FREE' },
+    allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
+    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
+    planExpiryDate: { type: Date, default: null },    // When the current plan expires
+    autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
 
-    // 🪙 UPGRADED & SECURE: Studio Wallet (With Revenue)
-    wallet: {
-        coins: { type: Number, default: 0 },
-        revenue: { type: Number, default: 0 }, // 👈 Missing: Studio ke asli paise (₹)
-        currentStreak: { type: Number, default: 0 },
-        lastRewardDate: { type: String, default: "" },
-        unlockedFiles: [{
-            fileUrl: String,
-            unlockTime: Date,
-            expiry: String
-        }],
-        history: [{ 
-            action: String,
-            amount: String,
-            date: String,
-            type: { type: String }
-        }],
-        claimedEvents: [{ type: String }]
-    },
-
-    // Security
     otp: String,
     otpExpires: Date,
     joinedDate: { type: Date, default: Date.now }
