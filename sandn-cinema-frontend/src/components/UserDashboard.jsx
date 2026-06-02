@@ -121,9 +121,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ MONETIZATION STATES (Pay per View/Download)
     const [purchaseModal, setPurchaseModal] = useState({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
     const [adLoading, setAdLoading] = useState(false);
-    const [isAdRunning, setIsAdRunning] = useState(false); // 🔥 NAYA: Tracking Ad Status
-    const [adTimer, setAdTimer] = useState(0); // 🔥 NAYA: 15s Ad Timer
-    const [adCooldown, setAdCooldown] = useState(0); // 🔥 NAYA: 5s Spam Cooldown Tracker
 
     // ✅ NEW: SMART ALBUM SELECTION STATES
     const [mySelections, setMySelections] = useState([]);
@@ -221,14 +218,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     useEffect(() => {
         localStorage.setItem('userCart', JSON.stringify(cart));
     }, [cart]);
-
-    // 🔥 NAYA: Anti-Spam Button Cooldown Logic
-    useEffect(() => {
-        if (adCooldown > 0) {
-            const timer = setTimeout(() => setAdCooldown(adCooldown - 1), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [adCooldown]);
 
     // ✅ SMART BACK BUTTON FOR USER DASHBOARD
     useBackButton(() => {
@@ -348,9 +337,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         : DEFAULT_FOLDER;
                     
                     setFolders([finalDefaultFolder, ...customFolders]);
-                    // 🔥 THE FIX: Pura naya Database Data (with latest coins) memory me dalo
-                    sessionStorage.setItem('user', JSON.stringify(dbData)); 
-                    localStorage.setItem('user', JSON.stringify(dbData)); 
+                    sessionStorage.setItem('user', JSON.stringify({ ...activeUser, name: dbData.name })); 
                 } else if(isInitialLoad) {
                     setFolders([DEFAULT_FOLDER]); 
                 }
@@ -705,82 +692,29 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } catch (err) { console.log('Share dismissed or failed', err); }
     };
 
-    // ✅ PRO-LEVEL: Anti-Cheat "Watch Ad to earn coins" Logic
+    // ✅ Watch Ad to earn coins
     const startWatchAdFlow = () => {
-        if (isAdRunning || adCooldown > 0 || adLoading) return;
+        setAdLoading(true);
+        alert("Starting Ad Video... (Please watch completely to earn 1 Coin)");
+        
+        setTimeout(async () => {
+            try {
+                const res = await axios.post(`${API_BASE}/add-coins`, {
+                    mobile: syncUser.mobile,
+                    amount: 1,
+                    reason: "Watched Ad Video"
+                });
 
-        // 1. Open Monetag Ad in a New Tab
-        const adWindow = window.open('https://omg10.com/4/11083152', '_blank');
-        if (!adWindow) return alert("⚠️ Please allow Popups in your browser to watch the Ad!");
-
-        // 2. Lock Button & Start Security Trackers
-        setIsAdRunning(true);
-        setAdTimer(15);
-        const startTime = Date.now();
-
-        // Visual Countdown Timer
-        const uiTimer = setInterval(() => {
-            const passed = Math.floor((Date.now() - startTime) / 1000);
-            const remaining = 15 - passed;
-            if (remaining <= 0) {
-                setAdTimer(0);
-                clearInterval(uiTimer);
-            } else {
-                setAdTimer(remaining);
-            }
-        }, 1000);
-
-        // 3. Security Check: Did they actually stay on the Ad tab?
-        const handleVisibilityChange = async () => {
-            // This triggers when user comes back to our App's tab
-            if (!document.hidden) {
-                document.removeEventListener("visibilitychange", handleVisibilityChange);
-                clearInterval(uiTimer);
-                setAdTimer(0);
-                setIsAdRunning(false);
-
-                const timeSpent = (Date.now() - startTime) / 1000;
-
-                // If they came back before 15 seconds (0.5s grace period)
-                if (timeSpent < 14.5) { 
-                    alert(`❌ Ad Interrupted!\nYou only stayed for ${Math.floor(timeSpent)} seconds.\nYou must watch the Ad for at least 15 seconds to earn coins.`);
-                    setAdCooldown(5); // Penalty
-                } else {
-                    // Success! Give Reward
-                    setAdLoading(true);
-                    try {
-                        const token = getValidToken(); // 🔥 1. Token nikalo
-                        const res = await axios.post(`${API_BASE}/add-coins`, {
-                            mobile: syncUser.mobile,
-                            amount: 1, 
-                            reason: "Watched Direct Ad"
-                        }, {
-                            headers: { 'Authorization': `Bearer ${token}` } // 🔥 2. Token API me bhejo
-                        });
-
-                        if (res.data.success) {
-                            setWallet(res.data.wallet); 
-                            
-                            // 🔥 THE FIX: Browser ki memory me bhi naye coins turant save karo!
-                            const updatedUser = { ...syncUser, wallet: res.data.wallet };
-                            setSyncUser(updatedUser);
-                            sessionStorage.setItem('user', JSON.stringify(updatedUser));
-                            localStorage.setItem('user', JSON.stringify(updatedUser));
-                            
-                            alert("🎉 Success! You earned 1 Free Coins.");
-                        }
-                    } catch (e) {
-                        console.error("Ad reward error", e);
-                        alert("Server error. Failed to add coins.");
-                    } finally {
-                        setAdLoading(false);
-                        setAdCooldown(5); // Rest period before next ad
-                    }
+                if (res.data.success) {
+                    setWallet(res.data.wallet); 
+                    alert("Reward Received! +1 Coin added to your wallet. 🪙");
                 }
+            } catch (e) {
+                console.error("Ad reward error", e);
+            } finally {
+                setAdLoading(false);
             }
-        };
-
-        document.addEventListener("visibilitychange", handleVisibilityChange);
+        }, 5000); 
     };
 
     // ✅ REAL MONEY PACKAGE PURCHASE (VIA INSTAMOJO)
@@ -3317,41 +3251,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         </button>
                                     </div>
                                     
-                                    {/* 🔥 PRO: Anti-Cheat AD Watch Card (ONLY FOR USERS) */}
-                                    {syncUser?.role === 'USER' && (
-                                        <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>
-                                                    <div style={{ color: '#2ecc71', fontSize: '12px', fontWeight: 'bold' }}>Reward: +1 Coin</div>
-                                                </div>
-                                                <button 
-                                                    onClick={startWatchAdFlow} 
-                                                    disabled={isAdRunning || adCooldown > 0 || adLoading || loading} 
-                                                    style={{ 
-                                                        background: (isAdRunning || adCooldown > 0) ? '#333' : 'transparent', 
-                                                        border: `2px solid ${(isAdRunning || adCooldown > 0) ? '#555' : '#2ecc71'}`, 
-                                                        color: (isAdRunning || adCooldown > 0) ? '#888' : '#2ecc71', 
-                                                        padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', 
-                                                        cursor: (isAdRunning || adCooldown > 0 || adLoading || loading) ? 'not-allowed' : 'pointer',
-                                                        transition: '0.3s',
-                                                        minWidth: '100px'
-                                                    }}
-                                                >
-                                                    {adLoading ? '🍿 Claiming...' : 
-                                                     isAdRunning ? `⏳ Watch (${adTimer}s)` : 
-                                                     adCooldown > 0 ? `Wait ${adCooldown}s` : 
-                                                     'Watch Now'}
-                                                </button>
-                                            </div>
-                                            
-                                            {/* 💡 THE PRO HINT TEXT */}
-                                            <div style={{ fontSize: '11px', color: '#aaa', background: 'rgba(255,255,255,0.05)', padding: '8px 10px', borderRadius: '8px', textAlign: 'center', fontStyle: 'italic', border: '1px dashed #333' }}>
-                                                💡 <strong>Hint:</strong> Click Watch Now, wait <strong>15s</strong> on the Ad page, then <strong>Close the Tab (X)</strong> to get your reward!
-                                            </div>
+                                    {/* Default AD Watch Card */}
+                                    <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>
+                                            <div style={{ color: '#2ecc71', fontSize: '12px', fontWeight: 'bold' }}>Reward: +1 Coin</div>
                                         </div>
-                                    )}
-                                    
+                                        <button onClick={startWatchAdFlow} disabled={adLoading || loading} style={{ background: 'transparent', border: '2px solid #2ecc71', color: '#2ecc71', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            {adLoading ? '🍿 Loading...' : 'Watch Now'}
+                                        </button>
+                                    </div>
+
                                     {/* Admin Mini Events */}
                                     {miniEvents.map((ev, idx) => {
                                         const isClaimed = wallet.claimedEvents?.includes(ev.id || ev.title);
