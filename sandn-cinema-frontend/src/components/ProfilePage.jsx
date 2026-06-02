@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'; // ✅ ADDED NAVIGATE
 import './ProfilePage.css';
 import profileImg from '../assets/snevio-logo.png'; 
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecovery }) => {
     const navigate = useNavigate(); // ✅ ADDED NAVIGATION SUPPORT

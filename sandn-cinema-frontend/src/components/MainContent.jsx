@@ -12,7 +12,7 @@ import arrow from '../assets/arrow.svg';
 import magnet from '../assets/magnet.svg';
 
 // ✅ FIXED: Added '/api/auth' to match Backend & Login Page
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 const MainContent = ({ user, onLoginSuccess, onSignupClick, onLogout }) => {
     const [activeTab, setActiveTab] = useState('home'); 

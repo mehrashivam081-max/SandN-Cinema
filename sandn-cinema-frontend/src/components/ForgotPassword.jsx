@@ -3,7 +3,7 @@ import axios from 'axios';
 import './ForgotPassword.css'; // ✅ Apni nayi CSS file import ki
 
 // ✅ Live Backend URL
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 const ForgotPassword = ({ onLoginClick }) => {
     const [step, setStep] = useState(1); // 1: Mobile, 2: OTP, 3: New Password

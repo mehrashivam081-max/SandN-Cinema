@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios'; // API call ke liye
 import './ServicesPage.css';
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 const ServicesPage = ({ onBack }) => {
     // State to track which section is open

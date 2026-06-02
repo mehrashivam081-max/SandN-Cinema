@@ -9,7 +9,7 @@ const Refund = () => {
 
     useEffect(() => {
         window.scrollTo(0, 0);
-        axios.get('https://sandn-cinema.onrender.com/api/auth/get-platform-settings')
+        axios.get('https://sandn-cinema-backend-test.onrender.com/api/auth/get-platform-settings')
             .then(res => {
                 const fetchedPolicies = res.data.data?.policies;
                 if (fetchedPolicies) {
