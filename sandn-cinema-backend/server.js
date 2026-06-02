@@ -2233,20 +2233,12 @@ app.post('/api/auth/claim-event', async (req, res) => {
 // 💸 30.5 INSTAMOJO PAYMENT GATEWAY LOGIC
 // ==========================================
 
-// 🔗 1. Generate Payment Link (Smart Router & X-Ray Debugger)
+// 🔗 1. Generate Payment Link (Smart Router)
 app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
-    console.log("\n💳 === INSTAMOJO PAYMENT INITIATED ===");
-    
-    // 🛑 PRE-CHECK: Kya Render par API Keys daali hain?
-    if (!process.env.INSTAMOJO_API_KEY || !process.env.INSTAMOJO_AUTH_TOKEN) {
-        console.log("❌ CRITICAL ERROR: Instamojo Keys are MISSING in Render .env!");
-        return res.json({ success: false, message: "Developer Error: Instamojo API Keys are missing on the Render server!" });
-    }
-
     try {
         const { amount, purpose, buyer_name, email, phone, itemType, itemValue } = req.body;
-        console.log(`👉 Request: ₹${amount} for ${purpose} by ${phone}`);
 
+        // Webhook URL में हम खुफिया तरीके से itemType और itemValue भेजेंगे
         let webhookUrl = 'https://sandn-cinema.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
@@ -2272,16 +2264,14 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
         });
 
         if (response.data.success) {
-            console.log(`✅ Payment Link Created:`, response.data.payment_request.longurl);
+            console.log(`💰 Payment Link Created for ${itemType || 'COINS'}:`, response.data.payment_request.longurl);
             res.json({ success: true, paymentUrl: response.data.payment_request.longurl });
         } else {
-            console.log("❌ Instamojo Rejected the request:", response.data);
-            res.json({ success: false, message: "Instamojo Rejected: Check account limits or KYC status." });
+            res.json({ success: false, message: "Instamojo Error: Link not generated" });
         }
     } catch (error) {
-        console.error("❌ Instamojo API Error:", error.response ? error.response.data : error.message);
-        // Note: Returning 200 with false success so frontend can show the exact message!
-        res.json({ success: false, message: "Payment Gateway Error. Are you using Test Keys on a Live URL?" });
+        console.error("Payment Creation Error:", error.response ? error.response.data : error.message);
+        res.status(500).json({ success: false, message: "Payment Gateway Error. Check API Keys." });
     }
 });
 
