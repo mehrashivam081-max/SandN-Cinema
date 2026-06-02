@@ -32,8 +32,8 @@ const userSchema = new mongoose.Schema({
         coins: { type: Number, default: 0 },
         currentStreak: { type: Number, default: 0 }, // ✅ Missing: Daily login streak
         lastRewardDate: { type: String, default: "" }, // ✅ Missing: Aaj ka reward liya ya nahi
-        unlockedFiles: [{ // ✅ Missing: Premium file jo 24 ghante ke liye khuli hai
-            fileUrl: String,
+        unlockedFiles: [{ 
+            fileUrl: { type: mongoose.Schema.Types.Mixed }, // 👈 Ab ye String aur Object dono ko allow karega
             unlockTime: Date,
             expiry: String
         }],
