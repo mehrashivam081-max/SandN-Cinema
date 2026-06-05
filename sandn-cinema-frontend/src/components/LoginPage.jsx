@@ -252,7 +252,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
             <div className="login-container">
                 <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem' }}>
-                    {activeTab === 'code' ? 'Security Access' : 'SandN Cinema'}
+                    {activeTab === 'code' ? 'Security Access' : 'SneVio'}
                 </h2>
 
                 <div className="auth-tabs">
