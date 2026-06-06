@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios'; 
 import PaymentSuccess from './components/PaymentSuccess'; // पाथ अपने फोल्डर के हिसाब से सेट कर लेना
@@ -92,6 +92,43 @@ function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
+
+// अपनी App component के अंदर ये डालो:
+const [isCheckingSession, setIsCheckingSession] = useState(true);
+const [currentUser, setCurrentUser] = useState(null);
+
+useEffect(() => {
+    const checkSavedSession = async () => {
+        // 1. Storage में टोकन ढूंढो (पहले localStorage, फिर sessionStorage)
+        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        
+        if (!token) {
+            setIsCheckingSession(false);
+            return; // कोई टोकन नहीं है, सीधे Login पेज दिखाओ
+        }
+
+        try {
+            // 2. बैकएंड से पूछो कि क्या ये टोकन असली है और एक्सपायर तो नहीं हुआ?
+            const res = await axios.post('https://sandn-cinema.onrender.com/api/auth/verify-session', { token });
+            
+            if (res.data.success && res.data.valid) {
+                // 3. टोकन असली है! यूज़र को बिना पासवर्ड के डायरेक्ट अंदर भेजो
+                const savedUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+                setCurrentUser(savedUser);
+            } else {
+                // टोकन एक्सपायर हो गया (या हैक हुआ है) -> कचरा साफ करो
+                localStorage.clear();
+                sessionStorage.clear();
+            }
+        } catch (error) {
+            console.error("Session verification failed");
+        } finally {
+            setIsCheckingSession(false);
+        }
+    };
+
+    checkSavedSession();
+}, []);
 
   return (
     <Router>
