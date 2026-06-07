@@ -2251,7 +2251,9 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
     try {
         const { amount, purpose, buyer_name, email, phone, itemType, itemValue } = req.body;
 
-        // Webhook URL में हम खुफिया तरीके से itemType और itemValue भेजेंगे
+        // 🔥 DEBUG: Payload check karein
+        console.log("PAYMENT PAYLOAD:", { amount, purpose, email, phone });
+
         let webhookUrl = 'https://sandn-cinema-backend-test.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
@@ -2276,15 +2278,18 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
             }
         });
 
-        if (response.data.success) {
-            console.log(`💰 Payment Link Created for ${itemType || 'COINS'}:`, response.data.payment_request.longurl);
-            res.json({ success: true, paymentUrl: response.data.payment_request.longurl });
-        } else {
-            res.json({ success: false, message: "Instamojo Error: Link not generated" });
-        }
+        console.log("INSTAMOJO SUCCESS RESPONSE:", response.data); // 🔥 SUCCESS RESPONSE DEKHEIN
+        res.json({ success: true, paymentUrl: response.data.payment_request.longurl });
+
     } catch (error) {
-        console.error("Payment Creation Error:", error.response ? error.response.data : error.message);
-        res.status(500).json({ success: false, message: "Payment Gateway Error. Check API Keys." });
+        // 🔥 DEBUG: Yahan asli error pakda jayega
+        if (error.response) {
+            console.error("INSTAMOJO ERROR RESPONSE DATA:", error.response.data);
+            console.error("STATUS CODE:", error.response.status);
+        } else {
+            console.error("AXIOS ERROR:", error.message);
+        }
+        res.status(500).json({ success: false, message: "Payment Gateway Error." });
     }
 });
 
@@ -4396,6 +4401,28 @@ cron.schedule('0 * * * *', async () => {
             proj.status = 'Confirmed';
             await proj.save();
             console.log(`✅ Project ${proj.folderName} auto-confirmed after 72h window.`);
+        }
+    } catch (err) { console.error('Cron Error:', err.message); }
+});
+
+// ✅ REVISED CRON JOB (Auto-Delete from Cloud & DB)
+cron.schedule('0 0 * * *', async () => { // यह हर रात 12 बजे चलेगा
+    console.log('🤖 Running Daily Expiry Cleanup...');
+    try {
+        const now = new Date();
+        // 1. वो सारे प्रोजेक्ट्स निकालो जो एक्सपायर हो गए हैं
+        const expiredProjects = await AlbumSelection.find({ 
+            'images.expiryDate': { $lt: now } 
+        });
+
+        for (let proj of expiredProjects) {
+            // 2. Cloudinary/S3 से डिलीट करने का कोड (ऊपर दी गई 'wipe-cloud' वाली logic जैसा)
+            // यहाँ आप अपनी delete-specific-data वाली logic का इस्तेमाल करेंगे
+            
+            // 3. डेटाबेस से इमेजेस हटा दें
+            proj.images = proj.images.filter(img => new Date(img.expiryDate) > now);
+            await proj.save();
+            console.log(`✅ Cleaned expired media for project: ${proj.folderName}`);
         }
     } catch (err) { console.error('Cron Error:', err.message); }
 });
