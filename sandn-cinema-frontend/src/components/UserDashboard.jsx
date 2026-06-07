@@ -2470,44 +2470,37 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     );
 
     const renderHomeTab = () => {
-        // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
-        if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
-            
-            let rawFiles = [];
-let currentFolderName = '';
+    // ✅ 1. वेरिएबल को फंक्शन के शुरुआत में ही define करें
+    let filesToDisplay = [];
+    let currentFolderName = '';
+    let rawFiles = [];
 
-if (activeSubFolder) {
-    rawFiles = activeSubFolder.files || [];
-    currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
-} else {
-    rawFiles = activeFolder.files || [];
-    currentFolderName = activeFolder.folderName;
-}
+    // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
+    if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
+        
+        if (activeSubFolder) {
+            rawFiles = activeSubFolder.files || [];
+            currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
+        } else {
+            rawFiles = activeFolder.files || [];
+            currentFolderName = activeFolder.folderName;
+        }
 
-// 🔥 NAYA: Expired Files को UI से हटाना
-filesToDisplay = rawFiles.filter(item => {
-    // अगर फाइल ऑब्जेक्ट है और उसमें expiryDate है
-    if (typeof item === 'object' && item !== null && (item.expiryDate || item.fileExpiryDate)) {
-        const expiry = item.expiryDate || item.fileExpiryDate;
-        return new Date(expiry) > new Date(); // सिर्फ वही फाइल दिखेगी जो एक्सपायर नहीं हुई है
-    }
-    return true; // अगर एक्सपायरी सेट नहीं है, तो फाइल हमेशा दिखेगी
-});
+        // ✅ 2. एक्सपायर्ड फाइल्स को फिल्टर करें
+        filesToDisplay = rawFiles.filter(item => {
+            // Check करें कि item एक object है या नहीं
+            if (item && typeof item === 'object' && (item.expiryDate || item.fileExpiryDate)) {
+                const expiry = item.expiryDate || item.fileExpiryDate;
+                return new Date(expiry) > new Date(); 
+            }
+            return true; // अगर एक्सपायरी नहीं है, तो फाइल दिखाएं
+        });
 
-            // 🔥 NAYA: UI SE EXPIRED FILES KO HATA DO
-            filesToDisplay = rawFiles.filter(item => {
-                if (typeof item === 'object' && (item.expiryDate || item.fileExpiryDate)) {
-                    const expiry = item.expiryDate || item.fileExpiryDate;
-                    return new Date(expiry) > new Date(); // Jo expire nahi hui, sirf wahi dikhegi
-                }
-                return true;
-            });
-
-            const displayedMedia = filesToDisplay.filter(item => {
-                if (mediaFilter === 'PHOTOS') return !isVideo(item);
-                if (mediaFilter === 'VIDEOS') return isVideo(item);
-                return true;
-            });
+        const displayedMedia = filesToDisplay.filter(item => {
+            if (mediaFilter === 'PHOTOS') return !isVideo(item);
+            if (mediaFilter === 'VIDEOS') return isVideo(item);
+            return true;
+        });
 
             const hasExpiry = activeFolder.expiryDate;
             const isExpired = hasExpiry && new Date(activeFolder.expiryDate) < new Date();
