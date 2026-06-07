@@ -109,7 +109,7 @@ useEffect(() => {
 
         try {
             // 2. बैकएंड से पूछो कि क्या ये टोकन असली है और एक्सपायर तो नहीं हुआ?
-            const res = await axios.post('https://sandn-cinema.onrender.com/api/auth/verify-session', { token });
+            const res = await axios.post(`${API_BASE}/verify-session`, { token });
             
             if (res.data.success && res.data.valid) {
                 // 3. टोकन असली है! यूज़र को बिना पासवर्ड के डायरेक्ट अंदर भेजो
@@ -136,7 +136,7 @@ useEffect(() => {
         <Routes>
           {/* Main Pages */}
           <Route path="/" element={<MainLanding />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/studio/:studioName" element={<StudioPage />} /> {/* 👈 NAYA: Studio Trap Route */}
 
