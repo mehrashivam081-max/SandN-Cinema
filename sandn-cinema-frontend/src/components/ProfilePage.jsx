@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom'; // ✅ ADDED NAVIGATE
+import { useNavigate, Link } from 'react-router-dom'; // ✅ ADDED NAVIGATE
 import './ProfilePage.css';
 import profileImg from '../assets/snevio-logo.png'; 
 
@@ -35,10 +35,10 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
     };
 
     const contactInfo = {
-        phone: "+91 98765 43210", // Asli number daal dena
-        email: "support@snevio.com",
-        hours: "Support: 10 AM - 8 PM",
-        address: "Shankar Bag Silari, Pipariya, MP - 461775" 
+        phone: "+91 78280-11282", // Asli number daal dena
+        email: "hello.snevio@gmail.com",
+        hours: "Support: 24x7 live Hours",
+        address: "Pipariya India , MP" 
     };
 
     // ✅ DYNAMIC DATA STATES (Fetched from DB)
@@ -425,10 +425,10 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                     <div className="legal-links-sidebar" style={{marginTop: '30px', padding: '20px 10px', borderTop: '1px solid #eee', textAlign: 'center'}}>
                         <p style={{fontSize: '12px', color: '#888', marginBottom: '10px', fontWeight: 'bold', letterSpacing: '1px'}}>LEGAL & SUPPORT</p>
                         <div style={{display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'center', fontSize: '13px'}}>
-                            <a href="/terms" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Terms</a>
-                            <a href="/refund" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Refunds</a>
-                            <a href="/shipping" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Shipping</a>
-                            <a href="/contact" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Contact</a>
+                            <Link to="/terms" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Terms</Link>
+                            <Link to="/refund" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Refunds</Link>
+                            <Link to="/shipping" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Shipping</Link>
+                            <Link to="/contact" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Contact</Link>
                         </div>
                     </div>
                 </div>
