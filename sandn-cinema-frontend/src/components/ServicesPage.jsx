@@ -176,7 +176,7 @@ const ServicesPage = ({ onBack }) => {
 
                 {/* Contact Info Footer */}
                 <div className="contact-info-box" style={{ marginTop: '20px' }}>
-                    <h3>Contact Us</h3>
+                    <h3>To Official Services</h3>
                     <p><strong>Instagram:</strong> ms_studio</p>
                     <p><strong>Contact:</strong> 7828011282</p>
                     <p><strong>Email:</strong> msstudioindore7@gmail.com</p>

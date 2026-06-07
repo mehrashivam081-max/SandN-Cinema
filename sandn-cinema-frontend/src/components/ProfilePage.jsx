@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom'; // ✅ ADDED NAVIGATE
 import './ProfilePage.css';
 import profileImg from '../assets/snevio-logo.png'; 
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
@@ -19,6 +20,7 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
     const [adInterest, setAdInterest] = useState(false);
     const [careerInterest, setCareerInterest] = useState(false);
     const [userRating, setUserRating] = useState(0); 
+    const [isCareerPage, setIsCareerPage] = useState(false); // ✅ नया स्टेट
 
     // ✅ State for Accounts Dropdown
     const [isAccountsOpen, setIsAccountsOpen] = useState(false);
@@ -157,6 +159,8 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
         } else if (itemId === "Recovery") {
             onClose();
             onOpenRecovery();
+        } else if (itemId === "Career & Vacancy") {
+            setIsCareerPage(true); // ✅ अब पेज मोड में खुल जाएगा
         } else {
             setActivePopup(itemId); 
             setPopupTab('tab1'); 
@@ -275,10 +279,65 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                 );
 
 
-            case "Career & Vacancy":
+            
+
+            case "Traffic":
+                const currentStats = trafficStats[popupTab]; 
+                const graphData = [
+                    { name: '10 AM', visitors: 200 },
+                    { name: '12 PM', visitors: 600 },
+                    { name: '2 PM', visitors: 400 },
+                    { name: '4 PM', visitors: 900 },
+                    { name: '6 PM', visitors: 1200 },
+                ];
                 return (
-                    <div className="popup-inner-box career-box">
-                        <div className="career-header"><span className="career-icon">🚀</span><h3>Snevio Careers</h3></div>
+                    <div className="popup-inner-box traffic-professional-box">
+                        <h3 style={{marginBottom: '15px', color: '#1a1a1a'}}>Snevio Traffic Live</h3>
+                        
+                        <div style={{ width: '100%', height: 200 }}>
+                            <ResponsiveContainer>
+                                <LineChart data={graphData}>
+                                    <XAxis dataKey="name" fontSize={10} />
+                                    <YAxis fontSize={10} />
+                                    <Tooltip />
+                                    <Line type="monotone" dataKey="visitors" stroke="#e50914" strokeWidth={3} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="traffic-stats-grid" style={{marginTop: '20px'}}>
+                            <div className="stat-card">
+                                <div className="stat-info">
+                                    <span className="stat-label">Total Visitors</span>
+                                    <span className="stat-value">{formatNum(currentStats.visitors)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case "Advertisement":
+                return (
+                    <div className="popup-inner-box ad-professional-box">
+                        <div className="ad-header-icon">🚀</div><h2 className="ad-pro-title">Grow Your Brand</h2><p className="ad-pro-subtitle">Promote your production house or equipment here.</p><div className="ad-status-badge">Launching Soon</div><div className="ad-divider"></div>
+                        <div className="ad-action-wrapper">{!adInterest ? <><p className="ad-question">Want to advertise?</p><button className="green-btn ad-notify-btn" onClick={() => setAdInterest(true)}>Notify Me</button></> : <div className="ad-success-msg"><span className="check-icon">✓</span><div><strong>Received!</strong><p>We'll contact you soon.</p></div></div>}</div>
+                    </div>
+                );
+
+            default: return null;
+        }
+    };
+
+    return (
+        <>
+            {/* ✅ नया फुल पेज करियर सेक्शन */}
+            {isCareerPage && (
+                <div className="full-career-page-overlay">
+                    <button className="back-btn" onClick={() => setIsCareerPage(false)}>← Back</button>
+                    <div className="career-box">
+            <div className="career-header" style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                <span className="career-icon">🚀</span><h3>Snevio Careers</h3>
+            </div>
                         <div className="popup-tabs career-tabs">
                             <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Career Path</button>
                             <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Open Vacancy</button>
@@ -300,48 +359,25 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
                             </>
                         )}
                         {popupTab === 'tab2' && (
-                            <div className="vacancy-list-container">
-                                {activeVacancies.map((job) => (
-                                    <div key={job.id} className="vacancy-card">
-                                        {job.urgent && <div className="urgent-badge">Urgent</div>}
-                                        <div className="vacancy-role-header"><h4 className="v-role">{job.role}</h4><span className={`v-type ${job.type === 'Long Term' ? 'v-long' : 'v-short'}`}>{job.type}</span></div>
-                                        <div className="vacancy-details"><div className="v-detail-row"><span>🕒 {job.time}</span></div><div className="v-detail-row"><span className="v-salary">💰 {job.salary}</span></div></div>
-                                        <button className="vacancy-apply-btn">Apply Now</button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+    <div className="vacancy-list-container">
+        {activeVacancies.map((job) => (
+            <div key={job.id} className="vacancy-card">
+                
+                {job.urgent && <div className="urgent-badge">Urgent</div>}
+                <h4 className="v-role">{job.role}</h4>
+                <div className="vacancy-details">
+                    <div>{job.type} • {job.time}</div>
+                    <div style={{color: '#2ecc71', fontWeight: 'bold'}}>💰 {job.salary}</div>
+                </div>
+                <button className="vacancy-apply-btn">Apply Now</button>
+            </div>
+        ))}
+    </div>
+)}
                     </div>
-                );
+                </div>
+            )}
 
-            case "Traffic":
-                const currentStats = trafficStats[popupTab]; 
-                return (
-                    <div className="popup-inner-box traffic-professional-box">
-                        <div className="traffic-header-row"><span className="traffic-icon-main">📊</span><span className="traffic-title-main">Analytics</span></div>
-                        <div className="traffic-filter-container"><select className="traffic-dropdown-pro" value={popupTab} onChange={(e) => setPopupTab(e.target.value)}><option value="tab1">Today's Data</option><option value="tab2">This Month</option><option value="tab3">All Time</option></select></div>
-                        <div className="traffic-stats-grid">
-                            <div className="stat-card"><div className="stat-icon-bg">👁️</div><div className="stat-info"><span className="stat-value">{formatNum(currentStats.visitors)}</span><span className="stat-label">Visitors</span></div></div>
-                            <div className="stat-card"><div className="stat-icon-bg">👤</div><div className="stat-info"><span className="stat-value highlight">{formatNum(currentStats.registered)}</span><span className="stat-label">Registered</span></div></div>
-                        </div>
-                        <div className="live-indicator"><span className="dot-blink"></span> Live Updates</div>
-                    </div>
-                );
-
-            case "Advertisement":
-                return (
-                    <div className="popup-inner-box ad-professional-box">
-                        <div className="ad-header-icon">🚀</div><h2 className="ad-pro-title">Grow Your Brand</h2><p className="ad-pro-subtitle">Promote your production house or equipment here.</p><div className="ad-status-badge">Launching Soon</div><div className="ad-divider"></div>
-                        <div className="ad-action-wrapper">{!adInterest ? <><p className="ad-question">Want to advertise?</p><button className="green-btn ad-notify-btn" onClick={() => setAdInterest(true)}>Notify Me</button></> : <div className="ad-success-msg"><span className="check-icon">✓</span><div><strong>Received!</strong><p>We'll contact you soon.</p></div></div>}</div>
-                    </div>
-                );
-
-            default: return null;
-        }
-    };
-
-    return (
-        <>
             <div className={`sidebar-backdrop ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
             <div className={`profile-sidebar-container ${isOpen ? 'slide-in' : ''}`}>
                 

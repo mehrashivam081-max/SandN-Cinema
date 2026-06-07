@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './ForgotPassword.css'; // ✅ Apni nayi CSS file import ki
 
+
 // ✅ Live Backend URL
 const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
@@ -10,6 +11,7 @@ const ForgotPassword = ({ onLoginClick }) => {
     const [mobile, setMobile] = useState('');
     const [otp, setOtp] = useState('');
     const [newPassword, setNewPassword] = useState('');
+    const [otpMethod, setOtpMethod] = useState('mobile'); // 👈 नया स्टेट
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
@@ -17,21 +19,20 @@ const ForgotPassword = ({ onLoginClick }) => {
     // --- STEP 1: SEND OTP ---
     const handleSendOTP = async () => {
         if (!mobile || mobile.length < 10) return setError("Valid Mobile Number Required");
-        
         setLoading(true); setError(''); setMessage('');
         try {
-            // Backend se OTP bheja
-            const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile });
+            const res = await axios.post(`${API_BASE}/check-send-otp`, { 
+                mobile, 
+                sendVia: otpMethod // 👈 मेथड भेजा
+            });
             if (res.data.success) {
-                setMessage("OTP Sent to your mobile!");
-                setStep(2); // Next Step
+                setMessage(`OTP Sent successfully via ${otpMethod.toUpperCase()}!`);
+                setStep(2);
             } else {
                 setError(res.data.message || "User not found");
             }
         } catch (e) {
-            // Simulation (Agar server down ho to test karne ke liye)
-            if(mobile === '1234567890') { setStep(2); alert("Simulation: OTP Sent"); }
-            else setError("Server Error. Try again.");
+            setError("Server Error. Try again.");
         } finally { setLoading(false); }
     };
 
@@ -73,21 +74,18 @@ const ForgotPassword = ({ onLoginClick }) => {
         <div className="auth-container">
             <div className="auth-card">
                 <h2>Recovery</h2>
-                
-                {/* Step 1: Mobile Input */}
                 {step === 1 && (
                     <>
-                        <p className="sub-text">Enter your registered mobile to receive OTP.</p>
-                        <input 
-                            className="auth-input" 
-                            placeholder="Mobile Number" 
-                            type="number"
-                            value={mobile}
-                            onChange={(e) => setMobile(e.target.value)}
-                        />
-                        <button className="btn-primary" onClick={handleSendOTP} disabled={loading}>
-                            {loading ? "SENDING..." : "SEND OTP"}
-                        </button>
+                        <input className="auth-input" placeholder="Mobile Number" type="number" value={mobile} onChange={(e) => setMobile(e.target.value)} />
+                        
+                        <label style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '10px', display: 'block' }}>Receive OTP via:</label>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                            <button type="button" onClick={() => setOtpMethod('mobile')} style={{ flex: 1, padding: '8px', background: otpMethod === 'mobile' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>SMS</button>
+                            <button type="button" onClick={() => setOtpMethod('whatsapp')} style={{ flex: 1, padding: '8px', background: otpMethod === 'whatsapp' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>WhatsApp</button>
+                            <button type="button" onClick={() => setOtpMethod('email')} style={{ flex: 1, padding: '8px', background: otpMethod === 'email' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>Email</button>
+                        </div>
+                        
+                        <button className="btn-primary" onClick={handleSendOTP} disabled={loading}>{loading ? "SENDING..." : "GET OTP"}</button>
                     </>
                 )}
 
