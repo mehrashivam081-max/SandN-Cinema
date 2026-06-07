@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema({
     
     // Security
     isVip: { type: Boolean, default: false },
+    isPremium: { type: Boolean, default: false }, // ✅ नया प्रीमियम फ्लैग
     vipExpiry: Date,
     otp: String,
     otpExpires: Date,
@@ -92,8 +93,9 @@ const studioSchema = new mongoose.Schema({
     autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
 
     otp: String,
-    otpExpires: Date,
-    joinedDate: { type: Date, default: Date.now }
+    otpExpires: Date,
+    isPremium: { type: Boolean, default: false }, // ✅ नया प्रीमियम फ्लैग
+    joinedDate: { type: Date, default: Date.now }
 });
 
 // --- 3. ADMIN SCHEMA ---
