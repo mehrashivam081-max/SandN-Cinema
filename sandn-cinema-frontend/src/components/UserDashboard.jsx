@@ -2473,16 +2473,35 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         // ✅ SCENARIO 1: Viewing Media inside a Folder (or Sub-folder)
         if (activeFolder && (!activeFolder.subFolders || activeFolder.subFolders.length === 0 || activeSubFolder)) {
             
-            let filesToDisplay = [];
-            let currentFolderName = '';
+            let rawFiles = [];
+let currentFolderName = '';
 
-            if (activeSubFolder) {
-                filesToDisplay = activeSubFolder.files || [];
-                currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
-            } else {
-                filesToDisplay = activeFolder.files || [];
-                currentFolderName = activeFolder.folderName;
-            }
+if (activeSubFolder) {
+    rawFiles = activeSubFolder.files || [];
+    currentFolderName = `${activeFolder.folderName} ➔ ${activeSubFolder.name}`;
+} else {
+    rawFiles = activeFolder.files || [];
+    currentFolderName = activeFolder.folderName;
+}
+
+// 🔥 NAYA: Expired Files को UI से हटाना
+filesToDisplay = rawFiles.filter(item => {
+    // अगर फाइल ऑब्जेक्ट है और उसमें expiryDate है
+    if (typeof item === 'object' && item !== null && (item.expiryDate || item.fileExpiryDate)) {
+        const expiry = item.expiryDate || item.fileExpiryDate;
+        return new Date(expiry) > new Date(); // सिर्फ वही फाइल दिखेगी जो एक्सपायर नहीं हुई है
+    }
+    return true; // अगर एक्सपायरी सेट नहीं है, तो फाइल हमेशा दिखेगी
+});
+
+            // 🔥 NAYA: UI SE EXPIRED FILES KO HATA DO
+            filesToDisplay = rawFiles.filter(item => {
+                if (typeof item === 'object' && (item.expiryDate || item.fileExpiryDate)) {
+                    const expiry = item.expiryDate || item.fileExpiryDate;
+                    return new Date(expiry) > new Date(); // Jo expire nahi hui, sirf wahi dikhegi
+                }
+                return true;
+            });
 
             const displayedMedia = filesToDisplay.filter(item => {
                 if (mediaFilter === 'PHOTOS') return !isVideo(item);
@@ -2714,9 +2733,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                             {/* 🥇 1st PRIORITY: SNEVIO & ADMIN FOLDERS (ALWAYS FIRST) */}
                             {folders.filter(f => f.isDefault || f.uploaderRole === 'Super Admin').map((folder, index) => {
-                                const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
+                                const isExpired = false; // 🔥 FOLDER EXPIRY HATA DI TAAKI LOCK NA HO
                                 const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
-                                const isLocked = isExpired || isLimitReached;
+                                const isLocked = false; // 🔥 AB FOLDER LOCK NAHI HOGA
 
                                 let totalFiles = folder.files ? folder.files.length : 0;
                                 if (folder.subFolders) {
@@ -2860,9 +2879,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                             {/* 🥉 3rd PRIORITY: NORMAL STUDIO FOLDERS */}
                             {folders.filter(f => !f.isDefault && f.uploaderRole !== 'Super Admin').map((folder, index) => {
-                                const isExpired = folder.expiryDate && new Date(folder.expiryDate) < new Date();
+                                const isExpired = false; // 🔥 FOLDER EXPIRY HATA DI TAAKI LOCK NA HO
                                 const isLimitReached = folder.downloadLimit > 0 && folder.downloadCount >= folder.downloadLimit;
-                                const isLocked = isExpired || isLimitReached;
+                                const isLocked = false; // 🔥 AB FOLDER LOCK NAHI HOGA
 
                                 let totalFiles = folder.files ? folder.files.length : 0;
                                 if (folder.subFolders) {
