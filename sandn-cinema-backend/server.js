@@ -359,6 +359,18 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
             targetEmail = account.data.email;
         }
 
+        // 🔥 NEW: VIP/Premium Gatekeeper Logic
+        const account = await findAccount(identifier, roleFilter);
+        const isPremium = account && account.data && account.data.isPremium === true; 
+
+        if ((sendVia === 'mobile' || sendVia === 'whatsapp') && !isPremium) {
+            return res.json({ 
+                success: false, 
+                message: "SMS/WhatsApp OTP is for Premium Members only. Please choose Email." 
+            });
+        }
+        // 🔥 Gatekeeper Ends
+
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore[identifier] = randomOTP; 
         console.log(`🔐 Generated OTP for ${identifier}: ${randomOTP}`);
