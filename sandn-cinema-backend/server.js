@@ -383,8 +383,9 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 );
                 return res.json({ success: true, message: "OTP Sent successfully via Email!" });
             } catch (emailErr) { 
-                return res.json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
-            }
+    console.error("Brevo Email Error:", emailErr.response ? emailErr.response.data : emailErr.message);
+    return res.json({ success: false, message: "Email Failed. Try SMS/WhatsApp." });
+}
         } 
         else if (sendVia === 'whatsapp') {
             try {
@@ -2239,7 +2240,7 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
         const { amount, purpose, buyer_name, email, phone, itemType, itemValue } = req.body;
 
         // Webhook URL में हम खुफिया तरीके से itemType और itemValue भेजेंगे
-        let webhookUrl = 'https://sandn-cinema.onrender.com/api/auth/payment-webhook';
+        let webhookUrl = 'https://sandn-cinema-backend-test.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
         }
@@ -2250,7 +2251,7 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
             buyer_name: buyer_name || req.user.name || 'Snevio User',
             email: email || 'dummy@snevio.com', 
             phone: phone || req.user.mobile,
-            redirect_url: 'https://sandn-cinema.onrender.com/payment-success', 
+            redirect_url: 'https://sandn-cinema-backend-test.onrender.com/payment-success', 
             webhook: webhookUrl, 
             allow_repeated_payments: false
         };
