@@ -879,17 +879,17 @@ app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req
 
             } else {
                 const newFolder = {
-                    folderName: finalFolderName,
-                    files: subFolderName ? [] : filePaths,
-                    subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-                    isDefault: finalFolderName === 'Snevio Photography',
-                    expiryDate: expiryDate,
-                    downloadLimit: dLimit,
-                    downloadCount: 0,
-                    imageCost: iCost,
-                    videoCost: vCost,
-                    unlockValidity: unlockValidity || '24 Hours'
-                };
+                folderName: finalFolderName,
+                files: subFolderName ? [] : filePaths,
+                subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
+                isDefault: finalFolderName === 'Snevio Photography',
+                expiryDate: expiryDate,
+                downloadLimit: dLimit,
+                downloadCount: 0,
+                imageCost: iCost,
+                videoCost: vCost,
+                unlockValidity: finalFolderName === 'Snevio Photography' ? '24 Hours' : (unlockValidity || '24 Hours')
+            };
                 currentData.push(newFolder);
             }
 
@@ -1400,19 +1400,19 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
 
             } else {
                 const newFolder = {
-                    folderName: finalFolderName,
-                    files: subFolderName ? [] : filePaths,
-                    subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
-                    isDefault: finalFolderName === 'Snevio Photography',
-                    expiryDate: expiryDate,
-                    downloadLimit: dLimit,
-                    downloadCount: 0,
-                    imageCost: iCost,
-                    videoCost: vCost,
-                    unlockValidity: unlockValidity || '24 Hours',
-                    uploaderName: uploaderName || 'Snevio Partner', // 🔥 NAYA
-                    uploaderRole: uploaderRole || 'Studio Partner' // 🔥 NAYA
-                };
+                    folderName: finalFolderName,
+                    files: subFolderName ? [] : filePaths,
+                    subFolders: subFolderName ? [{ name: subFolderName, files: filePaths }] : [],
+                    isDefault: finalFolderName === 'Snevio Photography',
+                    expiryDate: expiryDate,
+                    downloadLimit: dLimit,
+                    downloadCount: 0,
+                    imageCost: iCost,
+                    videoCost: vCost,
+                    unlockValidity: finalFolderName === 'Snevio Photography' ? '24 Hours' : (unlockValidity || '24 Hours'),
+                    uploaderName: uploaderName || 'Snevio Partner',
+                    uploaderRole: uploaderRole || 'Studio Partner'
+                };
                 currentData.push(newFolder);
             }
 
