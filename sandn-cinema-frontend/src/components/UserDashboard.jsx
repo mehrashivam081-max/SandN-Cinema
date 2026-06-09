@@ -77,10 +77,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // --- UI STATES ---
-    const [currentTab, setCurrentTab] = useState('HOME');
-    const [loading, setLoading] = useState(true); 
-    const [showInstallBanner, setShowInstallBanner] = useState(false); // 👈 NAYA: Banner hide/show
+    const [currentTab, setCurrentTab] = useState('HOME');
+    const [loading, setLoading] = useState(true); 
+    const [showInstallBanner, setShowInstallBanner] = useState(false);
     const [showExitPopup, setShowExitPopup] = useState(false);
+    const [timeTicker, setTimeTicker] = useState(Date.now()); // 🔥 For live countdown ticking
+
+    // Live Timer Refresh Effect (Ticks every second)
+    useEffect(() => {
+        const timer = setInterval(() => setTimeTicker(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, []);
     
     // --- USER SYNCED DATA (REAL-TIME) ---
     const [syncUser, setSyncUser] = useState(user || {});
@@ -199,7 +206,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ NEW: ACCEPT PROPOSAL MODAL
     const [viewProposalBooking, setViewProposalBooking] = useState(null);
 
-    const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: 'Permanent' };
+    const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: '24 Hours' };
 
     // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
     useEffect(() => {
@@ -633,7 +640,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setLoading(true);
         try {
             let expiryDate = 'Permanent';
-            if (activeFolder?.unlockValidity === '24 Hours') {
+            if (activeFolder?.unlockValidity === '24 Hours' || activeFolder?.folderName === 'Snevio Photography') {
                 expiryDate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString();
             } else if (activeFolder?.unlockValidity === '7 Days') {
                 expiryDate = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
