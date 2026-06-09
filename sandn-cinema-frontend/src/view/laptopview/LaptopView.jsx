@@ -159,7 +159,30 @@ const LaptopView = ({
       return <UserDashboard user={userData} userData={userData} onLogout={handleLogout} />;
   };
 
-  if (viewState === 'COLLAB') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh', textAlign:'center'}}><h2>🤝 Partnership & Collab</h2><p>Contact Admin for collaborations.</p><button onClick={goHome} style={{marginTop:'20px', padding:'10px', background:'red', color:'white', border:'none', borderRadius:'5px'}}>Go Back</button></div>;
+  if (viewState === 'COLLAB') return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a1a2e, #0f172a)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+          <div style={{ background: '#16213e', border: '1px solid #3498db', borderRadius: '20px', padding: '40px 30px', maxWidth: '450px', width: '100%', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+              <div style={{ fontSize: '60px', marginBottom: '15px' }}>🤝</div>
+              <h2 style={{ margin: '0 0 10px 0', color: '#fff', fontSize: '26px', letterSpacing: '1px' }}>
+                  Partnership & <span style={{ color: '#3498db' }}>Collab</span>
+              </h2>
+              <p style={{ color: '#aaa', fontSize: '15px', lineHeight: '1.6', marginBottom: '35px' }}>
+                  We are always looking for creative minds, talented studios, and strategic partners. Let's build something amazing together! Reach out to our admin team to discuss opportunities.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <button onClick={() => window.location.href = 'mailto:admin@snevio.com'} style={{ background: 'linear-gradient(90deg, #f1c40f, #f39c12)', color: '#000', border: 'none', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 5px 15px rgba(241, 196, 15, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                      ✉️ Email Admin Team
+                  </button>
+                  <button onClick={() => window.open('https://wa.me/917828011282', '_blank')} style={{ background: '#25D366', color: '#fff', border: 'none', padding: '15px', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 5px 15px rgba(37, 211, 102, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                      💬 Chat on WhatsApp
+                  </button>
+                  <button onClick={goHome} style={{ background: 'transparent', color: '#aaa', border: '1px solid #555', padding: '12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px', transition: '0.3s' }} onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#888'; }} onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.borderColor = '#555'; }}>
+                      ⬅ Go Back
+                  </button>
+              </div>
+          </div>
+      </div>
+  );
   if (viewState === 'SERVICE') return <ServicesPage onBack={() => setViewState('HOME')} />;
   if (viewState === 'AUTH') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><LoginPage onBack={() => setViewState('HOME')} onSignupClick={() => setViewState('SIGNUP')} onLoginSuccess={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
   if (viewState === 'SIGNUP') return <div style={{padding:'50px', background:'#eee', minHeight:'100vh'}}><SignupPage onLoginClick={() => setViewState('AUTH')} onSuccessLogin={(u)=>{setUserData(u); sessionStorage.setItem('user', JSON.stringify(u)); setSearchStep(3); setViewState('HOME')}} /></div>;
