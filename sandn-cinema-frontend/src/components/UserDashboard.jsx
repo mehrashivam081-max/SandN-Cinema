@@ -2916,7 +2916,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         };
 
     return (
-        <div className="ud-container-vip">
+        <div className="ud-container-vip" onContextMenu={(e) => e.preventDefault()}>
 
             {/* ✅ USER EXIT APP POPUP */}
             {showExitPopup && (
@@ -2936,15 +2936,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             {/* ✅ GLOBAL LONG PRESS IMAGE PREVIEW MODAL */}
             {previewMedia && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999999, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => setPreviewMedia(null)}>
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.95)', zIndex: 99999999, display: 'flex', justifyContent: 'center', alignItems: 'center', WebkitTouchCallout: 'none', userSelect: 'none' }} onClick={() => setPreviewMedia(null)} onContextMenu={(e) => e.preventDefault()}>
                     <button style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: 'pointer', zIndex: 10 }}>✖</button>
-                    <img src={getCleanUrl(previewMedia)} style={{ maxWidth: '95%', maxHeight: '90%', borderRadius: '10px', objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} alt="Preview" />
+                    <img src={getCleanUrl(previewMedia)} style={{ maxWidth: '95%', maxHeight: '90%', borderRadius: '10px', objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', pointerEvents: 'none' }} alt="Preview" />
                     <p style={{ position: 'absolute', bottom: '20px', color: '#aaa', fontSize: '12px' }}>Tap anywhere to close preview</p>
                 </div>
             )}
 
             {/* Inline CSS for Pulse Animation (Emergency Button) */}
             <style>{`
+                /* 🔥 SECURITY: Disable Long-Press Image Download Popup in Mobile */
+                .gallery-item-vip img {
+                    -webkit-touch-callout: none !important;
+                    -webkit-user-select: none !important;
+                    user-select: none !important;
+                    pointer-events: none !important;
+                }
                 /* 🌟 NEW: Daily Reward Coin Bounce Animation */
                 @keyframes coinBump {
                     0% { transform: scale(1); box-shadow: 0 0 0px transparent; }
