@@ -131,11 +131,11 @@ app.use(cors({
             "https://www.snevio.com",
         ];
         
-        if (allowedOrigins.indexOf(origin) === -1) {
-            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+            return callback(null, true);
+        } else {
+            return callback(new Error('Not allowed by CORS'), false);
         }
-        return callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 👈 Ensure OPTIONS is allowed for preflight
     allowedHeaders: ['Content-Type', 'Authorization'], // 👈 Explicitly allow these headers
