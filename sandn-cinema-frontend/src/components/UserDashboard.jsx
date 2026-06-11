@@ -1055,6 +1055,35 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setSelectionDraft(prev => prev.includes(url) ? prev.filter(item => item !== url) : [...prev, url]);
     };
 
+    // 🔥 NAYA: LAZY LOADING FETCH FUNCTION (Saves RAM and Loads Fast)
+    const openSmartAlbum = async (sel) => {
+        setLoading(true); // 1200+ इमेजेज लोड होने तक स्क्रीन पर लोडर दिखाएगा
+        try {
+            const token = getValidToken();
+            // बैकएंड से पूरा भारी फोल्डर मंगाओ
+            const res = await axios.post(`${API_BASE}/get-selection-folder-data`, { projectId: sel._id }, { headers: { 'Authorization': `Bearer ${token}` } });
+            
+            if (res.data.success && res.data.data) {
+                const fullProject = res.data.data;
+                
+                // अब पूरे डेटा के साथ फोल्डर खोलो
+                setActiveSelectionProject(fullProject); 
+                setCurrentTab('SELECTIONS'); 
+                
+                const isFam = fullProject.clientMobile !== syncUser?.mobile;
+                const initialDraft = fullProject.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
+                setSelectionDraft(initialDraft); 
+            } else {
+                alert("Failed to load full album data. Please try again.");
+            }
+        } catch (error) {
+            console.error("Fetch full album error:", error);
+            alert("Network error while loading album.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // ✅ NEW: Auto-Save Draft (Without changing phase)
     const saveDraftOnly = async () => {
         if (!activeSelectionProject) return false;
@@ -2168,14 +2197,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     
                                     {/* ✅ Stacked Buttons Layout */}
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <button onClick={() => { 
-                                            setCurrentTab('SELECTIONS'); 
-                                            setActiveSelectionProject(sel); 
-                                            // ✅ ISOLATION LOGIC: Check if viewing as family member or main client
-                                            const isFam = sel.clientMobile !== syncUser?.mobile;
-                                            const initialDraft = sel.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
-                                            setSelectionDraft(initialDraft); 
-                                        }} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                        <button onClick={() => openSmartAlbum(sel)} style={{ background: '#f1c40f', color: '#000', border: 'none', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
                                             {sharedTabFilter === 'RECEIVED' ? 'View & Vote ❤️' : 'Open Selection Folder'}
                                         </button>
 
@@ -2787,13 +2809,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 <React.Fragment key={`sel-${idx}`}>
                                     <div 
                                         className="folder-card" 
-                                        onClick={() => { 
-                                            setCurrentTab('SELECTIONS'); 
-                                            setActiveSelectionProject(sel); 
-                                            const isFam = sel.clientMobile !== syncUser?.mobile;
-                                            const initialDraft = sel.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
-                                            setSelectionDraft(initialDraft); 
-                                        }}
+                                        onClick={() => openSmartAlbum(sel)}
                                         style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative', overflow: 'hidden' }}
                                     >
                                         {/* Premium Badge */}

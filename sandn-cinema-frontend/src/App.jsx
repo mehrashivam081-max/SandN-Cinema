@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios'; 
-import PaymentSuccess from './components/PaymentSuccess'; // पाथ अपने फोल्डर के हिसाब से सेट कर लेना
+import PaymentSuccess from './components/PaymentSuccess';
 
 // Purane Imports
 import MainLanding from './view/MainLanding'; 
 import LoginPage from './components/LoginPage'; 
 import SignupPage from './components/SignupPage'; 
-import StudioPage from './components/StudioPage'; // 👈 NAYA: Studio Trap Page
+import StudioPage from './components/StudioPage';
 
 // ✅ NAYE LEGAL PAGES IMPORTS
 import Terms from './pages/legal/Terms';
@@ -15,16 +15,15 @@ import Refund from './pages/legal/Refund';
 import Shipping from './pages/legal/Shipping';
 import ContactUs from './pages/legal/ContactUs';
 
-const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend.onrender.com/api/auth';
 
 // 🔒 SMART GLOBAL AXIOS INTERCEPTOR (CORS & Cloudinary Safe)
 axios.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
     
-    // 🔥 THE FIX: Sirf tabhi Token bhejo jab request hamare Snevio Backend par jaa rahi ho!
-    // Agar request Cloudinary ya kisi aur server (S3, AWS) par hai, toh token mat bhejna.
-    if (token && config.url && config.url.includes('sandn-cinema.onrender.com')) {
+    // 🔥 THE FIX: Sirf tabhi Token bhejo jab request hamare Snevio Backend par jaa rahi ho
+    if (token && config.url && config.url.includes('sandn-cinema-backend.onrender.com')) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
@@ -34,113 +33,64 @@ axios.interceptors.request.use(
 
 function App() {
 
-  // ✅ SECURITY & SESSION VERIFICATION (BUG FIXED)
+  // ✅ CLEANED UP: SINGLE & SAFE SESSION MANAGER
   useEffect(() => {
     const handleOffline = () => {
-      alert("⚠️ Internet connection lost! Session locked for security.");
-      localStorage.clear(); 
-      sessionStorage.clear(); 
-      window.location.href = "/";
+      alert("⚠️ Internet connection lost! Please check your network.");
     };
-
     window.addEventListener('offline', handleOffline);
 
     const verifyDigitalLock = async () => {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
       
-      // 🔥 FIX: Ye wala block refresh par session uda raha tha kyunki login par token save nahi ho raha tha. 
-      // Ab ye sirf tab bahar nikalega jab na user ho aur na token.
-      if (!userStr && token) {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = "/";
-        return;
-      }
+      // Agar token nahi hai to chup chap return ho jao, forcefully clear mat karo
+      if (!token) return; 
 
-      if (token && userStr) {
-        const userObj = JSON.parse(userStr);
-        if (token === 'super_admin_bypass_token_999') return; 
+      if (token === 'super_admin_bypass_token_999') return; 
 
-        try {
-          const res = await axios.post(`${API_BASE}/verify-session`, {
-            token: token,
-            roleExpected: userObj.role
-          });
-          
-          if (!res.data.success) {
-            localStorage.clear();
-            sessionStorage.clear();
-            window.location.href = "/";
-          }
-        } catch (e) {
-          console.error("Session verification failed", e);
-        }
-      }
-    };
-
-    verifyDigitalLock();
-    return () => window.removeEventListener('offline', handleOffline);
-  }, []);
-
-  // ✅ PWA INSTALL APP LOGIC (GLOBAL PROMPT CATCHER)
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault(); // Browser ka default popup roko
-      window.deferredPrompt = e; // Global variable me save kar lo taki Dashboards use kar sakein
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  }, []);
-
-// अपनी App component के अंदर ये डालो:
-const [isCheckingSession, setIsCheckingSession] = useState(true);
-const [currentUser, setCurrentUser] = useState(null);
-
-useEffect(() => {
-    const checkSavedSession = async () => {
-        // 1. Storage में टोकन ढूंढो (पहले localStorage, फिर sessionStorage)
-        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      try {
+        // 🔥 Sirf ek baar API call hogi, app crash nahi hoga
+        const res = await axios.post(`${API_BASE}/verify-session`, { token: token });
         
-        if (!token) {
-            setIsCheckingSession(false);
-            return; // कोई टोकन नहीं है, सीधे Login पेज दिखाओ
+        // Agar backend bolta hai token invalid hai, tabhi bahar nikalo
+        if (!res.data.success) {
+          console.log("Session expired. Clearing old token.");
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = "/";
         }
-
-        try {
-            // 2. बैकएंड से पूछो कि क्या ये टोकन असली है और एक्सपायर तो नहीं हुआ?
-            const res = await axios.post(`${API_BASE}/verify-session`, { token });
-            
-            if (res.data.success && res.data.valid) {
-                // 3. टोकन असली है! यूज़र को बिना पासवर्ड के डायरेक्ट अंदर भेजो
-                const savedUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
-                setCurrentUser(savedUser);
-            } else {
-                // टोकन एक्सपायर हो गया (या हैक हुआ है) -> कचरा साफ करो
-                localStorage.clear();
-                sessionStorage.clear();
-            }
-        } catch (error) {
-            console.error("Session verification failed");
-        } finally {
-            setIsCheckingSession(false);
-        }
+      } catch (e) {
+        // Agar network error aaya toh app crash nahi hoga
+        console.error("Backend validation error. Assuming session is okay for now.", e);
+      }
     };
 
-    checkSavedSession();
-}, []);
+    verifyDigitalLock();
 
-  return (
-    <Router>
+    return () => window.removeEventListener('offline', handleOffline);
+  }, []);
+
+  // ✅ PWA INSTALL APP LOGIC
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault(); 
+      window.deferredPrompt = e; 
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  return (
+    <Router>
       <div className="App">
         <Routes>
           {/* Main Pages */}
-          <Route path="/" element={<MainLanding />} />
-          <Route path="/login" element={currentUser ? <Navigate to="/" replace /> : <LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/studio/:studioName" element={<StudioPage />} /> {/* 👈 NAYA: Studio Trap Route */}
+          <Route path="/" element={<MainLanding />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/studio/:studioName" element={<StudioPage />} />
 
-          {/* ✅ LEGAL PAGES */}
+          {/* ✅ LEGAL PAGES */}
           <Route path="/contact" element={<ContactUs />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/refund" element={<Refund />} />
