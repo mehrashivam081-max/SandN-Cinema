@@ -2775,7 +2775,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             })}
 
                             {/* 🥈 2nd PRIORITY: VIP HIGHLIGHTED FOLDER FOR ALBUM SELECTIONS */}
-                            {mySelections && mySelections.length > 0 && mySelections.filter(sel => sel.clientMobile === syncUser?.mobile).map((sel, idx) => (
+                            {mySelections && mySelections.length > 0 && mySelections.filter(sel => sel.clientMobile === syncUser?.mobile).map((sel, idx) => {
+                                // 🔥 NAYA: Check if uploaded by Admin or Studio
+                                const isAdminUpload = sel.uploaderRole === 'Super Admin' || sel.uploaderRole === 'ADMIN';
+                                const bgGradient = isAdminUpload ? 'linear-gradient(145deg, #1a1813, #0a0a0a)' : 'linear-gradient(135deg, #2c3e50, #8e44ad)';
+                                const borderColor = isAdminUpload ? '#d4af37' : '#f1c40f';
+                                const shadowColor = isAdminUpload ? 'rgba(212, 175, 55, 0.4)' : 'rgba(142, 68, 173, 0.4)';
+                                const badgeText = isAdminUpload ? '✨ Snevio Exclusive Selection' : '📸 Studio Selection Task';
+
+                                return (
                                 <React.Fragment key={`sel-${idx}`}>
                                     <div 
                                         className="folder-card" 
@@ -2786,23 +2794,27 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             const initialDraft = sel.images.filter(img => isFam ? (img.selectedBy && img.selectedBy.includes(syncUser?.mobile)) : img.status === 'selected').map(i => i.url);
                                             setSelectionDraft(initialDraft); 
                                         }}
-                                        style={{ background: 'linear-gradient(135deg, #2c3e50, #8e44ad)', border: '2px solid #f1c40f', boxShadow: '0 5px 15px rgba(142, 68, 173, 0.4)', animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '25px 15px' }}
+                                        style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative', overflow: 'hidden' }}
                                     >
-                                        <div className="folder-icon" style={{background: 'rgba(255,255,255,0.2)'}}>📸</div>
-                                        <h4 style={{color: '#fff', fontSize: '13px', textAlign: 'center', marginBottom: '5px'}}>Selection Task</h4>
-                                        <p style={{color: '#f1c40f', fontWeight: 'bold', margin: '0 0 5px 0', fontSize: '11px', textAlign: 'center'}}>{sel.folderName}</p>
-                                        <p style={{color: '#aaa', margin: 0, fontSize: '10px'}}>{sel.images?.length || 0} Items</p>
+                                        {/* Premium Badge */}
+                                        <div style={{ position: 'absolute', top: '-10px', background: isAdminUpload ? 'linear-gradient(90deg, #f1c40f, #d4af37)' : '#e74c3c', color: isAdminUpload ? '#000' : '#fff', fontSize: '9px', padding: '5px 15px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', zIndex: 10, textTransform: 'uppercase', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                                            {badgeText}
+                                        </div>
+
+                                        <div className="folder-icon" style={{background: 'rgba(255,255,255,0.1)', fontSize: '35px', marginBottom: '10px', marginTop: '10px'}}>{isAdminUpload ? '👑' : '📸'}</div>
+                                        <h4 style={{color: '#fff', fontSize: '15px', textAlign: 'center', marginBottom: '5px', fontWeight: 'bold'}}>{sel.folderName}</h4>
+                                        <p style={{color: '#aaa', margin: '0 0 10px 0', fontSize: '11px'}}>{sel.images?.length || 0} Media Items</p>
                                         
                                         {!['Completed', 'Confirmed', 'Submitted'].includes(sel.status) && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); setActiveSelectionProject(sel); setShowFamilyShareModal(true); }}
-                                                style={{ marginTop: '10px', background: '#f39c12', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', width: '100%', cursor: 'pointer' }}
+                                                style={{ marginTop: '5px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: `1px solid ${borderColor}`, padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', width: '100%', cursor: 'pointer', transition: '0.2s' }}
                                             >
                                                 🤝 Invite Family
                                             </button>
                                         )}
 
-                                        <span style={{ display:'block', fontSize:'9px', color:'#fff', marginTop:'8px', background: ['Completed', 'Confirmed'].includes(sel.status) ? '#2ecc71' : '#e74c3c', padding:'3px 6px', borderRadius:'10px', width:'max-content' }}>
+                                        <span style={{ display:'block', fontSize:'10px', color:'#fff', marginTop:'10px', background: ['Completed', 'Confirmed'].includes(sel.status) ? '#2ecc71' : '#e74c3c', padding:'4px 10px', borderRadius:'12px', fontWeight: 'bold' }}>
                                             {['Completed', 'Confirmed'].includes(sel.status) ? '✅ Done' : (sel.status === 'Split Mode' ? '🔄 Splitting...' : (sel.status === 'Submitted' ? '⏳ Finalizing' : `Phase ${sel.currentPhase} Pending`))}
                                         </span>
                                     </div>
@@ -2875,7 +2887,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         </div>
                                     )}
                                 </React.Fragment>
-                            ))}
+                                );
+                            })}
 
                             {/* 🥉 3rd PRIORITY: NORMAL STUDIO FOLDERS */}
                             {folders.filter(f => !f.isDefault && f.uploaderRole !== 'Super Admin').map((folder, index) => {
