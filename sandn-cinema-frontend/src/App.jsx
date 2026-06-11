@@ -35,8 +35,6 @@ function App() {
 
   // ✅ CLEANED UP: SINGLE & SAFE SESSION MANAGER
   useEffect(() => {
-    
-
     const verifyDigitalLock = async () => {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
       
@@ -63,8 +61,6 @@ function App() {
     };
 
     verifyDigitalLock();
-
-    return () => window.removeEventListener('offline', handleOffline);
   }, []);
 
   // ✅ PWA INSTALL APP LOGIC
