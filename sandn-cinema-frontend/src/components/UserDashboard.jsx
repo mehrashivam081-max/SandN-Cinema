@@ -208,18 +208,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: '24 Hours' };
 
-    // ✅ SUPER SECURITY: Auto-Logout on Connection Lost
+    // 🌐 NETWORK MONITOR (Auto-Logout Removed)
     useEffect(() => {
         const handleOffline = () => {
-            alert("⚠️ Internet connection lost! For security reasons, your session has been locked.");
-            sessionStorage.removeItem('user'); 
-            localStorage.removeItem('user');
-            if (onLogout) onLogout();
-            else window.location.href = "/SandN-Cinema/"; 
+            console.log("⚠️ Internet connection lost! Waiting for reconnect...");
+            // 🔥 अब यहाँ से ऑटो-लॉगआउट और डेटा डिलीट करने वाला लॉजिक पूरी तरह हटा दिया गया है!
         };
         window.addEventListener('offline', handleOffline);
         return () => window.removeEventListener('offline', handleOffline);
-    }, [onLogout]);
+    }, []);
 
     // ✅ Sync Cart to LocalStorage
     useEffect(() => {

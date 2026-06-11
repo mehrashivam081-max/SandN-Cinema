@@ -35,10 +35,7 @@ function App() {
 
   // ✅ CLEANED UP: SINGLE & SAFE SESSION MANAGER
   useEffect(() => {
-    const handleOffline = () => {
-      alert("⚠️ Internet connection lost! Please check your network.");
-    };
-    window.addEventListener('offline', handleOffline);
+    
 
     const verifyDigitalLock = async () => {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
