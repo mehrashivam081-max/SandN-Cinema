@@ -126,6 +126,7 @@ const LaptopView = ({
       } catch (e) { alert("Verification Failed."); } finally { setLoading(false); }
   };
 
+  // ✅ UPDATED: Login OR Setup Logic with Strict Token Saving
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
@@ -133,16 +134,25 @@ const LaptopView = ({
           if (isFirstTimeUser) {
               if (!newEmail) return alert("Email required.");
               if (password !== confirmPassword) return alert("Passwords don't match!");
-              // 🔄 FIX: Signup role is now dynamic based on selection
+              
               const res = await axios.post(`${API_BASE}/create-password`, { mobile, password, email: newEmail, roleFilter: loginRole });
               if (res.data.success) { 
-                  setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
+                  // 🔥 THE FIX: Saving the Authentication Token securely!
+                  localStorage.setItem('authToken', res.data.token);
+                  localStorage.setItem('user', JSON.stringify(res.data.user));
+                  sessionStorage.setItem('user', JSON.stringify(res.data.user));
+                  setUserData(res.data.user); 
+                  setSearchStep(3); 
               } else alert(res.data.message || "Setup Failed");
           } else {
-              // 🔄 FIX: Login role is now dynamic (Studio/User)
               const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: loginRole });
               if (res.data.success) { 
-                  setUserData(res.data.user); sessionStorage.setItem('user', JSON.stringify(res.data.user)); setSearchStep(3); 
+                  // 🔥 THE FIX: Saving the Authentication Token securely!
+                  localStorage.setItem('authToken', res.data.token);
+                  localStorage.setItem('user', JSON.stringify(res.data.user));
+                  sessionStorage.setItem('user', JSON.stringify(res.data.user));
+                  setUserData(res.data.user); 
+                  setSearchStep(3); 
               } else alert(res.data.message || "Wrong Password");
           }
       } catch (e) { alert("Action Failed."); } finally { setLoading(false); }

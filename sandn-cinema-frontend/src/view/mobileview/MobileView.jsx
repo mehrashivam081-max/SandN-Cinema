@@ -187,37 +187,37 @@ const MobileView = ({
       } finally { setLoading(false); }
   };
 
-  // ✅ UPDATED: Login OR Setup Logic
+  // ✅ UPDATED: Login OR Setup Logic with Strict Token Saving
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
 
       try {
           if (isFirstTimeUser) {
-              // --- SETUP LOGIC ---
               if (!newEmail) return alert("Please enter your email for future recovery.");
               if (password !== confirmPassword) return alert("Passwords do not match!");
               
               const res = await axios.post(`${API_BASE}/create-password`, { 
-                  mobile, 
-                  password, 
-                  email: newEmail,
-                  roleFilter: 'USER'
+                  mobile, password, email: newEmail, roleFilter: 'USER' 
               });
 
               if (res.data.success) {
-                  alert("Account Setup Complete! Logging in...");
+                  // 🔥 THE FIX: Saving the Authentication Token securely!
+                  localStorage.setItem('authToken', res.data.token);
+                  localStorage.setItem('user', JSON.stringify(res.data.user));
                   setUserData(res.data.user);
-                  setSearchStep(3); // Dashboard Rendered
+                  setSearchStep(3);
               } else {
                   alert(res.data.message);
               }
           } else {
-              // --- NORMAL LOGIN ---
               const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: 'USER' });
               if (res.data.success) {
+                  // 🔥 THE FIX: Saving the Authentication Token securely!
+                  localStorage.setItem('authToken', res.data.token);
+                  localStorage.setItem('user', JSON.stringify(res.data.user));
                   setUserData(res.data.user);
-                  setSearchStep(3); // Dashboard Rendered
+                  setSearchStep(3);
               } else {
                   alert("Wrong Password");
               }
