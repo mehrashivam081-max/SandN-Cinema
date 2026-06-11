@@ -1208,13 +1208,25 @@ const StudioDashboard = ({ user, onLogout }) => {
         }
     };
 
-    // ✅ 1. VIEW CLIENT UI (Opens In-App Modal)
-    const handleMagicLogin = (project) => {
-        if (!project || !project.images || project.images.length === 0) {
-            return alert("No images found in this project.");
-        }
-        setPreviewProject(project); // Set the project to show in modal
-    };
+    // ✅ 1. VIEW CLIENT UI (Opens In-App Modal) [OPTIMIZED WITH LAZY LOADING]
+    const handleMagicLogin = async (project) => {
+        if (!project) return;
+        setLoading(true);
+        try {
+            // 🔥 NAYA: Studio panel me bhi on-demand full data mangayenge
+            const res = await axios.post(`${API_BASE}/get-selection-folder-data`, { projectId: project._id }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success && res.data.data) {
+                setPreviewProject(res.data.data); 
+            } else {
+                alert("Failed to load full album data. Please try again.");
+            }
+        } catch (error) {
+            console.error("Fetch full album error:", error);
+            alert("Network error while loading album.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // ✅ NEW: DELETE SMART SELECTION PROJECT (Single Correct Version)
     const handleDeleteSelectionProject = async (projectId) => {

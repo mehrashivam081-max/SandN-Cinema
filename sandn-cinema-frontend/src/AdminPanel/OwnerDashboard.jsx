@@ -403,12 +403,26 @@ const handleEditFileUpload = async (e, isFolder = false) => {
     };   
 
     // ==========================================
-    // 🚀 ADMIN SMART DOWNLOADER & PREVIEW ENGINE
-    // ==========================================
-    const handleMagicLogin = (project) => {
-        if (!project || !project.images || project.images.length === 0) return alert("No images found.");
-        setPreviewProject(project); 
-    };
+    // 🚀 ADMIN SMART DOWNLOADER & PREVIEW ENGINE
+    // ==========================================
+    const handleMagicLogin = async (project) => {
+        if (!project) return;
+        setLoading(true);
+        try {
+            // 🔥 NAYA: Admin panel me bhi on-demand data mangayenge taaki crash na ho
+            const res = await axios.post(`${API_BASE}/get-selection-folder-data`, { projectId: project._id }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if (res.data.success && res.data.data) {
+                setPreviewProject(res.data.data); 
+            } else {
+                alert("Failed to load full album data.");
+            }
+        } catch (error) {
+            console.error("Fetch full album error:", error);
+            alert("Network error while loading album.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // ✅ NEW: DELETE ENTIRE SMART SELECTION PROJECT (God View)
     const handleDeleteSelectionProject = async (projectId) => {

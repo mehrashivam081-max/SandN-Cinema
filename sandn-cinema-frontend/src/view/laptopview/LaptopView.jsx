@@ -15,7 +15,7 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend.onrender.com/api/auth';
 
 const LaptopView = ({
     viewState, setViewState, searchStep, setSearchStep,
