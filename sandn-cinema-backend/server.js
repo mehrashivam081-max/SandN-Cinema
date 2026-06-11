@@ -813,13 +813,16 @@ app.post('/api/auth/verify-session', (req, res) => {
 // 🔒 NEW: Live User Status Fetcher (For Auto-Refresh System)
 app.get('/api/auth/get-user-status', authenticateToken, async (req, res) => {
     try {
-        const account = await findAccount(req.user.mobile, req.user.role);
+        // हम पहले User चेक करेंगे, नहीं मिला तो Studio चेक करेंगे
+        const account = await findAccount(req.user.mobile);
+        
         if (account && account.data) {
             res.json({ success: true, user: account.data });
         } else {
-            res.json({ success: false, message: "Account not found" });
+            res.status(404).json({ success: false, message: "Account not found" });
         }
     } catch (e) {
+        console.error("Get User Status Error:", e);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
@@ -2301,7 +2304,7 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
         // 🔥 DEBUG: Payload check karein
         console.log("PAYMENT PAYLOAD:", { amount, purpose, email, phone });
 
-        let webhookUrl = 'https://sandn-cinema-backend-test.onrender.com/api/auth/payment-webhook';
+        let webhookUrl = 'https://sandn-cinema-backend.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
         }
@@ -2312,7 +2315,7 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
             buyer_name: buyer_name || req.user.name || 'Snevio User',
             email: email || 'dummy@snevio.com', 
             phone: phone || req.user.mobile,
-            redirect_url: 'https://sandn-cinema-backend-test.onrender.com/payment-success', 
+            redirect_url: 'https://snevio.com/payment-success', // या आपका जो भी फ्रंटएंड URL है 
             webhook: webhookUrl, 
             allow_repeated_payments: false
         };
