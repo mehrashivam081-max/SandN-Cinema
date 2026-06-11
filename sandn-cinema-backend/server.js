@@ -1564,15 +1564,48 @@ app.post('/api/auth/delete-account', authenticateToken, async (req, res) => {
     }
 });
 
-// 11. Search Account
+// 11. Search Account (OPTIMIZED: Lazy Loading for Folders)
 app.post('/api/auth/search-account', async (req, res) => {
     const identifier = getCleanMobile(req.body.mobile);
     const { roleFilter } = req.body; 
-    const account = await findAccount(identifier, roleFilter);
-    if (account) {
-        res.json({ success: true, data: account.data });
-    } else {
-        res.json({ success: false, message: "Account not found" });
+    
+    try {
+        const account = await findAccount(identifier, roleFilter);
+        
+        if (account && account.data) {
+            // 🔥 NAYA LOGIC: Heavy data ko halka karo
+            let lightweightData = { ...account.data };
+            
+            // Agar uploadedData hai, toh uske andar se files array hata do (Sirf length bhejo)
+            if (lightweightData.uploadedData && Array.isArray(lightweightData.uploadedData)) {
+                lightweightData.uploadedData = lightweightData.uploadedData.map(folder => {
+                    let leanFolder = { ...folder };
+                    
+                    // Root files ko count me badlo
+                    if (leanFolder.files) {
+                        leanFolder.totalFilesCount = leanFolder.files.length;
+                        // Frontend ke chalne ke liye ek dummy array bhejo
+                        leanFolder.files = leanFolder.files.slice(0, 10); // Sirf pehli 10 images preview ke liye
+                    }
+                    
+                    // Subfolders ko bhi halka karo
+                    if (leanFolder.subFolders) {
+                        leanFolder.subFolders = leanFolder.subFolders.map(sub => ({
+                            ...sub,
+                            totalFilesCount: sub.files ? sub.files.length : 0,
+                            files: sub.files ? sub.files.slice(0, 5) : [] // Preview
+                        }));
+                    }
+                    return leanFolder;
+                });
+            }
+            
+            res.json({ success: true, data: lightweightData });
+        } else {
+            res.json({ success: false, message: "Account not found" });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 });
 
@@ -3574,22 +3607,50 @@ app.post('/api/auth/move-image-album', authenticateToken, async (req, res) => {
     }
 });
 
-// 3. Fetch Selections (For User Dashboard - UPDATED FOR FAMILY COLLAB & NICKNAME)
+// 3. Fetch Selections (OPTIMIZED: Lightweight Initial Load)
 app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) => {
     try {
         const clientMobile = getCleanMobile(req.body.mobile);
         if(!clientMobile) return res.json({ success: false, message: "Invalid Mobile" });
         
+        // 🔥 NAYA: 'images' aur 'allImages' jaisi bhaari arrays ko shuru mein load mat karo
         const selections = await AlbumSelection.find({ 
             $or: [
                 { clientMobile: clientMobile },
-                { "familyMembers.mobile": clientMobile } // ✅ FIXED: Check inside array of objects
+                { "familyMembers.mobile": clientMobile } 
             ]
-        }).sort({ createdAt: -1 });
+        }).select('-allImages').lean().sort({ createdAt: -1 });
         
-        res.json({ success: true, data: selections });
+        // Har project ke andar ki 'images' array ko halka karo
+        const lightweightSelections = selections.map(project => {
+            if (project.images && project.images.length > 0) {
+                project.totalImagesCount = project.images.length;
+                // Sirf shuru ki 1-2 photo bhej do thumbnail/preview ke liye
+                project.images = project.images.slice(0, 5);
+            }
+            return project;
+        });
+
+        res.json({ success: true, data: lightweightSelections });
     } catch (e) {
         res.status(500).json({ success: false, message: "Failed to fetch user selections." });
+    }
+});
+
+// 🔥 NAYA ROUTE: Pura folder load karne ke liye (Jab user folder par click karega)
+app.post('/api/auth/get-selection-folder-data', authenticateToken, async (req, res) => {
+    try {
+        const { projectId } = req.body;
+        // Ab poori details (saari images) bhejenge
+        const projectData = await AlbumSelection.findById(projectId);
+        
+        if (projectData) {
+            res.json({ success: true, data: projectData });
+        } else {
+            res.json({ success: false, message: "Project not found" });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server error fetching full folder." });
     }
 });
 
