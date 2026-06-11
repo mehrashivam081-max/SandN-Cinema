@@ -288,6 +288,11 @@ const albumSelectionSchema = new mongoose.Schema({
     cloudProvider: { type: String, default: 'CLOUDINARY' },
 
     storageConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'StorageConfig', default: null },
+
+    // 🔥 NAYA: Missing Fields Added
+    assignToStudio: { type: String, default: '' },
+    allImages: [{ type: String }],
+    mergedImages: [{ type: String }],
     
     // ⚙️ Limits & Pricing (For Extra Earning)
     sheetLimit: { type: Number, default: 0 },       // Kitni sheets allowed hain
@@ -323,13 +328,11 @@ const albumSelectionSchema = new mongoose.Schema({
         albumTag: { type: String, default: 'Album 1' } // ✅ For Split Mode categorization
     }],
 
-    // 👨‍👩‍👧‍👦 Family Collaboration System
-    sharedWith: [{
+    // 🔥 NAYA: Family Members proper schema (Replaced sharedWith)
+    familyMembers: [{
         mobile: String,
-        name: String,
-        expiryDate: Date,
-        hasSubmitted: { type: Boolean, default: false },
-        notifiedAt: Date // Track 1-time notification
+        nickname: String,
+        hasSubmitted: { type: Boolean, default: false }
     }],
     
     // 💰 Payment & Output (PDF)

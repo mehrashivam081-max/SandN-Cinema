@@ -810,6 +810,20 @@ app.post('/api/auth/verify-session', (req, res) => {
     });
 });
 
+// 🔒 NEW: Live User Status Fetcher (For Auto-Refresh System)
+app.get('/api/auth/get-user-status', authenticateToken, async (req, res) => {
+    try {
+        const account = await findAccount(req.user.mobile, req.user.role);
+        if (account && account.data) {
+            res.json({ success: true, user: account.data });
+        } else {
+            res.json({ success: false, message: "Account not found" });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+});
+
 // ==============================================================
 // ✅ 8. UPLOAD LOGIC (MULTER - LOCAL) WITH SUBFOLDERS
 // ==============================================================
