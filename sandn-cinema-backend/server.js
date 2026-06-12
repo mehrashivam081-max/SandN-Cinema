@@ -117,10 +117,9 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinem
 // ✅ URL wahi purana rakhenge taaki links na tootein
 const WEBSITE_URL = "https://snevio.com/"; // Google search wali link hata do
 
-// 🔥 FIX: Stronger CORS setup to allow preflight requests and avoid blockages
-app.use(cors({
+// 🔥 FIX: Ultimate CORS Setup (Unified Config for Normal & Preflight)
+const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         
         const allowedOrigins = [
@@ -128,21 +127,24 @@ app.use(cors({
             "http://localhost:3000",
             "https://mehrashivam081-max.github.io",
             "https://snevio.com",
-            "https://www.snevio.com",
+            "https://www.snevio.com"
         ];
         
-        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+        if (allowedOrigins.indexOf(origin) !== -1) {
             return callback(null, true);
         } else {
             return callback(new Error('Not allowed by CORS'), false);
         }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 👈 Ensure OPTIONS is allowed for preflight
-    allowedHeaders: ['Content-Type', 'Authorization'], // 👈 Explicitly allow these headers
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
     credentials: true,
-    optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
-}));
-app.options(/.*/, cors());
+    optionsSuccessStatus: 200 
+};
+
+// दोनों के लिए एक ही नियम (Rules) लागू करें
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 
 // 🔥 THE 413 ERROR FIX: Increased JSON Payload Limit to 50MB for heavy Album Saves
