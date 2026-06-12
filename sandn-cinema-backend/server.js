@@ -117,34 +117,47 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinem
 // ✅ URL wahi purana rakhenge taaki links na tootein
 const WEBSITE_URL = "https://snevio.com/"; // Google search wali link hata do
 
-// 🔥 FIX: Ultimate CORS Setup (Unified Config for Normal & Preflight)
-const corsOptions = {
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        
-        const allowedOrigins = [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://mehrashivam081-max.github.io",
-            "https://snevio.com",
-            "https://www.snevio.com"
-        ];
-        
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            return callback(null, true);
-        } else {
-            return callback(new Error('Not allowed by CORS'), false);
-        }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-    credentials: true,
-    optionsSuccessStatus: 200 
-};
+// 🔥 THE NUCLEAR CORS FIX (For 404 Preflight Errors)
 
+// 1. कस्टम गेटकीपर: यह किसी भी Preflight (OPTIONS) रिक्वेस्ट को 404 नहीं होने देगा, सीधा 200 OK भेजेगा!
+app.use((req, res, next) => {
+    const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://mehrashivam081-max.github.io",
+        "https://snevio.com",
+        "https://www.snevio.com"
+    ];
+    
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*'); 
+    }
+    
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+    // अगर रिक्वेस्ट OPTIONS (Preflight) है, तो उसे यहीं से 200 Success देकर वापस भेज दो
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    next();
+});
+
+// 2. नार्मल CORS पैकेज (बैकअप के लिए)
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://mehrashivam081-max.github.io",
+        "https://snevio.com",
+        "https://www.snevio.com"
+    ],
+    credentials: true
+}));
 
 
 // 🔥 THE 413 ERROR FIX: Increased JSON Payload Limit to 50MB for heavy Album Saves
