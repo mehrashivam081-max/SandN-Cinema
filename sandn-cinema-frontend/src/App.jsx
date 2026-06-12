@@ -15,7 +15,7 @@ import Refund from './pages/legal/Refund';
 import Shipping from './pages/legal/Shipping';
 import ContactUs from './pages/legal/ContactUs';
 
-const API_BASE = 'https://sandn-cinema-backend.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 // 🔒 SMART GLOBAL AXIOS INTERCEPTOR (CORS & Cloudinary Safe)
 axios.interceptors.request.use(

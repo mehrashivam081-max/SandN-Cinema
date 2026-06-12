@@ -8,8 +8,8 @@ import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
-const API_BASE = 'https://sandn-cinema-backend.onrender.com/api/auth';
-const SERVER_URL = 'https://sandn-cinema-backend.onrender.com/';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
+const SERVER_URL = 'https://sandn-cinema-backend-test.onrender.com/';
 
 // ✅ SUPER TOKEN GRABBER: Ye token ko securely fetch karega
 const getValidToken = () => {

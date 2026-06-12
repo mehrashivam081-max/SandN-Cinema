@@ -9,7 +9,7 @@ const Shipping = () => {
 
     useEffect(() => {
         window.scrollTo(0, 0);
-        axios.get('https://sandn-cinema-backend.onrender.com/api/auth/get-platform-settings')
+        axios.get('https://sandn-cinema-backend-test.onrender.com/api/auth/get-platform-settings')
             .then(res => {
                 if (res.data.success && res.data.data?.policies?.shipping) {
                     setContent(res.data.data.policies.shipping);

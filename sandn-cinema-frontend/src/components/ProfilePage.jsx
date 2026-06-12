@@ -5,7 +5,7 @@ import './ProfilePage.css';
 import profileImg from '../assets/snevio-logo.png'; 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-const API_BASE = 'https://sandn-cinema-backend.onrender.com/api/auth';
+const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 
 const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecovery }) => {
     const navigate = useNavigate(); // ✅ ADDED NAVIGATION SUPPORT
