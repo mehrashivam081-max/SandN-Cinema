@@ -142,7 +142,7 @@ const corsOptions = {
     optionsSuccessStatus: 200 
 };
 
-// दोनों के लिए एक ही नियम (Rules) लागू करें
+
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
