@@ -2319,7 +2319,7 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
         // 🔥 DEBUG: Payload check karein
         console.log("PAYMENT PAYLOAD:", { amount, purpose, email, phone });
 
-        let webhookUrl = 'https://sandn-cinema-backend.onrender.com/api/auth/payment-webhook';
+        let webhookUrl = 'https://sandn-cinema-backend-test.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
         }
