@@ -4,7 +4,7 @@ import './OwnerDashboard.css';
 import useBackButton from '../hooks/useBackButton';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
+import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import.
 
 const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
 const SERVER_URL = 'https://sandn-cinema-backend-test.onrender.com/';
