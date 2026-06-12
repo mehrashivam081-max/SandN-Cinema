@@ -2805,32 +2805,38 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 return (
                                 <React.Fragment key={`sel-${idx}`}>
                                     <div 
-                                        className="folder-card" 
-                                        onClick={() => openSmartAlbum(sel)}
-                                        style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative', overflow: 'hidden' }}
-                                    >
-                                        {/* Premium Badge */}
-                                        <div style={{ position: 'absolute', top: '-10px', background: isAdminUpload ? 'linear-gradient(90deg, #f1c40f, #d4af37)' : '#e74c3c', color: isAdminUpload ? '#000' : '#fff', fontSize: '9px', padding: '5px 15px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', zIndex: 10, textTransform: 'uppercase', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                                            {badgeText}
-                                        </div>
-
-                                        <div className="folder-icon" style={{background: 'rgba(255,255,255,0.1)', fontSize: '35px', marginBottom: '10px', marginTop: '10px'}}>{isAdminUpload ? '👑' : '📸'}</div>
-                                        <h4 style={{color: '#fff', fontSize: '15px', textAlign: 'center', marginBottom: '5px', fontWeight: 'bold'}}>{sel.folderName}</h4>
-                                        <p style={{color: '#aaa', margin: '0 0 10px 0', fontSize: '11px'}}>{sel.images?.length || 0} Media Items</p>
-                                        
-                                        {!['Completed', 'Confirmed', 'Submitted'].includes(sel.status) && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setActiveSelectionProject(sel); setShowFamilyShareModal(true); }}
-                                                style={{ marginTop: '5px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: `1px solid ${borderColor}`, padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', width: '100%', cursor: 'pointer', transition: '0.2s' }}
+                                                className="folder-card" 
+                                                onClick={() => openSmartAlbum(sel)}
+                                                style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '260px', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative' }}
                                             >
-                                                🤝 Invite Family
-                                            </button>
-                                        )}
+                                                {/* Premium Badge */}
+                                                <div style={{ position: 'absolute', top: '-10px', background: isAdminUpload ? 'linear-gradient(90deg, #f1c40f, #d4af37)' : '#e74c3c', color: isAdminUpload ? '#000' : '#fff', fontSize: '9px', padding: '5px 15px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', zIndex: 10, textTransform: 'uppercase', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                                                    {badgeText}
+                                                </div>
 
-                                        <span style={{ display:'block', fontSize:'10px', color:'#fff', marginTop:'10px', background: ['Completed', 'Confirmed'].includes(sel.status) ? '#2ecc71' : '#e74c3c', padding:'4px 10px', borderRadius:'12px', fontWeight: 'bold' }}>
-                                            {['Completed', 'Confirmed'].includes(sel.status) ? '✅ Done' : (sel.status === 'Split Mode' ? '🔄 Splitting...' : (sel.status === 'Submitted' ? '⏳ Finalizing' : `Phase ${sel.currentPhase} Pending`))}
-                                        </span>
-                                    </div>
+                                                {/* Top Content (Icon, Title, Count) */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                                                    <div className="folder-icon" style={{background: 'rgba(255,255,255,0.1)', fontSize: '35px', marginBottom: '10px', marginTop: '10px'}}>{isAdminUpload ? '👑' : '📸'}</div>
+                                                    <h4 style={{color: '#fff', fontSize: '15px', textAlign: 'center', marginBottom: '5px', fontWeight: 'bold'}}>{sel.folderName}</h4>
+                                                    <p style={{color: '#aaa', margin: '0', fontSize: '11px'}}>{sel.images?.length || 0} Media Items</p>
+                                                </div>
+
+                                                {/* Bottom Content (Button & Status Tag) - Pushed to bottom via mt-auto */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 'auto', paddingTop: '15px' }}>
+                                                    {!['Completed', 'Confirmed', 'Submitted'].includes(sel.status) && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); setActiveSelectionProject(sel); setShowFamilyShareModal(true); }}
+                                                            style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: `1px solid ${borderColor}`, padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', width: '100%', cursor: 'pointer', transition: '0.2s', marginBottom: '10px' }}
+                                                        >
+                                                            🤝 Invite Family
+                                                        </button>
+                                                    )}
+
+                                                    <span style={{ display:'inline-block', fontSize:'10px', color:'#fff', background: ['Completed', 'Confirmed'].includes(sel.status) ? '#2ecc71' : '#e74c3c', padding:'4px 10px', borderRadius:'12px', fontWeight: 'bold', width: 'max-content' }}>
+                                                        {['Completed', 'Confirmed'].includes(sel.status) ? '✅ Done' : (sel.status === 'Split Mode' ? '🔄 Splitting...' : (sel.status === 'Submitted' ? '⏳ Finalizing' : `Phase ${sel.currentPhase} Pending`))}
+                                                    </span>
+                                                </div>
+                                            </div>
 
                                     {/* FAMILY COLLABORATION MODAL */}
                                     {showFamilyShareModal && activeSelectionProject?._id === sel._id && (
