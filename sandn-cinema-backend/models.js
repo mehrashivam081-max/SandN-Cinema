@@ -333,7 +333,7 @@ const albumSelectionSchema = new mongoose.Schema({
         mobile: String,
         nickname: String,
         hasSubmitted: { type: Boolean, default: false }
-    }],
+    }], 
     
     // 💰 Payment & Output (PDF)
     extraAmountToPay: { type: Number, default: 0 },
