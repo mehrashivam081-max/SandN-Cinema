@@ -6,7 +6,7 @@ import MobileView from './mobileview/MobileView';
 import axios from 'axios';
 
 const MOBILE_BREAKPOINT = 768;
-const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth'; // ✅ Update if backend URL changes
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth'; // ✅ Update if backend URL changes
 
 const MainLanding = () => {
   const width = useViewport();
