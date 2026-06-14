@@ -828,10 +828,12 @@ app.post('/api/auth/verify-session', (req, res) => {
 // 🔒 NEW: Live User Status Fetcher (For Auto-Refresh System)
 app.get('/api/auth/get-user-status', authenticateToken, async (req, res) => {
     try {
-        // यह 'findAccount' फंक्शन को इस्तेमाल करेगा जो आपके पास पहले से है
         const account = await findAccount(req.user.mobile, req.user.role);
         
         if (account && account.data) {
+            // 🔥 THE NUCLEAR FIX: Always force inject the role so the frontend never gets confused!
+            account.data.role = account.type; 
+            
             res.json({ success: true, user: account.data });
         } else {
             res.status(404).json({ success: false, message: "Account not found" });
