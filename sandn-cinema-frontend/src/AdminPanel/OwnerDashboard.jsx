@@ -6,8 +6,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import.
 
-const API_BASE = 'https://sandn-cinema-backend-test.onrender.com/api/auth';
-const SERVER_URL = 'https://sandn-cinema-backend-test.onrender.com/';
+const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const SERVER_URL = 'https://sandn-cinema.onrender.com/';
 
 // ✅ SUPER TOKEN GRABBER (Security ke liye)
 const getValidToken = () => {
