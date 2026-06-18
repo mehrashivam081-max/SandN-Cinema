@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/components.css';
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const TrendingFeed = ({ type, onClose }) => {
     const title = type === 'trending' ? '🔥 Trending Now' : '🚀 Viral Content';

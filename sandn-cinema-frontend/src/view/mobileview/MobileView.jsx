@@ -18,7 +18,7 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const MobileView = ({
     viewState, setViewState, searchStep, setSearchStep,

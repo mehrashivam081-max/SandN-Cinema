@@ -9,8 +9,8 @@ import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
-const SERVER_URL = 'https://sandn-cinema.onrender.com/';
+const API_BASE = import.meta.env.VITE_API_BASE;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 
 // ✅ SUPER TOKEN GRABBER: Ye 'token' aur 'authToken' dono ko check karega, kabhi Khali (null) nahi bhejega!
 const getValidToken = () => {

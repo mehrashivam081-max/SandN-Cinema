@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './BookingForm.css';
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const BookingForm = ({ onClose }) => {
     // --- FORM STATES ---

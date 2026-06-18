@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './UserDashboard.css'; // Purani styling use kar lenge
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
-const SERVER_URL = 'https://sandn-cinema.onrender.com/';
+const API_BASE = import.meta.env.VITE_API_BASE;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 
 const StudioPage = () => {
     const { studioName } = useParams();

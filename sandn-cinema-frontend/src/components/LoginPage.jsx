@@ -8,7 +8,7 @@ import useBackButton from '../hooks/useBackButton';
 import { auth } from '../firebase'; 
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 
-const API_BASE = 'https://sandn-cinema.onrender.com/api/auth';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const navigate = useNavigate();
