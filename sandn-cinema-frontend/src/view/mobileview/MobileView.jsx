@@ -263,158 +263,147 @@ const MobileView = ({
   if (viewState === 'SIGNUP') return <SignupPage onLoginClick={() => setViewState('AUTH')} onBack={goHome} onSuccessLogin={(u)=>{setUserData(u); setSearchStep(3); setViewState('HOME')}} />;
   if (viewState === 'RECOVERY') return <ForgotPassword onLoginClick={() => setViewState('AUTH')} onBack={goHome} />;
 
+  // 🔥 नया लॉजिक: चेक करने के लिए कि यूज़र डैशबोर्ड पर है या लॉगिन पेज पर
+  const isDashboard = userData && searchStep === 3;
+
   return (
-    <div className="mobile-container" style={{ overflow: 'hidden', position: 'relative', background: '#222' }}>
+    <div className="mobile-container" style={{ 
+        overflowX: 'hidden', 
+        overflowY: isDashboard ? 'auto' : 'hidden', /* 🔥 FIX 1: डैशबोर्ड में स्क्रॉल चालू कर दिया */
+        position: 'relative', 
+        background: isDashboard ? '#0f172a' : '#000', /* 🔥 FIX 2: डैशबोर्ड के लिए डार्क बैकग्राउंड */
+        minHeight: '100dvh', 
+        height: isDashboard ? 'auto' : '100dvh', /* 🔥 FIX 3: हाइट को लॉक से हटा दिया */
+        width: '100vw' 
+    }}>
       
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
       {viewState === 'BOOKING' && <BookingForm onClose={goHome} />}
-      
-      <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
+      <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} />
 
-      {/* ✅ OTP Selection Popup Overlay */}
+      {/* OTP POPUP */}
       {showOtpPopup && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
-              <div style={{ background: '#fff', padding: '25px', borderRadius: '20px', width: '85%', maxWidth: '320px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', animation: 'fadeIn 0.3s ease-in-out' }}>
-                  <h3 style={{ color: '#333', marginBottom: '10px', fontSize: '1.1rem' }}>Send OTP to {mobile}</h3>
-                  <p style={{ color: '#666', fontSize: '13px', marginBottom: '20px' }}>Choose your preferred method below:</p>
-                  
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+              <div style={{ background: '#1a1a1a', border: '1px solid #333', padding: '25px', borderRadius: '20px', width: '85%', textAlign: 'center' }}>
+                  <h3 style={{ color: '#fff', marginBottom: '10px' }}>Send OTP to {mobile}</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#2b5876', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                          📱 Send via Text SMS
-                      </button>
-                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#25D366', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                          💬 Send via WhatsApp
-                      </button>
-                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '14px', borderRadius: '10px', border: 'none', background: '#EA4335', color: '#fff', cursor: 'pointer', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                          ✉️ Send via Email
-                      </button>
+                      <button onClick={() => handleSendOtp('mobile')} style={{ padding: '12px', borderRadius: '10px', border: 'none', background: '#FFD700', color: '#000', fontWeight: 'bold' }}>📱 Send SMS</button>
+                      <button onClick={() => handleSendOtp('whatsapp')} style={{ padding: '12px', borderRadius: '10px', border: 'none', background: '#25D366', color: '#fff', fontWeight: 'bold' }}>💬 Send WhatsApp</button>
                   </div>
-
-                  <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '20px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', textDecoration: 'underline' }}>
-                      Cancel
-                  </p>
+                  <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '20px', cursor: 'pointer' }}>Cancel</p>
               </div>
           </div>
       )}
 
+      {/* SWIPE WRAPPER & MAIN CONTENT */}
       <div 
         className="mobile-swipe-wrapper"
-        onTouchStart={handleTouchStart} 
-        onTouchMove={handleTouchMove} 
-        onTouchEnd={handleTouchEnd}
-        style={{ 
+        onTouchStart={isDashboard ? undefined : handleTouchStart} 
+        onTouchMove={isDashboard ? undefined : handleTouchMove} 
+        onTouchEnd={isDashboard ? undefined : handleTouchEnd}
+        style={isDashboard ? {
+            width: '100%', minHeight: '100vh' /* 🔥 डैशबोर्ड के लिए सिंपल स्टाइल्स */
+        } : {
             transform: `translateX(${swipeOffset}px)`, 
-            transition: isSwiping.current ? 'none' : 'transform 0.3s ease-out',
-            height: '100dvh',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            background: '#fff', 
-            position: 'absolute',
-            zIndex: feedType ? 0 : 5 
+            transition: isSwiping.current ? 'none' : 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)', 
+            height: '100dvh', width: '100vw', display: 'flex', flexDirection: 'column',
+            position: 'absolute', zIndex: feedType ? 0 : 5,
+            backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.95)), url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=800&auto=format&fit=crop')`,
+            backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#000'
         }}
       >
-          {!userData && (
-              <header className="mobile-header">
-                <div className="menu-icon-mob" onClick={() => setMenuOpen(true)}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          {!isDashboard && (
+              <header style={{ 
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                  padding: '20px 25px', position: 'absolute', top: 0, width: '100%', zIndex: 10, boxSizing: 'border-box'
+              }}>
+                <div onClick={() => setMenuOpen(true)} style={{ background: 'rgba(255,255,255,0.08)', padding: '10px', borderRadius: '50%', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </div>
-                <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer'}}>
-                         SNE<span className="brand-highlight">VIO</span>
-              </h1>
-                <div className="logo-circle-mob" onClick={() => setViewState('COLLAB')} style={{cursor:'pointer', fontSize:'10px', textAlign:'center', lineHeight:'1.2', display:'flex', alignItems:'center', justifyContent:'center'}}>
-                    🤝<br/>Collab
+                <h1 onClick={goHome} style={{margin: 0, fontSize: '22px', color: '#fff', fontWeight: '800', letterSpacing: '1px', cursor: 'pointer', textShadow: '0 2px 10px rgba(0,0,0,0.5)'}}>
+                    SNE<span style={{color: '#FFD700'}}>VIO</span>
+                </h1>
+                <div onClick={() => setViewState('AUTH')} style={{ background: 'rgba(255,255,255,0.08)', padding: '10px', borderRadius: '50%', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
               </header>
           )}
 
-          <div className="mobile-main-content" style={userData ? {padding:0, background:'#f4f4f4', flex: 1} : {flex: 1}}>
-            
-            {searchStep === 3 && userData ? (
-                renderDashboard()
-            ) : (
-                <>
-                    <div className="mobile-search-block">
-                        {searchStep > 0 && <span onClick={() => setSearchStep(prev => prev - 1)} style={{ alignSelf: 'flex-start', color: '#555', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px', display: 'block' }}>← Back</span>}
+          {/* 🔥 MAIN LOGIC: Render Dashboard OR Soft UI */}
+          {isDashboard ? (
+              renderDashboard() /* 🔥 FIX 4: बिना किसी पैडिंग/गैप के डायरेक्ट डैशबोर्ड रेंडर किया */
+          ) : (
+              <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', width: '100%', padding: '0 25px 90px 25px', marginTop: '80px', boxSizing: 'border-box'}}>
+                  
+                  <h2 style={{color: '#ffffff', fontSize: '2.8rem', fontWeight: '800', textAlign: 'center', marginBottom: '8px', lineHeight: '1.1'}}>
+                      Relive <br/><span style={{color: '#FFD700'}}>Memories</span>
+                  </h2>
+                  <p style={{ color: '#E0E0E0', fontSize: '15px', textAlign: 'center', marginBottom: '35px', opacity: 0.9 }}>Access your studio quality event photos securely.</p>
+                  
+                  {/* ULTRA SOFT AUTH CARD */}
+                  <div style={{width: '100%', maxWidth: '400px', background: 'rgba(255, 255, 255, 0.04)', padding: '30px 25px', borderRadius: '30px', backdropFilter: 'blur(25px)', WebkitBackdropFilter: 'blur(25px)', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 30px 60px rgba(0,0,0,0.5)'}}>
+                      
+                      {searchStep > 0 && <span onClick={() => setSearchStep(prev => prev - 1)} style={{ color: '#aaa', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '25px', cursor: 'pointer', transition: '0.2s' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back</span>}
 
-                        {searchStep === 0 && (
-                            <>
-                                <input type="number" placeholder="Search registered mobile no." className="mobile-input-field" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} autoFocus />
-                                <button className="mobile-blue-btn" onClick={handleSearchClick} disabled={loading}>{loading?'Searching...':'Search'}</button>
-                            </>
-                        )}
-                        {searchStep === 1 && (
-                            <>
-                                <input type="number" placeholder="Enter OTP" className="mobile-input-field" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} autoFocus />
-                                <button className="mobile-blue-btn" onClick={handleVerifyOTP} disabled={loading}>{loading?'Verifying...':'Verify OTP'}</button>
-                            </>
-                        )}
+                      {searchStep === 0 && (
+                          <>
+                              <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '20px', padding: '5px', display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '20px' }}>
+                                  <span style={{ padding: '0 15px', color: '#FFD700', fontWeight: 'bold' }}>+91</span>
+                                  <input type="number" placeholder="Mobile Number" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} style={{flex: 1, padding: '16px 0', border: 'none', background: 'transparent', color: '#fff', outline: 'none', fontSize: '16px'}} autoFocus />
+                              </div>
+                              <button onClick={handleSearchClick} disabled={loading} style={{width: '100%', padding: '16px', borderRadius: '20px', background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', fontWeight: '800', border: 'none', fontSize: '16px', boxShadow: '0 10px 20px -5px rgba(243, 156, 18, 0.4)'}}>{loading?'Searching...':'Search Data'}</button>
+                          </>
+                      )}
 
-                        {searchStep === 2 && (
-                            <div style={{ textAlign: 'left', width: '100%' }}>
-                                {isFirstTimeUser ? (
-                                    <>
-                                        <h3 style={{ color: '#2ecc71', textAlign: 'center', marginBottom: '15px' }}>Setup Account</h3>
-                                        <input type="email" placeholder="Link your Email (Required)" className="mobile-input-field" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{marginBottom: '10px'}} autoFocus />
-                                        
-                                        <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
-                                            <input type={showPass ? "text" : "password"} placeholder="Create New Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} style={{marginBottom: 0}} />
-                                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
-                                        </div>
+                      {searchStep === 1 && (
+                          <>
+                              <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{width: '100%', padding: '18px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.08)', color: '#fff', marginBottom: '20px', boxSizing: 'border-box', outline: 'none', fontSize: '16px', textAlign: 'center', letterSpacing: '4px'}} autoFocus />
+                              <button onClick={handleVerifyOTP} disabled={loading} style={{width: '100%', padding: '16px', borderRadius: '20px', background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', fontWeight: '800', border: 'none', fontSize: '16px', boxShadow: '0 10px 20px -5px rgba(243, 156, 18, 0.4)'}}>{loading?'Verifying...':'Verify OTP'}</button>
+                          </>
+                      )}
 
-                                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
-                                            <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" className="mobile-input-field" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{marginBottom: 0}} />
-                                            <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showConfirmPass ? '🙈' : '👁️'}</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <h3 style={{ color: '#3498db', textAlign: 'center', marginBottom: '15px' }}>Enter Password</h3>
-                                        <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
-                                            <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="mobile-input-field" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{marginBottom: 0}} autoFocus />
-                                            <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}>{showPass ? '🙈' : '👁️'}</span>
-                                        </div>
-                                    </>
-                                )}
-                                
-                                <button className="mobile-blue-btn" onClick={handleLoginOrSetup} disabled={loading} style={{marginTop: '10px'}}>
-                                    {loading ? 'Processing...' : isFirstTimeUser ? 'Setup Account' : 'Login & Access'}
-                                </button>
-                            </div>
-                        )}
-                    </div>
+                      {searchStep === 2 && (
+                          <div style={{ textAlign: 'left', width: '100%' }}>
+                              <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
+                                  <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', padding: '18px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.08)', color: '#fff', boxSizing: 'border-box', outline: 'none', fontSize: '15px'}} autoFocus />
+                                  <span onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', opacity: 0.7 }}>{showPass ? '🙈' : '👁️'}</span>
+                              </div>
+                              
+                              {isFirstTimeUser && (
+                                  <>
+                                      <input type="email" placeholder="Link Email (Required)" value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={{width: '100%', padding: '18px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.08)', color: '#fff', marginBottom: '15px', boxSizing: 'border-box', outline: 'none', fontSize: '15px'}} />
+                                      
+                                      <div style={{ position: 'relative', width: '100%', marginBottom: '15px' }}>
+                                          <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{width: '100%', padding: '18px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.08)', color: '#fff', boxSizing: 'border-box', outline: 'none', fontSize: '15px'}} />
+                                          <span onClick={() => setShowConfirmPass(!showConfirmPass)} style={{ position: 'absolute', right: '20px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px', opacity: 0.7 }}>{showConfirmPass ? '🙈' : '👁️'}</span>
+                                      </div>
+                                  </>
+                              )}
+                              
+                              <button onClick={handleLoginOrSetup} disabled={loading} style={{width: '100%', padding: '16px', borderRadius: '20px', background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', fontWeight: '800', border: 'none', fontSize: '16px', boxShadow: '0 10px 20px -5px rgba(243, 156, 18, 0.4)', marginTop: '10px'}}>{loading ? 'Processing...' : isFirstTimeUser ? 'Setup Account' : 'Login & Access'}</button>
+                          </div>
+                      )}
+                  </div>
+                  
+                  {/* Trust Badges */}
+                  <div style={{ display: 'flex', gap: '20px', marginTop: '35px', color: '#bbb', fontSize: '0.8rem', fontWeight: '500' }}>
+                      <span style={{display: 'flex', alignItems:'center', gap:'6px'}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Secure</span>
+                      <span style={{display: 'flex', alignItems:'center', gap:'6px'}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Fast</span>
+                      <span style={{display: 'flex', alignItems:'center', gap:'6px'}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> Quality</span>
+                  </div>
+              </div>
+          )}
+          
+          {/* FLOATING BOOK BUTTON */}
+          {!isDashboard && (
+              <div style={{position: 'absolute', bottom: '30px', left: 0, width: '100%', display: 'flex', justifyContent: 'center', zIndex: 20}}>
+                  <button onClick={() => setViewState('BOOKING')} style={{padding: '15px 45px', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '30px', fontWeight: '700', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', boxShadow: '0 15px 25px rgba(0,0,0,0.5)', fontSize: '15px', letterSpacing: '1px'}}>
+                      Book Studio
+                  </button>
+              </div>
+          )}
 
-                    <div className="info-box-red-mob">
-                        <h2>{searchStep === 0 ? "Search Your Data By Registered Mobile No." : searchStep === 1 ? "OTP Verification" : "Security Check"}</h2>
-                    </div>
-
-                    <div 
-                      className="magnet-section-mob"
-                      ref={magnetRef}
-                      onTouchMove={handleMagnetMove}
-                      onTouchEnd={handleMagnetLeave}
-                      onMouseMove={handleMagnetMove}
-                      onMouseLeave={handleMagnetLeave}
-                      style={{ 
-                        ...magnetStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', touchAction: 'none' 
-                      }}
-                    >
-                      <video 
-                        className="magnet-video-mob" 
-                        autoPlay loop muted playsInline
-                        style={{ width: '80%', maxWidth: '300px', borderRadius: '15px', boxShadow: '0px 10px 30px rgba(0,0,0,0.2)', pointerEvents: 'none' }}
-                      >
-                        <source src={magnetVideo} type="video/mp4" />
-                      </video>
-                    </div>
-
-                    <div className="footer-section-mob">
-                      <button className="book-btn-mob" onClick={() => setViewState('BOOKING')}>Book <br/> Now</button>
-                    </div>
-                </>
-            )}
-          </div>
       </div>
     </div>
   );

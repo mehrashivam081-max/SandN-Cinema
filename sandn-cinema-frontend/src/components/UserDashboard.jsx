@@ -3647,10 +3647,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ HEADER MODIFIED: Added Cart and Emergency Button */}
-            <header className="ud-header-vip" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* ✅ HEADER MODIFIED: App-Like Fixed Header (आपके Header.jsx वाले लॉजिक के साथ) */}
+            <header className="ud-header-vip" style={{ 
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                position: 'fixed', top: 0, left: 0, width: '100%', boxSizing: 'border-box', /* 🔥 Your Fixed Logic */
+                zIndex: 9999, 
+                background: 'rgba(15, 23, 42, 0.85)', 
+                backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', 
+                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                padding: '15px 25px'
+            }}>
                 
-                {/* 🚀 NAYA SNEVIO LOGO (Premium Cinematic Look) */}
                 <div className="brand-logo-vip" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '400', letterSpacing: '3px', color: '#fff' }}>
                         SNE<span style={{ fontWeight: '800', color: '#f1c40f' }}>VIO</span>
@@ -3674,7 +3681,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             </header>
 
-            <main className="user-main-content">
+            {/* 🔥 Added padding-top so content scrolls perfectly UNDER the fixed header */}
+            <main className="user-main-content" style={{ paddingTop: '90px' }}>
                 {renderContent()}
             </main>
 

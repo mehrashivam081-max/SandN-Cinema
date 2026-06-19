@@ -139,3 +139,42 @@
   mix-blend-mode: screen; 
   filter: drop-shadow(0 0 20px rgb(91, 169, 233));
 }
+/* Scroll Bounce Animation */
+.scroll-indicator-icon {
+    position: absolute;
+    bottom: 30px;
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.6);
+    animation: bounceUpDown 2s infinite;
+    cursor: pointer;
+}
+
+@keyframes bounceUpDown {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-15px); }
+    60% { transform: translateY(-7px); }
+}
+/* 🔥 FIX 2: Search Bar Placeholder Color (Text ko white karne ke liye) */
+.laptop-search-wrapper input::placeholder {
+    color: rgba(255, 255, 255, 0.7) !important;
+    opacity: 1; /* Firefox fix */
+}
+
+/* Scroll Bounce Animation */
+.scroll-indicator-icon {
+    position: absolute;
+    bottom: 30px;
+    animation: bounceUpDown 2s infinite;
+    cursor: pointer;
+}
+
+@keyframes bounceUpDown {
+    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-15px); }
+    60% { transform: translateY(-7px); }
+}
+body, html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}

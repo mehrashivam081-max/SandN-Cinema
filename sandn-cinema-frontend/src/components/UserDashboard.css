@@ -11,18 +11,24 @@
     overflow-x: hidden;
 }
 
-/* --- HEADER SECTION --- */
+/* --- HEADER SECTION (🔥 ULTRA PREMIUM GLASS EFFECT) --- */
 .ud-header-vip {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 25px;
-    background: rgba(15, 15, 15, 0.95);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #222;
+    padding: 15px 30px;
+    
+    /* 🔥 डार्क सिनेमैटिक ग्लास इफेक्ट */
+    background: rgba(15, 23, 42, 0.80); /* हल्का सा नीला/डार्क टोन */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px); /* Apple Devices के लिए */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* बहुत ही हल्की सफ़ेद लाइन */
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3); /* हेडर के नीचे हल्की सी परछाई */
+    
+    /* 🔥 इसे टॉप पर चिपकाने का मेन लॉजिक */
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 9999; /* Z-index बढ़ा दिया ताकि ये किसी भी इमेज के नीचे ना दबे */
 }
 
 .brand-logo-vip {

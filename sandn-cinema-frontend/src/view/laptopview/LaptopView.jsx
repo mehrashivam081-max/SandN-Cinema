@@ -1,7 +1,8 @@
+// src/view/laptopview/LaptopView.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './LaptopView.css';
-import magnetVideo from '../../assets/magnet-clip.mp4';
+
 import ProfilePage from '../../components/ProfilePage';
 import ServicesPage from '../../components/ServicesPage';
 import LoginPage from '../../components/LoginPage';
@@ -50,7 +51,7 @@ const LaptopView = ({
   };
 
   // ==========================================
-  // 🧭 1. ADVANCED BROWSER HISTORY LOGIC
+  // 🧭 ADVANCED BROWSER HISTORY LOGIC
   // ==========================================
   useEffect(() => {
       if (!userData) {
@@ -76,7 +77,7 @@ const LaptopView = ({
   }, [userData, setViewState, setSearchStep]);
 
   // ==========================================
-  // 🔄 2. GLOBAL AUTO-REFRESH ENGINE
+  // 🔄 GLOBAL AUTO-REFRESH ENGINE
   // ==========================================
   useEffect(() => {
       const globalRefreshInterval = setInterval(() => {
@@ -99,7 +100,6 @@ const LaptopView = ({
       setOtpMethod(selectedMethod);
       setLoading(true);
       try {
-          // 🔄 FIX: Hardcoded 'USER' replaced with loginRole state
           const res = await axios.post(`${API_BASE}/check-send-otp`, { mobile, sendVia: selectedMethod, roleFilter: loginRole });
           if (res.data.success) { 
               const methodLabel = selectedMethod === 'mobile' ? 'SMS' : selectedMethod === 'whatsapp' ? 'WhatsApp' : 'Email';
@@ -117,7 +117,6 @@ const LaptopView = ({
       if (!otp) return alert("Please enter OTP");
       setLoading(true);
       try {
-          // 🔄 FIX: Using loginRole for dynamic role matching
           const res = await axios.post(`${API_BASE}/verify-otp`, { mobile, otp, roleFilter: loginRole });
           if (res.data.success) {
               setIsFirstTimeUser(res.data.isNewUser);
@@ -126,7 +125,6 @@ const LaptopView = ({
       } catch (e) { alert("Verification Failed."); } finally { setLoading(false); }
   };
 
-  // ✅ UPDATED: Login OR Setup Logic with Strict Token Saving
   const handleLoginOrSetup = async () => {
       if (!password) return alert("Please enter password");
       setLoading(true);
@@ -137,7 +135,6 @@ const LaptopView = ({
               
               const res = await axios.post(`${API_BASE}/create-password`, { mobile, password, email: newEmail, roleFilter: loginRole });
               if (res.data.success) { 
-                  // 🔥 THE FIX: Saving the Authentication Token securely!
                   localStorage.setItem('authToken', res.data.token);
                   localStorage.setItem('user', JSON.stringify(res.data.user));
                   sessionStorage.setItem('user', JSON.stringify(res.data.user));
@@ -147,7 +144,6 @@ const LaptopView = ({
           } else {
               const res = await axios.post(`${API_BASE}/login`, { mobile, password, roleFilter: loginRole });
               if (res.data.success) { 
-                  // 🔥 THE FIX: Saving the Authentication Token securely!
                   localStorage.setItem('authToken', res.data.token);
                   localStorage.setItem('user', JSON.stringify(res.data.user));
                   sessionStorage.setItem('user', JSON.stringify(res.data.user));
@@ -223,175 +219,156 @@ const LaptopView = ({
       )}
 
       {/* ==========================================
-          💎 HEADER: ORIGINAL BRAND UI + NEW RIGHT SECTION
-          ========================================== */}
-{/* ==========================================
-          💎 HEADER: FIXED ALIGNMENT & CAPSULE SEARCH BAR
+          💎 HEADER SECTION (DARK PREMIUM GLASS)
           ========================================== */}
       {!userData && (
           <header className="laptop-header" style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between', 
-              padding: '10px 30px', 
-              width: '100%', 
-              boxSizing: 'border-box', 
-              position: 'relative', 
-              zIndex: 100,
-              minHeight: '80px',
-              background: '#ececec'
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+              padding: '15px 30px', width: '100%', boxSizing: 'border-box', 
+              position: 'absolute', top: 0, left: 0, zIndex: 100, minHeight: '80px',
+              background: 'rgba(18, 18, 18, 0.3)', backdropFilter: 'blur(10px)', 
+              borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
           }}>
             
-            {/* LEFT SECTION: LOGO + LOGIN DROPDOWN */}
+            {/* LEFT SECTION */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: '0 0 380px' }}>
                 <div className="menu-icon" onClick={() => setMenuOpen(true)} style={{cursor: 'pointer'}}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
-                <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer', margin: 0, fontSize: '24px', whiteSpace: 'nowrap'}}>
-                         S N E <span className="brand-highlight">V I O</span>
+                <h1 className="brand-title" onClick={goHome} style={{cursor:'pointer', margin: 0, fontSize: '24px', whiteSpace: 'nowrap', color: '#ffffff'}}>
+                         S N E <span className="brand-highlight" style={{color: '#FFD700'}}>V I O</span>
                 </h1>
 
-                {/* 🚀 SIMPLE LOGIN BUTTON (No Dropdown) */}
                 <button 
                     onClick={() => setViewState('AUTH')}
                     style={{
-                        padding: '8px 25px', 
-                        background: '#fff', 
-                        color: '#333',
-                        border: '1px solid #8a1818', 
-                        borderRadius: '30px', 
-                        cursor: 'pointer',
-                        fontWeight: 'bold', 
-                        fontSize: '13px',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                        position: 'relative',
-                        left: '+70px',
-                        transition: '0.2s',
-                        whiteSpace: 'nowrap'
-                        
+                        padding: '8px 25px', background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff',
+                        border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '30px', 
+                        cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', position: 'relative',
+                        left: '+70px', transition: '0.3s', whiteSpace: 'nowrap'
                     }}
-                    onMouseEnter={(e) => e.target.style.background = '#f0f0f0'}
-                    onMouseLeave={(e) => e.target.style.background = '#fff'}
+                    onMouseEnter={(e) => { e.target.style.background = '#FFD700'; e.target.style.color = '#121212'; e.target.style.border = '1px solid #FFD700'; }}
+                    onMouseLeave={(e) => { e.target.style.background = 'rgba(255, 255, 255, 0.1)'; e.target.style.color = '#ffffff'; e.target.style.border = '1px solid rgba(255, 255, 255, 0.3)'; }}
                 >
                     Login
                 </button>
             </div>
 
-            {/* CENTER: CAPSULE SEARCH BAR (Absolute Centered) */}
-            <div style={{ 
-                position: 'absolute', 
-                left: '50%', 
-                transform: 'translateX(-50%)', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                zIndex: 101 
-            }}>
+            {/* CENTER: CAPSULE SEARCH BAR */}
+            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 101 }}>
               <div className="laptop-search-wrapper" style={{ margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  
                  {searchStep === 0 && (
                     <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        background: '#f1f3f4', 
-                        borderRadius: '30px', 
-                        padding: '4px 4px 4px 20px', 
-                        border: '1px solid #000000',
-                        width: '400px',
-                        height: '40px'
+                        display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.15)', 
+                        borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid rgba(255, 255, 255, 0.3)', width: '400px', height: '40px'
                     }}>
-                        <input 
-                            type="text" 
-                            placeholder="Search registered mobile number" 
-                            value={mobile} 
-                            onChange={e=>setMobile(e.target.value)} 
-                            onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} 
-                            style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', color: '#555' }} 
-                            autoFocus 
-                        />
-                        <button 
-                            onClick={handleSearchClick} 
-                            disabled={loading} 
-                            style={{ 
-                                background: 'linear-gradient(to right, #5d78b4, #b486d5)', 
-                                color: 'white', 
-                                border: 'none', 
-                                borderRadius: '25px', 
-                                padding: '8px 25px', 
-                                cursor: 'pointer', 
-                                fontWeight: 'bold',
-                                fontSize: '14px'
-                            }}
-                        >
-                            {loading ? '...' : 'Search'}
-                        </button>
+                        <input type="text" placeholder="Search registered mobile number" value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleSearchClick)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: '14px', color: '#ffffff' }} autoFocus />
+                        <button onClick={handleSearchClick} disabled={loading} style={{ background: '#FFD700', color: '#121212', border: 'none', borderRadius: '25px', padding: '8px 25px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', boxShadow: '0 4px 10px rgba(255, 215, 0, 0.3)' }}>{loading ? '...' : 'Search'}</button>
                     </div>
                  )}
-
                  {searchStep === 1 && (
-                     <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        background: '#f1f3f4', 
-                        borderRadius: '30px', 
-                        padding: '4px 4px 4px 20px', 
-                        border: '1px solid #000000',
-                        width: '400px',
-                        height: '40px'
-                    }}>
-                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#333', fontSize: '15px', fontWeight: '500' }} autoFocus />
-                        <button onClick={handleVerifyOTP} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Verify</button>
+                     <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.15)', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid rgba(255, 255, 255, 0.3)', width: '400px', height: '40px' }}>
+                        <input type="text" placeholder="Enter OTP" className="search-input" value={otp} onChange={e=>setOtp(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleVerifyOTP)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#ffffff', fontSize: '15px', fontWeight: '500' }} autoFocus />
+                        <button onClick={handleVerifyOTP} disabled={loading} style={{ background: '#FFD700', color: '#121212', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Verify</button>
                     </div>
                  )}
-
                  {searchStep === 2 && (
-                     <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        background: '#f1f3f4', 
-                        borderRadius: '30px', 
-                        padding: '4px 4px 4px 20px', 
-                        border: '1px solid #000000',
-                        width: '400px',
-                        height: '40px'
-                    }}>
-                        <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#333', fontSize: '15px', fontWeight: '500' }} autoFocus />
-                        <button onClick={handleLoginOrSetup} disabled={loading} style={{ background: 'linear-gradient(to right, #5d78b4, #b486d5)', color: 'white', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Login</button>
+                     <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.15)', borderRadius: '30px', padding: '4px 4px 4px 20px', border: '1px solid rgba(255, 255, 255, 0.3)', width: '400px', height: '40px' }}>
+                        <input type={showPass ? "text" : "password"} placeholder="Enter Password" className="search-input" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={(e) => handleKeyDown(e, handleLoginOrSetup)} style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', color: '#ffffff', fontSize: '15px', fontWeight: '500' }} autoFocus />
+                        <button onClick={handleLoginOrSetup} disabled={loading} style={{ background: '#FFD700', color: '#121212', border: 'none', borderRadius: '25px', padding: '8px 20px', fontWeight: 'bold' }}>Login</button>
                     </div>
                  )}
               </div>
             </div>
 
-            {/* RIGHT: Buttons Group */}
+            {/* RIGHT BUTTONS */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '0 0 auto' }}>
-                <button onClick={() => handleManualSwipe('left')} style={{padding:'8px 14px', background:'#fff', color: '#333', border:'1px solid #ddd', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'}}>🔥 Trending</button>
-                <button onClick={() => handleManualSwipe('right')} style={{padding:'8px 14px', background:'#fff', color: '#333', border:'1px solid #ddd', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'}}>🚀 Viral</button>
-                <button onClick={() => setViewState('BOOKING')} style={{padding: '8px 18px', background: 'linear-gradient(45deg, #FF512F, #DD2476)', color: '#fff', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(221, 36, 118, 0.3)'}}>Book Now</button>
-                <div onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', background: '#111', color: '#FFD700', borderRadius: '50%', border: '2px solid #FFD700', width: '38px', height: '38px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.2)'}} title="Partnership & Collab">
+                <button onClick={() => handleManualSwipe('left')} style={{padding:'8px 14px', background:'rgba(255, 255, 255, 0.1)', color: '#ffffff', border:'1px solid rgba(255, 255, 255, 0.2)', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', transition: '0.3s'}} onMouseEnter={(e) => e.target.style.background='rgba(255,255,255,0.2)'} onMouseLeave={(e) => e.target.style.background='rgba(255,255,255,0.1)'}>🔥 Trending</button>
+                <button onClick={() => handleManualSwipe('right')} style={{padding:'8px 14px', background:'rgba(255, 255, 255, 0.1)', color: '#ffffff', border:'1px solid rgba(255, 255, 255, 0.2)', borderRadius:'20px', cursor:'pointer', fontWeight:'bold', fontSize: '13px', transition: '0.3s'}} onMouseEnter={(e) => e.target.style.background='rgba(255,255,255,0.2)'} onMouseLeave={(e) => e.target.style.background='rgba(255,255,255,0.1)'}>🚀 Viral</button>
+                
+                <button onClick={() => setViewState('BOOKING')} style={{padding: '8px 18px', background: 'linear-gradient(45deg, #FFD700, #F39C12)', color: '#121212', border: 'none', borderRadius: '25px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(255, 215, 0, 0.3)', transition: '0.3s'}} onMouseEnter={(e) => e.target.style.transform='scale(1.05)'} onMouseLeave={(e) => e.target.style.transform='scale(1)'}>Book Now</button>
+                
+                <div onClick={() => setViewState('COLLAB')} style={{cursor: 'pointer', background: 'rgba(255, 255, 255, 0.1)', color: '#FFD700', borderRadius: '50%', border: '1px solid rgba(255, 255, 255, 0.2)', width: '38px', height: '38px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink: 0, transition: '0.3s'}} onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={(e) => e.currentTarget.style.background='rgba(255,255,255,0.1)'} title="Partnership & Collab">
                     <span style={{fontSize:'16px'}}>🤝</span>
                 </div>
             </div>
           </header>
       )}
 
-      {/* MAIN CONTENT AREA */}
-      <div className="laptop-main-content" style={{ minHeight: 'calc(100vh - 80px)', paddingBottom: '50px' }}>
+      {/* ==========================================
+          💎 MAIN CONTENT AREA
+          ========================================== */}
+      <div 
+        className="laptop-main-content" 
+        style={{ 
+            minHeight: 'calc(100vh - 80px)', 
+            backgroundColor: searchStep === 3 ? '#f9f9f9' : 'transparent', 
+            transition: 'background-color 0.3s ease',
+            width: '100%', 
+            display: 'flex', 
+            flexDirection: 'column'
+        }}
+      >
         {searchStep === 3 ? (
-            <div style={{width: '100%', padding: '20px'}}>
+            <div style={{width: '100%', height: '100vh', padding: '0', margin: '0'}}> 
                 {renderDashboard()}
             </div>
         ) : (
-            <>
-                <div className="down-arrow">⮉</div>
-                <div className="info-box-red">
-                    <h2>Search Your Data<br />By Your Registered<br />Mobile No.</h2>
+            <div style={{ 
+                flex: 1, 
+                width: '100%', 
+                boxSizing: 'border-box',
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                minHeight: 'calc(100vh - 80px)', 
+                textAlign: 'center', 
+                padding: '0 20px',
+                backgroundImage: `linear-gradient(rgba(18, 18, 18, 0.75), rgba(18, 18, 18, 0.95)), url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2069&auto=format&fit=crop')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+            }}>
+                
+                <h1 style={{ color: '#ffffff', fontSize: '4rem', fontWeight: '800', marginBottom: '15px', letterSpacing: '1px', textShadow: '0px 4px 15px rgba(0,0,0,0.6)' }}>
+                    Relive Your Best <span style={{ color: '#FFD700', textShadow: '0px 4px 20px rgba(255, 215, 0, 0.4)' }}>Memories</span>
+                </h1>
+                
+                <p style={{ color: '#E0E0E0', fontSize: '1.25rem', maxWidth: '650px', marginBottom: '40px', lineHeight: '1.6', textShadow: '0px 2px 10px rgba(0,0,0,0.8)' }}>
+                    Securely access, select, and manage your high-quality event photos directly from your studio's digital album.
+                </p>
+                
+                <div style={{ 
+                    display: 'flex', 
+                    gap: '40px', 
+                    marginTop: '10px', 
+                    color: '#E0E0E0', 
+                    fontSize: '1rem', 
+                    fontWeight: '500',
+                    background: 'rgba(255, 255, 255, 0.08)', 
+                    padding: '15px 35px',
+                    borderRadius: '50px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    backdropFilter: 'blur(10px)', 
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+                }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>🔒 100% Secure</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>⚡ Instant Access</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>📸 Studio Quality</span>
                 </div>
-                <div className="magnet-section">
-                  <video className="magnet-video" autoPlay loop muted playsInline>
-                    <source src={magnetVideo} type="video/mp4" />
-                  </video>
+
+                {/* 🔥 SCROLL INDICATOR */}
+                <div className="scroll-indicator-icon" onClick={() => window.scrollBy({top: window.innerHeight, behavior: 'smooth'})}>
+                    {/* 🔥 SCROLL INDICATOR (Upgraded to Clean SVG) */}
+                <div className="scroll-indicator-icon" onClick={() => window.scrollBy({top: window.innerHeight, behavior: 'smooth'})}>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                 </div>
-            </>
+                </div>
+
+            </div>
         )}
       </div>
     </div>
