@@ -1,42 +1,152 @@
+/* src/components/BookingForm.css */
+
+/* 🔥 Cinematic Overlay */
 .modal-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(10, 10, 12, 0.85); /* Deep dark tint */
     display: flex; justify-content: center; align-items: center;
-    z-index: 1000; backdrop-filter: blur(5px);
-}
-
-.modal-content {
-    background: var(--card-bg);
-    width: 90%; max-width: 400px;
+    z-index: 999999; 
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
     padding: 20px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--primary);
-    box-shadow: 0 0 20px var(--glow-color);
-    color: var(--text-main);
+    box-sizing: border-box;
 }
 
-.modal-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 20px; border-bottom: 1px solid var(--glass-border);
-    padding-bottom: 10px;
+/* 🔥 Premium Glass Card */
+.booking-card-glass {
+    background: rgba(25, 25, 30, 0.7);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    width: 100%; 
+    max-width: 480px;
+    max-height: 90vh;
+    padding: 30px;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    color: #fff;
+    overflow-y: auto;
+    animation: slideUpModal 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    box-sizing: border-box;
 }
 
-.close-btn {
-    background: transparent; color: var(--text-main); font-size: 1.5rem;
+/* Hide scrollbar for the modal card */
+.booking-card-glass::-webkit-scrollbar { display: none; }
+.booking-card-glass { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 🔥 Labels */
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.luxe-label {
+    font-size: 11px;
+    color: #aaa;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
 }
 
-.modal-body select, .modal-body input {
-    margin-bottom: 15px; background: rgba(0,0,0,0.3);
+/* 🔥 Inputs */
+.luxe-input {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    outline: none;
+    transition: 0.3s;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+.luxe-input:focus { border-color: #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.15); }
+.luxe-input:disabled { opacity: 0.6; cursor: not-allowed; }
+.luxe-input::placeholder { color: rgba(255,255,255,0.3); }
+
+/* Force dark mode calendar icon on date pickers */
+.date-picker-dark { color-scheme: dark; }
+
+/* 🔥 Buttons inside inputs (OTP) */
+.btn-otp-luxe {
+    background: transparent;
+    border: 1px solid #FFD700;
+    color: #FFD700;
+    padding: 0 15px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.3s;
+    white-space: nowrap;
+}
+.btn-otp-luxe:hover:not(:disabled) { background: rgba(255, 215, 0, 0.1); }
+.btn-otp-luxe:disabled { border-color: #555; color: #555; cursor: not-allowed; }
+
+.verified-badge {
+    display: flex; align-items: center; padding: 0 15px;
+    background: rgba(46, 204, 113, 0.1);
+    color: #2ecc71;
+    border: 1px solid rgba(46, 204, 113, 0.3);
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
 }
 
-.price-summary {
-    background: var(--glass-bg); padding: 15px; border-radius: var(--radius-sm);
-    margin: 15px 0; text-align: center;
+/* 🔥 OTP Verification Box */
+.otp-box-glass {
+    display: flex; gap: 10px;
+    background: rgba(255, 215, 0, 0.05);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255, 215, 0, 0.3);
 }
+.luxe-input-otp {
+    flex: 1; padding: 10px; background: transparent; border: none;
+    color: #FFD700; font-size: 18px; font-weight: 700;
+    letter-spacing: 6px; text-align: center; outline: none;
+}
+.luxe-input-otp::placeholder { color: rgba(255,215,0,0.3); font-size: 12px; letter-spacing: 1px; }
+.btn-verify-luxe {
+    background: #FFD700; color: #000; border: none; padding: 0 20px;
+    border-radius: 8px; font-weight: 800; font-size: 11px; letter-spacing: 1px;
+    cursor: pointer; transition: 0.3s;
+}
+.btn-verify-luxe:hover { box-shadow: 0 0 15px rgba(255,215,0,0.4); transform: scale(1.05); }
 
-.pay-btn {
-    width: 100%; padding: 15px;
-    background: var(--gradient-main);
-    color: white; border-radius: var(--radius-sm);
-    font-weight: bold; letter-spacing: 1px;
+/* 🔥 T&C Checkbox */
+.checkbox-wrapper-glass {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.checkbox-wrapper-glass input { width: 16px; height: 16px; accent-color: #FFD700; cursor: pointer; margin-top: 2px; }
+.checkbox-wrapper-glass label { font-size: 12px; color: #ccc; cursor: pointer; line-height: 1.5; font-weight: 300; letter-spacing: 0.5px; }
+.link-text-gold { color: #FFD700; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+/* 🔥 Primary Confirm Button */
+.btn-primary-luxe {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, #FFD700, #F39C12);
+    color: #121212; border: none; border-radius: 25px;
+    font-size: 13px; font-weight: 800; cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-transform: uppercase; letter-spacing: 2px;
+    box-shadow: 0 8px 20px rgba(243, 156, 18, 0.3);
+}
+.btn-primary-luxe:hover:not(:disabled) { transform: scale(1.02); box-shadow: 0 12px 25px rgba(243, 156, 18, 0.5); }
+.btn-primary-luxe:disabled { background: rgba(255,255,255,0.1); color: #666; cursor: not-allowed; box-shadow: none; }
+
+/* Animations */
+.fade-in { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUpModal { from { opacity: 0; transform: translateY(40px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+    .booking-card-glass { padding: 25px 20px; border-radius: 20px; }
 }

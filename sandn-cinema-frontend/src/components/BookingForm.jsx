@@ -135,94 +135,96 @@ const BookingForm = ({ onClose }) => {
     };
 
     return (
-        // ✅ Clicking outside the box closes the modal
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
-                <div className="modal-header" style={{ marginBottom: '20px' }}>
-                    <h3>📅 Book a Shoot</h3>
-                    <button onClick={onClose} className="close-btn">&times;</button>
+        // ✅ Premium Cinematic Overlay
+        <div className="modal-overlay" onClick={onClose} style={{ fontFamily: "'Poppins', sans-serif" }}>
+            <div className="booking-card-glass" onClick={(e) => e.stopPropagation()}>
+                
+                {/* 🔥 Header */}
+                <div className="modal-header" style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '15px' }}>
+                    <h3 style={{ margin: 0, color: '#FFD700', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '700' }}>📅 Book a Shoot</h3>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '28px', cursor: 'pointer', opacity: 0.7, transition: '0.3s' }} onMouseEnter={(e)=>e.currentTarget.style.opacity=1} onMouseLeave={(e)=>e.currentTarget.style.opacity=0.7}>&times;</button>
                 </div>
                 
-                {/* ✅ Form connected to Submit Logic */}
-                <form className="modal-body" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* 🔥 Premium Form */}
+                <form className="modal-body" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                     
-                    <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444' }}>Full Name</label>
-                    <input type="text" name="name" value={formData.name} onChange={handleChange} required placeholder="Enter your full name" style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }} disabled={isMobileVerified} />
-
-                    {/* MOBILE VERIFICATION ROW */}
-                    <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444' }}>Mobile Number</label>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <input type="number" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="10-digit mobile number" style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', flex: 1 }} disabled={isMobileVerified} />
-                        {!isMobileVerified && (
-                            <button type="button" onClick={handleSendOtp} disabled={otpLoading || formData.mobile.length !== 10} style={{ padding: '0 15px', background: '#3498db', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                                {otpLoading ? '...' : isOtpSent ? 'Resend' : 'Get OTP'}
-                            </button>
-                        )}
-                        {isMobileVerified && <span style={{ padding: '0 15px', background: '#e8f8f5', color: '#2ecc71', border: '1px solid #2ecc71', borderRadius: '5px', display: 'flex', alignItems: 'center', fontWeight: 'bold', fontSize: '12px' }}>✓ Verified</span>}
+                    <div className="input-group">
+                        <label className="luxe-label">Full Name</label>
+                        <input type="text" name="name" className="luxe-input" value={formData.name} onChange={handleChange} required placeholder="Enter your full name" disabled={isMobileVerified} />
                     </div>
 
-                    {/* OTP INPUT BLOCK */}
+                    {/* 🔥 MOBILE VERIFICATION ROW */}
+                    <div className="input-group">
+                        <label className="luxe-label">Mobile Number</label>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <input type="number" name="mobile" className="luxe-input" value={formData.mobile} onChange={handleChange} required placeholder="10-digit mobile number" disabled={isMobileVerified} style={{ flex: 1 }} />
+                            {!isMobileVerified && (
+                                <button type="button" onClick={handleSendOtp} disabled={otpLoading || formData.mobile.length !== 10} className="btn-otp-luxe">
+                                    {otpLoading ? '...' : isOtpSent ? 'RESEND' : 'GET OTP'}
+                                </button>
+                            )}
+                            {isMobileVerified && <span className="verified-badge">✔️ VERIFIED</span>}
+                        </div>
+                    </div>
+
+                    {/* 🔥 OTP INPUT BLOCK */}
                     {isOtpSent && !isMobileVerified && (
-                        <div style={{ display: 'flex', gap: '10px', background: '#fef9e7', padding: '10px', borderRadius: '5px', border: '1px dashed #f1c40f' }}>
-                            <input type="number" placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '5px', border: '1px solid #f1c40f', textAlign: 'center', letterSpacing: '2px', fontWeight: 'bold' }} />
-                            <button type="button" onClick={handleVerifyOtp} style={{ background: '#2ecc71', color: 'white', border: 'none', padding: '0 20px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>Verify</button>
+                        <div className="otp-box-glass fade-in">
+                            <input type="number" placeholder="Enter 6-Digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} className="luxe-input-otp" autoFocus />
+                            <button type="button" onClick={handleVerifyOtp} className="btn-verify-luxe">VERIFY</button>
                         </div>
                     )}
 
-                    {/* DYNAMIC SERVICE SELECTOR */}
-                    <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444' }}>Event / Shoot Type</label>
-                    <select name="type" value={formData.type} onChange={handleChange} style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontFamily: 'inherit' }}>
-                        <option value="" disabled>Select a service...</option>
-                        {availableServices.map((service, index) => (
-                            <option key={index} value={service.name || service}>{service.name || service}</option>
-                        ))}
-                    </select>
+                    {/* 🔥 DYNAMIC SERVICE SELECTOR */}
+                    <div className="input-group">
+                        <label className="luxe-label">Event / Shoot Type</label>
+                        <select name="type" value={formData.type} onChange={handleChange} className="luxe-input" style={{ cursor: 'pointer', appearance: 'none' }}>
+                            <option value="" disabled>Select a premium service...</option>
+                            {availableServices.map((service, index) => (
+                                <option key={index} value={service.name || service} style={{ background: '#1b1b1b', color: '#fff' }}>{service.name || service}</option>
+                            ))}
+                        </select>
+                    </div>
 
-                    {/* DATES (FROM - TO) */}
+                    {/* 🔥 DATES (FROM - TO) */}
                     <div style={{ display: 'flex', gap: '15px' }}>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444', marginBottom: '5px' }}>Start Date</label>
-                            <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} required min={new Date().toISOString().split('T')[0]} style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontFamily: 'inherit' }} />
+                        <div className="input-group" style={{ flex: 1 }}>
+                            <label className="luxe-label">Start Date</label>
+                            <input type="date" name="startDate" className="luxe-input date-picker-dark" value={formData.startDate} onChange={handleChange} required min={new Date().toISOString().split('T')[0]} />
                         </div>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                            <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444', marginBottom: '5px' }}>End Date</label>
-                            <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} required min={formData.startDate || new Date().toISOString().split('T')[0]} style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontFamily: 'inherit' }} />
+                        <div className="input-group" style={{ flex: 1 }}>
+                            <label className="luxe-label">End Date</label>
+                            <input type="date" name="endDate" className="luxe-input date-picker-dark" value={formData.endDate} onChange={handleChange} required min={formData.startDate || new Date().toISOString().split('T')[0]} />
                         </div>
                     </div>
 
-                    {/* LOCATION DETAILS */}
-                    <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444' }}>City / Location</label>
-                    <input type="text" name="location" value={formData.location} onChange={handleChange} required placeholder="e.g. Indore" style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }} />
+                    {/* 🔥 LOCATION DETAILS */}
+                    <div className="input-group">
+                        <label className="luxe-label">City / Location</label>
+                        <input type="text" name="location" className="luxe-input" value={formData.location} onChange={handleChange} required placeholder="e.g. Mumbai, Maharashtra" />
+                    </div>
 
-                    <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#444' }}>Event Place / Venue Name</label>
-                    <input type="text" name="eventPlaceName" value={formData.eventPlaceName} onChange={handleChange} required placeholder="e.g. Grand Sheraton Hotel" style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }} />
+                    <div className="input-group">
+                        <label className="luxe-label">Event Place / Venue Name</label>
+                        <input type="text" name="eventPlaceName" className="luxe-input" value={formData.eventPlaceName} onChange={handleChange} required placeholder="e.g. The Taj Mahal Palace" />
+                    </div>
 
-                    {/* TERMS AND CONDITIONS */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: '#f9f9f9', padding: '15px', borderRadius: '8px', marginTop: '10px', border: '1px solid #eee' }}>
-                        <input type="checkbox" id="tcCheckbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} style={{ marginTop: '3px', transform: 'scale(1.2)', cursor: 'pointer' }} />
-                        <label htmlFor="tcCheckbox" style={{ fontSize: '12px', color: '#555', cursor: 'pointer', lineHeight: '1.4' }}>
-                            I agree to the <span style={{ color: '#e50914', fontWeight: 'bold', textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); alert("1. 30% advance required.\n2. Non-refundable on cancellation within 7 days.\n3. Outstation travel borne by client."); }}>Terms & Conditions</span> regarding booking, payment, and cancellation.
+                    {/* 🔥 TERMS AND CONDITIONS */}
+                    <div className="checkbox-wrapper-glass">
+                        <input type="checkbox" id="tcCheckbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} />
+                        <label htmlFor="tcCheckbox">
+                            I agree to the <span onClick={(e) => { e.preventDefault(); alert("1. 30% advance required.\n2. Non-refundable on cancellation within 7 days.\n3. Outstation travel borne by client."); }} className="link-text-gold">Terms & Conditions</span> regarding booking.
                         </label>
                     </div>
 
-                    {/* SUBMIT BUTTON */}
+                    {/* 🔥 SUBMIT BUTTON */}
                     <button 
                         type="submit" 
-                        className="pay-btn" 
+                        className="btn-primary-luxe"
                         disabled={loading || !isMobileVerified || !agreedToTerms}
-                        style={{ 
-                            marginTop: '15px', 
-                            padding: '15px', 
-                            background: (loading || !isMobileVerified || !agreedToTerms) ? '#95a5a6' : '#e50914', 
-                            color: '#fff', 
-                            border: 'none', 
-                            borderRadius: '5px', 
-                            fontWeight: 'bold', 
-                            cursor: (loading || !isMobileVerified || !agreedToTerms) ? 'not-allowed' : 'pointer',
-                            transition: '0.3s'
-                        }}
+                        style={{ marginTop: '10px' }}
                     >
-                        {loading ? 'SUBMITTING REQUEST...' : 'CONFIRM BOOKING'}
+                        {loading ? 'SUBMITTING REQUEST...' : 'CONFIRM BOOKING ⚡'}
                     </button>
                 </form>
             </div>

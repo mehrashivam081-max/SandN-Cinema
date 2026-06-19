@@ -124,3 +124,37 @@
 
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes slideUpComments { from { transform: translateY(100%); } to { transform: translateY(0); } }
+/* 🔥 HIDE SCROLLBAR FOR TRENDING FEED (Reels Vibe) */
+.hide-scroll {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* 🔥 PREMIUM GOLD SPINNER (Loading Effect) */
+.premium-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 215, 0, 0.2);
+  border-top-color: #FFD700;
+  border-radius: 50%;
+  animation: premiumSpin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+}
+
+@keyframes premiumSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* 🔥 FADE IN ANIMATION FOR POPUPS */
+.fade-in {
+  animation: fadeInModal 0.3s ease-out forwards;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

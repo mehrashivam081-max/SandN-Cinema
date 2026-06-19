@@ -1,679 +1,132 @@
-/* --- SIDEBAR CONTAINER --- */
-.profile-sidebar-container {
-    position: fixed;
-    top: 0;
-    left: 0; 
-    width: 30%;
-    min-width: 260px; /* Mobile adjustment */
-    height: 100dvh; 
-    background: #1a1a1a; 
-    color: #fff;
-    z-index: 2000;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-in-out;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto; 
-    overscroll-behavior: contain; 
+/* src/components/ProfilePage.css */
+
+/* 🔥 PREMIUM SIDEBAR GLASS CONTAINER */
+.profile-sidebar-glass {
+    position: fixed; top: 0; left: 0; 
+    width: 30%; min-width: 280px; max-width: 350px; height: 100dvh; 
+    background: rgba(15, 15, 20, 0.85); /* Deep dark glass */
+    backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    color: #fff; z-index: 2000;
+    transform: translateX(-100%); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
 }
 
-.profile-sidebar-container::-webkit-scrollbar {
-    width: 5px;
-}
+.profile-sidebar-glass::-webkit-scrollbar { width: 4px; }
+.profile-sidebar-glass::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.3); border-radius: 10px; }
 
-.profile-sidebar-container::-webkit-scrollbar-thumb {
-    background: #444;
-    border-radius: 10px;
-}
+.profile-sidebar-glass.slide-in { transform: translateX(0); }
 
-.profile-sidebar-container.slide-in {
-    transform: translateX(0);
-}
-
+/* Backdrop */
 .sidebar-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.6);
-    z-index: 1999;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s;
-}
-
-.sidebar-backdrop.open {
-    opacity: 1;
-    visibility: visible;
-}
-
-/* --- HEADER SECTION --- */
-.sidebar-header-row {
-    padding: 15px;
-    text-align: right;
-}
-
-.sidebar-close-btn {
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 24px;
-    cursor: pointer;
-}
-
-.dp-section {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 10px;
-}
-
-.profile-img-container {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 2px solid #e50914; 
-    cursor: pointer;
-}
-
-.profile-dp {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.profile-header-text {
-    text-align: center;
-    font-size: 1.2rem;
-    font-weight: bold;
-    margin-bottom: 20px;
-    letter-spacing: 1px;
-}
-
-.header-underline {
-    width: 40px;
-    height: 3px;
-    background: #e50914;
-    margin: 5px auto 0;
-}
-
-/* --- MENU LIST --- */
-.profile-menu-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    flex-grow: 1;
-    overflow-y: auto;
-    padding-bottom: 80px; /* ✅ FIX: Prevents bottom items from hiding in mobile */
-}
-
-.profile-menu-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    border-bottom: 1px solid #333;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.profile-menu-item:hover {
-    background: #333;
-}
-
-.menu-left-group {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.menu-icon {
-    font-size: 1.2rem;
-}
-
-.menu-label {
-    font-size: 0.95rem;
-    font-weight: 500;
-}
-
-.menu-arrow {
-    color: #777;
-}
-
-/* ✅ FULL IMAGE FIX: CSS for Double Tap Image Overlay */
-.full-image-overlay {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
-    background: rgba(0,0,0,0.95); z-index: 3000;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+    z-index: 1999; opacity: 0; visibility: hidden; transition: 0.4s;
 }
-.full-screen-img {
-    width: 100%; max-width: 500px; height: auto; max-height: 80vh; object-fit: contain;
-}
-.close-instruction { color: white; margin-top: 20px; font-size: 14px; opacity: 0.7; }
+.sidebar-backdrop.open { opacity: 1; visibility: visible; }
 
-/* --- POPUPS & MODALS --- */
-.popup-overlay-fixed {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 2100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(5px);
-}
+/* Header & Close */
+.sidebar-header-row { padding: 15px 20px; text-align: right; }
+.sidebar-close-btn-gold { background: transparent; border: none; color: #aaa; font-size: 24px; cursor: pointer; transition: 0.3s; }
+.sidebar-close-btn-gold:hover { color: #FFD700; transform: scale(1.1); }
 
-.custom-popup-box {
-    background: #222;
-    width: 90%;
-    max-width: 400px;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    border: 1px solid #444;
+/* DP Section */
+.dp-section { display: flex; justify-content: center; margin-bottom: 15px; }
+.profile-img-glass {
+    width: 85px; height: 85px; border-radius: 50%; overflow: hidden;
+    border: 2px solid #FFD700; padding: 3px; background: rgba(0,0,0,0.5);
+    box-shadow: 0 0 20px rgba(255,215,0,0.2); cursor: pointer; transition: 0.3s;
 }
+.profile-img-glass:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(255,215,0,0.4); }
+.profile-dp { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
-.popup-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    background: #333;
-    border-bottom: 1px solid #444;
-}
+.profile-header-text-gold { text-align: center; font-size: 18px; font-weight: 800; color: #fff; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 25px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.header-underline-gold { width: 50px; height: 3px; background: linear-gradient(90deg, transparent, #FFD700, transparent); margin: 10px auto; border-radius: 5px; }
 
-.popup-title-badge {
-    font-weight: bold;
-    color: #fff;
-}
+/* Quick Actions (4 Icons) */
+.profile-actions-row { display: flex; justify-content: space-around; padding: 0 10px 15px; }
+.profile-action-btn-glass { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: 0.3s; }
+.profile-action-btn-glass:hover { transform: translateY(-3px); }
+.p-action-icon-glass { font-size: 20px; background: rgba(255,255,255,0.05); width: 45px; height: 45px; display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.3s; }
+.profile-action-btn-glass:hover .p-action-icon-glass { background: rgba(255,215,0,0.1); border-color: rgba(255,215,0,0.3); color: #FFD700; }
+.p-action-label-glass { font-size: 11px; color: #aaa; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; }
 
-.popup-close-x {
-    background: transparent;
-    border: none;
-    color: #aaa;
-    font-size: 1.2rem;
-    cursor: pointer;
-}
+/* Menu List */
+.profile-menu-list { list-style: none; padding: 0; margin: 20px 0; flex-grow: 1; }
+.profile-menu-item-glass { display: flex; justify-content: space-between; align-items: center; padding: 16px 25px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.3s; }
+.profile-menu-item-glass:hover { background: linear-gradient(90deg, rgba(255,215,0,0.05), transparent); padding-left: 30px; border-left: 3px solid #FFD700; }
+.menu-left-group { display: flex; align-items: center; gap: 15px; }
+.menu-icon { font-size: 16px; opacity: 0.8; }
+.profile-menu-item-glass:hover .menu-icon { opacity: 1; filter: drop-shadow(0 0 5px rgba(255,215,0,0.5)); }
+.menu-label { font-size: 13px; font-weight: 500; color: #ddd; letter-spacing: 0.5px; text-transform: uppercase; }
+.menu-arrow { color: #555; font-size: 18px; transition: 0.3s; }
 
-.popup-inner-box {
-    padding: 20px;
-    max-height: 60vh;
-    overflow-y: auto;
-    color: #ddd;
-}
+/* Accounts Dropdown */
+.accounts-dropdown-glass { width: 100%; margin-top: 15px; padding-left: 35px; display: flex; flex-direction: column; gap: 10px; }
+.acc-btn { padding: 10px 15px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; font-size: 12px; color: #ccc; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; transition: 0.3s; }
+.acc-btn:hover { background: rgba(255,215,0,0.1); color: #FFD700; border-color: rgba(255,215,0,0.3); }
 
-/* --- SPECIFIC POPUP STYLES --- */
-.about-logo { width: 50px; margin-bottom: 10px; }
-.contact-item { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
-.green-btn { width: 100%; padding: 10px; background: #25D366; border: none; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
-.usp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-.usp-card { background: #333; padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; }
-.stars-container { font-size: 2rem; color: gold; cursor: pointer; text-align: center; margin: 10px 0; }
-.social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.social-card { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid; border-radius: 8px; text-decoration: none; font-size: 0.9rem; }
-/* ✅ NEW PROFILE ACTIONS ROW STYLES (Below DP) */
-.profile-actions-row {
-    display: flex;
-    justify-content: space-around;
-    padding: 10px 15px 20px;
-}
+/* Legal Footer */
+.legal-links-sidebar { padding: 25px 20px; border-top: 1px solid rgba(255,255,255,0.05); text-align: center; margin-top: auto; }
+.legal-title { font-size: 10px; color: #666; margin-bottom: 15px; font-weight: 700; letter-spacing: 2px; }
+.legal-flex { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; font-size: 12px; }
+.legal-flex a { color: #888; text-decoration: none; font-weight: 500; transition: 0.3s; text-transform: uppercase; letter-spacing: 0.5px; }
+.legal-flex a:hover { color: #FFD700; }
 
-.profile-action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
+/* 🔥 CUSTOM POPUPS (Glass Theme) */
+.popup-overlay-fixed { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; z-index: 3000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); }
+.custom-popup-glass { background: rgba(20,20,25,0.8); border: 1px solid rgba(255,255,255,0.1); width: 90%; max-width: 420px; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.8); backdrop-filter: blur(25px); animation: slideUp 0.3s ease-out; }
+.popup-header-row-glass { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: rgba(0,0,0,0.5); border-bottom: 1px solid rgba(255,255,255,0.05); }
+.popup-title-badge-gold { font-weight: 800; color: #FFD700; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; }
+.popup-close-x-gold { background: transparent; border: none; color: #888; font-size: 20px; cursor: pointer; transition: 0.3s; }
+.popup-close-x-gold:hover { color: #fff; transform: scale(1.1); }
+.popup-inner-glass { padding: 25px; max-height: 70vh; overflow-y: auto; color: #ddd; }
 
-.profile-action-btn:hover {
-    transform: scale(1.1);
-}
+/* Full Image Overlay */
+.full-image-overlay-glass { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(0,0,0,0.95); z-index: 4000; display: flex; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px); }
+.full-screen-img { width: 100%; max-width: 500px; max-height: 80vh; object-fit: contain; filter: drop-shadow(0 0 20px rgba(255,215,0,0.2)); }
+.close-instruction { color: #888; margin-top: 20px; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }
 
-.p-action-icon {
-    font-size: 1.4rem;
-    background: #2a2a2a;
-    width: 45px;
-    height: 45px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 50%;
-    border: 1px solid #444;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-}
+/* 🔥 CAREER OVERLAY (Glass) */
+.full-career-page-overlay-glass { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: linear-gradient(rgba(10,10,12,0.9), rgba(10,10,12,0.95)), url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2069&auto=format&fit=crop'); background-size: cover; background-position: center; z-index: 5000; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; }
+.career-box-glass { width: 100%; max-width: 750px; background: rgba(20,20,25,0.7); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.1); padding: 40px; border-radius: 24px; margin-top: 80px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
 
-.p-action-label {
-    font-size: 0.75rem;
-    color: #bbb;
-    text-align: center;
-    font-weight: 500;
-}
-/* Traffic Section CSS */
-.traffic-professional-box {
-    padding: 15px;
-    color: #333; /* टेक्स्ट का रंग डार्क किया */
-}
+.career-tabs { display: flex; gap: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 30px; }
+.p-tab-btn-glass { background: transparent; border: none; padding: 10px 0; color: #888; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: 0.3s; border-bottom: 2px solid transparent; }
+.p-tab-btn-glass.active { color: #FFD700; border-bottom: 2px solid #FFD700; }
 
-.stat-card {
-    background: #f8f8f8;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    padding: 15px;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
+.sub-tabs-glass { background: rgba(0,0,0,0.4); padding: 5px; border-radius: 12px; display: inline-flex; border: 1px solid rgba(255,255,255,0.05); }
+.t-tab-glass { padding: 10px 25px; border-radius: 8px; border: none; cursor: pointer; background: transparent; color: #aaa; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; }
+.t-tab-glass.active { background: rgba(255,215,0,0.15); color: #FFD700; }
 
-.stat-value {
-    font-weight: bold;
-    font-size: 18px;
-    color: #000; /* वैल्यू का रंग काला किया */
-    display: block;
-}
+.career-sub-title-gold { color: #fff; font-size: 18px; margin: 20px 0 15px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.career-list-glass { list-style: none; padding: 0; }
+.career-list-glass li { background: rgba(0,0,0,0.3); margin-bottom: 12px; padding: 15px 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); font-size: 14px; color: #ccc; font-weight: 300; letter-spacing: 0.5px; transition: 0.3s; }
+.career-list-glass li:hover { background: rgba(255,215,0,0.05); border-color: rgba(255,215,0,0.2); }
+.gold-bullet { color: #FFD700; margin-right: 10px; font-size: 16px; }
 
-.stat-label {
-    font-size: 13px;
-    color: #666; /* लेबल का रंग ग्रे किया */
-}
+.vacancy-list-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.vacancy-card-glass { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); padding: 25px; border-radius: 20px; display: flex; flex-direction: column; transition: 0.3s; }
+.vacancy-card-glass:hover { border-color: #FFD700; transform: translateY(-5px); box-shadow: 0 10px 30px rgba(255,215,0,0.15); }
+.urgent-badge-gold { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid rgba(231, 76, 60, 0.4); padding: 4px 10px; font-size: 10px; text-transform: uppercase; font-weight: 800; border-radius: 6px; display: inline-block; margin-bottom: 15px; letter-spacing: 1px; }
+.v-role-gold { font-size: 18px; margin: 0 0 10px 0; color: #fff; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.vacancy-details-glass { display: flex; flex-direction: column; gap: 8px; color: #aaa; font-size: 13px; margin-bottom: 25px; flex-grow: 1; letter-spacing: 0.5px; }
+.vacancy-apply-btn-gold { width: 100%; padding: 14px; background: linear-gradient(135deg, #FFD700, #F39C12); color: #000; border: none; border-radius: 12px; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: 0.3s; margin-top: auto; }
+.vacancy-apply-btn-gold:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4); }
 
-.stat-icon-bg {
-    font-size: 24px;
-}
-/* Card को प्रीमियम लुक देने के लिए */
-.stat-card {
-    background: linear-gradient(135deg, #ffffff, #f4f4f4);
-    border: 1px solid rgba(0,0,0,0.05);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* Soft Shadow */
-    transition: transform 0.3s ease;
-}
+/* Global Luxe Primary Button */
+.btn-primary-luxe { width: 100%; padding: 15px; background: linear-gradient(135deg, #FFD700, #F39C12); color: #000; border: none; border-radius: 25px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: 0.3s; box-shadow: 0 5px 15px rgba(243, 156, 18, 0.3); }
+.btn-primary-luxe:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(243, 156, 18, 0.5); }
 
-.stat-card:hover {
-    transform: translateY(-3px); /* Hover पर हल्का सा ऊपर उठेगा */
-}
+/* Animations */
+.fade-in { animation: fadeIn 0.4s ease-out forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-/* वैल्यू के लिए स्टाइलिश फॉन्ट */
-.stat-value {
-    font-weight: 700;
-    font-size: 22px;
-    color: #1a1a1a;
-    font-family: 'Inter', sans-serif; /* अगर इंटर फॉन्ट है तो */
-}
-
-/* लाइव अपडेट को और कूल बनाना */
-.live-indicator {
-    font-size: 11px;
-    color: #2ecc71;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-/* Premium Dashboard Styles */
-.traffic-professional-box {
-    padding: 20px;
-    background: #ffffff;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-}
-
-.stat-card {
-    background: linear-gradient(145deg, #ffffff, #f9f9f9);
-    border: 1px solid #eee;
-    border-radius: 16px;
-    padding: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: 0.3s;
-}
-
-.stat-label {
-    font-size: 12px;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.stat-value {
-    font-size: 24px;
-    font-weight: 800;
-    color: #1a1a1a;
-    display: block;
-}
-
-/* ग्राफ को और अच्छा बनाने के लिए */
-.recharts-cartesian-axis-tick-value {
-    fill: #666;
-    font-size: 12px;
-}
-.full-career-page-overlay {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: #111; /* डार्क थीम */
-    color: #fff;
-    z-index: 9999;
-    padding: 20px;
-    overflow-y: auto;
-}
-
-.back-btn {
-    padding: 10px 20px;
-    background: #e50914;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: bold;
-    margin-bottom: 20px;
-}
-/* Career Page Overlay - Premium Layout */
-.full-career-page-overlay {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: #111;
-    color: #fff;
-    z-index: 9999;
-    padding: 20px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center; /* सब कुछ बीच में लाने के लिए */
-}
-
-/* कंटेंट को एक कार्ड जैसा लुक दें */
-.career-box {
-    width: 100%;
-    max-width: 600px;
-    background: #1a1a1a;
-    padding: 30px;
-    border-radius: 20px;
-    margin-top: 20px;
-}
-
-.back-btn {
-    align-self: flex-start; /* वापस जाने का बटन ऊपर बाईं ओर */
-    padding: 10px 20px;
-    background: #e50914;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-/* Tabs और Typography को बेहतर अलाइनमेंट */
-.popup-tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #333;
-    padding-bottom: 10px;
-}
-
-.p-tab-btn {
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.p-tab-btn.active {
-    color: #e50914;
-    border-bottom: 2px solid #e50914;
-}
-
-.career-list {
-    list-style: none;
-    padding: 0;
-}
-
-.career-list li {
-    margin-bottom: 10px;
-    background: #222;
-    padding: 10px;
-    border-radius: 8px;
-}
-/* Career Page Premium Layout */
-.full-career-page-overlay {
-    background: #0a0a0a !important; /* बिल्कुल गहरा ब्लैक */
-    padding: 40px 20px;
-}
-
-.career-box {
-    background: #141414; /* थोड़ा लाइट ब्लैक */
-    border: 1px solid #222;
-    padding: 40px;
-    border-radius: 24px;
-    max-width: 700px;
-}
-
-/* Tabs को बटन जैसा बनाएं */
-.career-tabs {
-    border-bottom: 2px solid #222;
-    margin-bottom: 30px;
-    display: flex;
-    gap: 20px;
-}
-
-.p-tab-btn {
-    padding: 10px 0;
-    font-size: 16px;
-    border-bottom: 2px solid transparent;
-}
-
-.p-tab-btn.active {
-    color: #e50914;
-    border-bottom: 2px solid #e50914;
-}
-
-/* Sub-tabs (Short/Long term) */
-.sub-tabs-container {
-    background: #000;
-    padding: 5px;
-    border-radius: 12px;
-    display: inline-flex;
-    margin-bottom: 25px;
-}
-
-.t-tab {
-    padding: 8px 20px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    background: transparent;
-    color: #fff;
-}
-
-.t-tab.active {
-    background: #e50914;
-}
-
-/* List Items को प्रीमियम कार्ड जैसा लुक */
-.career-list {
-    list-style: none;
-    padding: 0;
-}
-
-.career-list li {
-    background: #1c1c1c;
-    margin-bottom: 12px;
-    padding: 15px 20px;
-    border-radius: 12px;
-    border-left: 4px solid #e50914; /* लाल बॉर्डर */
-    transition: 0.3s;
-}
-
-.career-list li:hover {
-    background: #252525;
-}
-
-/* Back Button */
-.back-btn {
-    margin-bottom: 30px;
-    background: #222;
-    color: #fff;
-    padding: 12px 25px;
-}
-/* Vacancy Card Premium Grid */
-.vacancy-list-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.vacancy-card {
-    background: #1c1c1c;
-    border: 1px solid #333;
-    padding: 25px;
-    border-radius: 20px;
-    position: relative;
-    transition: 0.3s;
-}
-
-.vacancy-card:hover {
-    border-color: #e50914;
-border: 2px solid transparent; /* बॉर्डर को पहले से रखें */
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.vacancy-card:hover {
-    border-color: #e50914;
-    box-shadow: 0 0 20px rgba(229, 9, 20, 0.2); /* लाल चमक */
-    transform: scale(1.02);
-}
-
-.urgent-badge {
-    background: #e50914;
-    color: white;
-    padding: 4px 10px;
-    font-size: 10px;
-    text-transform: uppercase;
-    font-weight: bold;
-    border-radius: 6px;
-    display: inline-block;
-    margin-bottom: 10px;
-}
-
-.v-role { font-size: 20px; margin: 0 0 10px 0; color: #fff; }
-
-.vacancy-details {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    color: #bbb;
-    font-size: 14px;
-    margin-bottom: 20px;
-    flex-grow: 1;
-}
-
-.vacancy-apply-btn {
-    width: 100%;
-    padding: 14px;
-    background: #e50914; /* लाल बटन */
-    margin-top: auto;
-    color: #fff;
-    border: none;
-    border-radius: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: 0.3s;
-    margin-top: 15px;
-}
-
-.vacancy-apply-btn:hover {
-    background: #ff1a26;
-    letter-spacing: 1px;
-}
-/* --- Ultra-Premium Career Page Overlay --- */
-.full-career-page-overlay {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: #050505; /* डीप ब्लैक बैकग्राउंड */
-    color: #fff;
-    z-index: 9999;
-    padding: 20px;
-    overflow-y: auto;
-    font-family: 'Inter', sans-serif;
-}
-
-.career-box {
-    background: rgba(20, 20, 20, 0.6);
-    backdrop-filter: blur(20px); /* ग्लास वाला प्रीमियम लुक */
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 40px;
-    border-radius: 30px;
-    max-width: 800px;
-    margin: 40px auto;
-}
-
-.career-header h3 {
-    font-size: 28px;
-    margin: 0;
-    background: linear-gradient(to right, #fff, #888);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-/* Tabs */
-.p-tab-btn {
-    font-size: 16px;
-    padding: 12px 24px;
-    border-radius: 12px;
-    transition: all 0.3s ease;
-}
-
-.p-tab-btn.active {
-    background: #e50914;
-    color: #fff;
-}
-
-/* Vacancy Card Glow */
-.vacancy-card {
-    background: #121212;
-    border: 1px solid #333;
-    padding: 30px;
-    border-radius: 20px;
-    transition: all 0.4s ease;
-    display: flex;        /* ✅ इसे जोड़ें */
-    flex-direction: column; /* ✅ कार्ड को वर्टिकल बनाएगा */
-    height: 100%;
-}
-
-.vacancy-card:hover {
-    border-color: #e50914;
-    box-shadow: 0 10px 30px rgba(229, 9, 20, 0.2);
-    transform: translateY(-5px);
-}
-
-.vacancy-apply-btn:hover {
-    background: #ff1a26;
-    box-shadow: 0 0 15px rgba(229, 9, 20, 0.5);
-}
-
-/* Back Button */
-.back-btn {
-    background: #222;
-    color: #fff;
-    padding: 12px 25px;
-    border-radius: 50px;
-    border: 1px solid #444;
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+    .profile-sidebar-glass { width: 85%; }
+    .career-box-glass { padding: 30px 20px; border-radius: 20px; }
+    .home-btn-glass { top: 15px; left: 15px; padding: 10px; font-size: 11px; }
 }

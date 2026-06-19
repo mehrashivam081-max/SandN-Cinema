@@ -330,141 +330,147 @@ const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecover
 
     return (
         <>
-            {/* ✅ नया फुल पेज करियर सेक्शन */}
+            {/* 🔥 PREMIUM CAREER PAGE OVERLAY */}
             {isCareerPage && (
-                <div className="full-career-page-overlay">
-                    <button className="back-btn" onClick={() => setIsCareerPage(false)}>← Back</button>
-                    <div className="career-box">
-            <div className="career-header" style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                <span className="career-icon">🚀</span><h3>Snevio Careers</h3>
-            </div>
-                        <div className="popup-tabs career-tabs">
-                            <button className={`p-tab-btn ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Career Path</button>
-                            <button className={`p-tab-btn ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Open Vacancy</button>
+                <div className="full-career-page-overlay-glass" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                    <div className="home-btn-glass" onClick={() => setIsCareerPage(false)} title="Back" style={{position:'absolute', top:'25px', left:'25px'}}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        <span className="home-text">Back</span>
+                    </div>
+                    
+                    <div className="career-box-glass">
+                        <div className="career-header" style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '30px'}}>
+                            <span className="career-icon" style={{fontSize: '28px'}}>🚀</span>
+                            <h3 style={{color: '#FFD700', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '800'}}>Snevio Careers</h3>
                         </div>
+                        
+                        <div className="popup-tabs career-tabs">
+                            <button className={`p-tab-btn-glass ${popupTab === 'tab1' ? 'active' : ''}`} onClick={() => setPopupTab('tab1')}>Career Path</button>
+                            <button className={`p-tab-btn-glass ${popupTab === 'tab2' ? 'active' : ''}`} onClick={() => setPopupTab('tab2')}>Open Vacancies</button>
+                        </div>
+                        
                         {popupTab === 'tab1' && (
-                            <>
-                                <div className="sub-tabs-container">
-                                    <button className={`t-tab ${careerSubTab === 'short' ? 'active' : ''}`} onClick={() => setCareerSubTab('short')}>Short Term</button>
-                                    <button className={`t-tab ${careerSubTab === 'long' ? 'active' : ''}`} onClick={() => setCareerSubTab('long')}>Long Term</button>
+                            <div className="fade-in">
+                                <div className="sub-tabs-glass">
+                                    <button className={`t-tab-glass ${careerSubTab === 'short' ? 'active' : ''}`} onClick={() => setCareerSubTab('short')}>Short Term</button>
+                                    <button className={`t-tab-glass ${careerSubTab === 'long' ? 'active' : ''}`} onClick={() => setCareerSubTab('long')}>Long Term</button>
                                 </div>
-                                <div className="career-content-area">
+                                <div className="career-content-area" style={{marginTop: '20px'}}>
                                     {careerSubTab === 'short' ? (
-                                        <><h4 className="career-sub-title">Freelance & Gigs</h4><ul className="career-list"><li>⚡ Project Based Pay</li><li>🕒 Flexible Shoot Timings</li><li>🎨 Build Creative Portfolio</li></ul></>
+                                        <><h4 className="career-sub-title-gold">Freelance & Gigs</h4><ul className="career-list-glass"><li><span className="gold-bullet">⚡</span> Project Based Pay</li><li><span className="gold-bullet">🕒</span> Flexible Shoot Timings</li><li><span className="gold-bullet">🎨</span> Build Creative Portfolio</li></ul></>
                                     ) : (
-                                        <><h4 className="career-sub-title">Core Team</h4><ul className="career-list"><li>💼 Permanent Role</li><li>📈 Growth in Production</li><li>🌟 Studio Perks & Insurance</li></ul></>
+                                        <><h4 className="career-sub-title-gold">Core Team</h4><ul className="career-list-glass"><li><span className="gold-bullet">💼</span> Permanent Role</li><li><span className="gold-bullet">📈</span> Growth in Production</li><li><span className="gold-bullet">🌟</span> Studio Perks & Insurance</li></ul></>
                                     )}
                                 </div>
-                                <div style={{marginTop: '15px'}}>{!careerInterest ? <button className="green-btn career-apply-btn" onClick={() => setCareerInterest(true)}>I am Interested</button> : <div className="ad-success-msg"><span className="check-icon">✓</span><div><strong>Interest Noted!</strong></div></div>}</div>
-                            </>
+                                <div style={{marginTop: '25px'}}>
+                                    {!careerInterest ? <button className="btn-primary-luxe" onClick={() => setCareerInterest(true)}>I AM INTERESTED 🚀</button> : <div className="success-badge">✅ Interest Noted!</div>}
+                                </div>
+                            </div>
                         )}
+                        
                         {popupTab === 'tab2' && (
-    <div className="vacancy-list-container">
-        {activeVacancies.map((job) => (
-            <div key={job.id} className="vacancy-card">
-                
-                {job.urgent && <div className="urgent-badge">Urgent</div>}
-                <h4 className="v-role">{job.role}</h4>
-                <div className="vacancy-details">
-                    <div>{job.type} • {job.time}</div>
-                    <div style={{color: '#2ecc71', fontWeight: 'bold'}}>💰 {job.salary}</div>
-                </div>
-                <button className="vacancy-apply-btn">Apply Now</button>
-            </div>
-        ))}
-    </div>
-)}
+                            <div className="vacancy-list-container fade-in">
+                                {activeVacancies.map((job) => (
+                                    <div key={job.id} className="vacancy-card-glass">
+                                        {job.urgent && <div className="urgent-badge-gold">URGENT</div>}
+                                        <h4 className="v-role-gold">{job.role}</h4>
+                                        <div className="vacancy-details-glass">
+                                            <div>{job.type} • {job.time}</div>
+                                            <div style={{color: '#FFD700', fontWeight: '800', marginTop: '5px'}}>💰 {job.salary}</div>
+                                        </div>
+                                        <button className="vacancy-apply-btn-gold">Apply Now</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
-            <div className={`sidebar-backdrop ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
-            <div className={`profile-sidebar-container ${isOpen ? 'slide-in' : ''}`}>
-                
-                {isFullView && (
-                    <div className="full-image-overlay" onClick={() => setIsFullView(false)} style={{position: 'fixed', top: 0, left: 0, width: '100vw', height: '100dvh', background: 'rgba(0,0,0,0.95)', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'}}>
-                        <img src={profileImg} alt="Full Profile" className="full-screen-img" style={{width: '100%', maxWidth: '500px', height: 'auto', maxHeight: '80vh', objectFit: 'contain'}} />
-                        <p className="close-instruction" style={{color: 'white', marginTop: '20px', fontSize: '14px', opacity: 0.7}}>Tap anywhere to close</p>
-                    </div>
-                )}
+            {/* 🔥 Full View Image (Moved OUTSIDE sidebar to prevent clipping) */}
+            {isFullView && (
+                <div className="full-image-overlay-glass" onClick={() => setIsFullView(false)}>
+                    <img src={profileImg} alt="Full Profile" className="full-screen-img" />
+                    <p className="close-instruction">Tap anywhere to close</p>
+                </div>
+            )}
 
-                {activePopup && (
-                    <div className="popup-overlay-fixed" onClick={closePopup} style={{position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)'}}>
-                        <div className="custom-popup-box" onClick={(e) => e.stopPropagation()}>
-                            <div className="popup-header-row">
-                                <div className="popup-title-badge">
-                                    {activePopup === "Advertisement" ? "Promotions" : (activePopup === "Traffic" ? "Analytics" : (activePopup.includes("...") ? "Connect" : activePopup.split('&')[0]))}
-                                </div>
-                                <button className="popup-close-x" onClick={closePopup}>X</button>
+            {/* 🔥 Popups (Moved OUTSIDE sidebar to prevent clipping) */}
+            {activePopup && (
+                <div className="popup-overlay-fixed" onClick={closePopup}>
+                    <div className="custom-popup-glass" onClick={(e) => e.stopPropagation()}>
+                        <div className="popup-header-row-glass">
+                            <div className="popup-title-badge-gold">
+                                {activePopup === "Advertisement" ? "Promotions" : (activePopup === "Traffic" ? "Analytics" : (activePopup.includes("...") ? "Connect" : activePopup.split('&')[0]))}
                             </div>
-                            {renderPopupContent()}
+                            <button className="popup-close-x-gold" onClick={closePopup}>✕</button>
                         </div>
+                        <div className="popup-inner-glass">{renderPopupContent()}</div>
                     </div>
-                )}
+                </div>
+            )}
 
-                <div className="sidebar-header-row"><button className="sidebar-close-btn" onClick={onClose}>✕</button></div>
+            {/* 🔥 SIDEBAR BACKDROP & CONTAINER */}
+            <div className={`sidebar-backdrop ${isOpen ? 'open' : ''}`} onClick={onClose}></div>
+            <div className={`profile-sidebar-glass ${isOpen ? 'slide-in' : ''}`} style={{ fontFamily: "'Poppins', sans-serif" }}>
+                
+                <div className="sidebar-header-row"><button className="sidebar-close-btn-gold" onClick={onClose}>✕</button></div>
                 
                 <div className="sidebar-content" ref={sidebarContentRef} style={{flexGrow: 1, overflowY: 'auto'}}>
+                    
+                    {/* DP Section */}
                     <div className="dp-section">
-                        <div className="profile-img-container" onClick={() => setIsFullView(true)} style={{cursor: 'pointer'}}>
+                        <div className="profile-img-glass" onClick={() => setIsFullView(true)}>
                             <img src={profileImg} alt="DP" className="profile-dp" />
                         </div>
                     </div>
                     
-                    <div className="profile-header-text">Snevio Cloud</div>
+                    <div className="profile-header-text-gold">Snevio Cloud</div>
 
+                    {/* Quick Actions */}
                     <div className="profile-actions-row">
                         {profileActions.map(action => (
-                            <div key={action.id} className="profile-action-btn" onClick={() => handleMenuClick(action.id)}>
-                                <div className="p-action-icon">{action.icon}</div>
-                                <div className="p-action-label">{action.label}</div>
+                            <div key={action.id} className="profile-action-btn-glass" onClick={() => handleMenuClick(action.id)}>
+                                <div className="p-action-icon-glass">{action.icon}</div>
+                                <div className="p-action-label-glass">{action.label}</div>
                             </div>
                         ))}
                     </div>
                     
-                    <div className="header-underline" style={{marginTop: '0px'}}></div>
+                    <div className="header-underline-gold"></div>
                     
-                    <ul className="profile-menu-list" style={{marginTop: '15px'}}>
-                        <li className="profile-menu-item" style={{flexDirection: 'column', alignItems: 'flex-start'}} onClick={() => setIsAccountsOpen(!isAccountsOpen)}>
+                    {/* Menu List */}
+                    <ul className="profile-menu-list">
+                        
+                        {/* Accounts Accordion */}
+                        <li className="profile-menu-item-glass" style={{flexDirection: 'column', alignItems: 'flex-start'}} onClick={() => setIsAccountsOpen(!isAccountsOpen)}>
                             <div style={{display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center'}}>
-                                <div className="menu-left-group">
-                                    <span className="menu-icon">👤</span>
-                                    <span className="menu-label">Accounts</span>
-                                </div>
-                                <span className="menu-arrow" style={{ transform: isAccountsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: '0.3s' }}>›</span>
+                                <div className="menu-left-group"><span className="menu-icon">👤</span><span className="menu-label">Accounts</span></div>
+                                <span className="menu-arrow" style={{ transform: isAccountsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
                             </div>
                             
                             {isAccountsOpen && (
-                                <div className="accounts-dropdown" style={{width: '100%', marginTop: '10px', paddingLeft: '35px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                                    <div 
-                                        onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); }} 
-                                        style={{padding: '8px 12px', background: '#f5f5f5', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
-                                        🔑 Login
-                                    </div>
-                                    <div 
-                                        onClick={(e) => { e.stopPropagation(); onClose(); navigate('/signup'); }} // ✅ FIXED: Redirects directly to signup
-                                        style={{padding: '8px 12px', background: '#f5f5f5', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', color: '#333'}}>
-                                        📝 Create Account
-                                    </div>
-                                </div>
+                                <div className="accounts-dropdown-glass fade-in">
+                                    <div className="acc-btn" onClick={(e) => { e.stopPropagation(); onClose(); onOpenAuth(); }}>🔑 Login</div>
+                                    <div className="acc-btn" onClick={(e) => { e.stopPropagation(); onClose(); navigate('/signup'); }}>📝 Create Account</div>
+                                </div>
                             )}
                         </li>
 
+                        {/* Standard Menu Items */}
                         {menuItems.map((item, index) => (
-                            <li key={index} className="profile-menu-item" onClick={() => handleMenuClick(item.id)}>
+                            <li key={index} className="profile-menu-item-glass" onClick={() => handleMenuClick(item.id)}>
                                 <div className="menu-left-group"><span className="menu-icon">{item.icon}</span><span className="menu-label">{item.label}</span></div>
                                 <span className="menu-arrow">›</span>
                             </li>
                         ))}
                     </ul>
-                    {/* ✅ SNEVIO LEGAL LINKS (For Instamojo Approval) */}
-                    <div className="legal-links-sidebar" style={{marginTop: '30px', padding: '20px 10px', borderTop: '1px solid #eee', textAlign: 'center'}}>
-                        <p style={{fontSize: '12px', color: '#888', marginBottom: '10px', fontWeight: 'bold', letterSpacing: '1px'}}>LEGAL & SUPPORT</p>
-                        <div style={{display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'center', fontSize: '13px'}}>
-                            <Link to="/terms" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Terms</Link>
-                            <Link to="/refund" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Refunds</Link>
-                            <Link to="/shipping" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Shipping</Link>
-                            <Link to="/contact" style={{color: '#2b5876', textDecoration: 'none', fontWeight: '500'}}>Contact</Link>
+
+                    {/* Legal Links */}
+                    <div className="legal-links-sidebar">
+                        <p className="legal-title">LEGAL & SUPPORT</p>
+                        <div className="legal-flex">
+                            <Link to="/terms">Terms</Link><Link to="/refund">Refunds</Link><Link to="/shipping">Shipping</Link><Link to="/contact">Contact</Link>
                         </div>
                     </div>
                 </div>

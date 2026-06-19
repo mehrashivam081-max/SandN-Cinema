@@ -1,10 +1,13 @@
+/* src/components/Footer.css */
+
 .app-footer {
-    background: var(--card-bg, #0f172a);
-    border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.05));
-    padding: 50px 20px 20px;
-    color: var(--text-main, #e2e8f0);
-    margin-top: 50px; /* Thoda space upar se */
-    font-family: 'Inter', sans-serif;
+    background: #0a0a0c; /* Ultra Dark Premium Background */
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 60px 20px 20px;
+    color: #eaeaea;
+    margin-top: 50px; 
+    font-family: 'Poppins', sans-serif; /* Matched font */
+    box-sizing: border-box;
 }
 
 .footer-content {
@@ -13,7 +16,7 @@
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 40px;
+    gap: 50px;
 }
 
 /* Brand Section */
@@ -24,92 +27,97 @@
 .footer-logo-container {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 15px;
+    gap: 12px;
+    margin-bottom: 20px;
 }
 
 .footer-logo-icon {
-    height: 28px;
-    width: 28px;
-    filter: grayscale(20%); /* Footer mein logo thoda subtle accha lagta hai */
+    height: 32px;
+    width: 32px;
+    filter: drop-shadow(0 0 5px rgba(255,215,0,0.3)); /* Subtle Gold Glow */
 }
 
 .footer-logo-text {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.logo-highlight {
+    color: #FFD700; /* Gold Highlight */
 }
 
 .footer-tagline {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #888;
+    font-weight: 300;
+    letter-spacing: 0.5px;
 }
 
 /* Links Section */
 .footer-links {
     display: flex;
-    gap: 60px;
+    gap: 80px; /* More spaced out */
 }
 
 .link-group {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 15px;
 }
 
 .link-group h3 {
-    font-size: 1.1rem;
-    color: #ffffff;
-    margin: 0 0 5px 0;
-    font-weight: 600;
+    font-size: 13px;
+    color: #FFD700; /* Gold Headings */
+    margin: 0 0 10px 0;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 
 .link-group a {
-    color: #94a3b8;
+    color: #aaa;
     text-decoration: none;
-    font-size: 0.9rem;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
     transition: all 0.3s ease;
+    text-transform: uppercase; /* Pro look */
 }
 
 .link-group a:hover {
-    color: #ff7e5f; /* Snevio gradient ka orange color */
-    transform: translateX(3px); /* Hover par halka sa right move hoga */
+    color: #fff; 
+    transform: translateX(5px); /* Smooth move */
+    text-shadow: 0 0 5px rgba(255,255,255,0.5);
 }
 
 /* Bottom Copyright Section */
 .footer-bottom {
     max-width: 1200px;
-    margin: 40px auto 0;
-    padding-top: 20px;
+    margin: 50px auto 0;
+    padding-top: 25px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.85rem;
-    color: #64748b;
+    font-size: 12px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .developer-tag {
-    font-weight: 500;
-    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: #888;
 }
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
-    .footer-content {
-        flex-direction: column;
-    }
-    
-    .footer-links {
-        flex-direction: column;
-        gap: 30px;
-    }
-
-    .footer-bottom {
-        flex-direction: column;
-        gap: 15px;
-        text-align: center;
-    }
+    .footer-content { flex-direction: column; gap: 40px; }
+    .footer-links { flex-direction: column; gap: 40px; }
+    .footer-bottom { flex-direction: column; gap: 15px; text-align: center; }
 }

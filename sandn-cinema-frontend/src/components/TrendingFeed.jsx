@@ -35,12 +35,13 @@ const TrendingFeed = ({ type, onClose }) => {
                     // ✅ FIX 1: Filter strictly by category (trending vs viral)
                     const filteredPosts = postRes.data.data.filter(item => item.feedCategory === type || !item.feedCategory);
                     
+                    // 🔥 FIX: 100% Real API Data (Removed all fake random numbers)
                     posts = filteredPosts.map(item => ({
                         ...item,
-                        likes: Math.floor(Math.random() * 500) + 50,
-                        isLiked: false,
-                        commentsCount: Math.floor(Math.random() * 50) + 5,
-                        shares: Math.floor(Math.random() * 20) + 1
+                        likes: item.likes || 0,
+                        isLiked: item.isLiked || false,
+                        commentsCount: item.commentsCount || 0,
+                        shares: item.shares || 0
                     }));
                     posts = posts.sort(() => 0.5 - Math.random()); // Shuffle posts
                 }
@@ -252,34 +253,64 @@ const TrendingFeed = ({ type, onClose }) => {
     };
 
     return (
-        <div className="modal-overlay" style={{ background: `rgba(0,0,0, ${1 - Math.abs(translateX)/(screenWidth*1.5)})`, zIndex: 9999 }}>
+        <div className="modal-overlay" style={{ 
+            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', 
+            overflow: 'hidden', 
+            background: `rgba(0,0,0, ${1 - Math.abs(translateX)/(screenWidth*1.5)})`, zIndex: 99999,
+            display: 'flex', justifyContent: 'center', alignItems: 'center' /* 🔥 Fully centers the feed vertically & horizontally */
+        }}>
             <div 
-                className="modal-card full-screen fade-in"
+                /* 🔥 FIX: Removed 'full-screen' class that was overriding our Desktop width! */
+                className="modal-card fade-in hide-scroll"
                 style={{
                     transform: `translateX(${translateX}px)`,
-                    transition: translateX === 0 ? 'transform 0.3s ease-out' : 'none',
-                    width: '100%', height: '100dvh', maxWidth: '100%', borderRadius: 0, margin: 0,
-                    display: 'flex', flexDirection: 'column', background: '#000'
+                    transition: translateX === 0 ? 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' : 'none',
+                    width: '100%', height: '100dvh', 
+                    maxWidth: '450px', /* 🔥 Strict 450px lock for Desktop */
+                    position: 'relative',
+                    overflow: 'hidden', 
+                    display: 'flex', flexDirection: 'column', 
+                    background: '#000',
+                    boxShadow: '0 0 50px rgba(0,0,0,0.8)' /* 🔥 Premium shadow for Desktop view */
                 }}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
             >
-                {/* Header */}
-                <div className="modal-header" style={{background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)', border: 'none', position: 'absolute', top: 0, width: '100%', zIndex: 10}}>
-                    <h3 style={{color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.5)'}}>{title}</h3>
+                {/* 🔥 Force Hide Scrollbar using internal style */}
+                <style>{`.hide-scroll::-webkit-scrollbar { display: none !important; width: 0 !important; }`}</style>
+
+                {/* 🔥 Ultra-Premium Glass Header */}
+                <div className="modal-header" style={{
+                    background: 'rgba(15, 23, 42, 0.4)', 
+                    backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)', 
+                    position: 'absolute', top: 0, width: '100%', zIndex: 50, 
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '15px 20px', boxSizing: 'border-box',
+                    fontFamily: "'Poppins', sans-serif"
+                }}>
+                    {/* 🔥 Luxe Typography for Header */}
+                    <h3 style={{color: '#fff', margin: 0, fontSize: '15px', fontWeight: '500', letterSpacing: '2px', textTransform: 'uppercase'}}>{title}</h3>
+                    {/* 🔥 Clean SVG Cross Button */}
+                    <button onClick={onClose} style={{background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7, transition: '0.3s', padding: '5px'}} onMouseEnter={(e)=>e.currentTarget.style.opacity=1} onMouseLeave={(e)=>e.currentTarget.style.opacity=0.7}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
                 </div>
                 
-                <div className="feed-content" style={{ flex: 1, overflowY: 'auto', scrollSnapType: 'y mandatory', scrollBehavior: 'smooth' }}>
+                {/* 🔥 Scrollable Feed Content (Scrollbar Hidden via Inline & CSS) */}
+                <div className="feed-content hide-scroll" style={{ flex: 1, overflowY: 'auto', scrollSnapType: 'y mandatory', scrollBehavior: 'smooth', paddingTop: '0', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
                     
                     {loading ? (
-                        <div style={{height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'}}><p>Loading magic... ✨</p></div>
+                        <div style={{height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#000'}}>
+                            <div className="premium-spinner"></div>
+                            <p style={{color: '#FFD700', fontWeight: 'bold', marginTop: '15px', letterSpacing: '1px'}}>Loading Premium Content...</p>
+                        </div>
                     ) : feedData.length > 0 ? (
                         feedData.map((item, index) => {
                             const fileUrl = getCleanUrl(item.file);
                             const isVid = isVideo(item.file);
                             
-                            // ✅ FIX 4: Read More Logic Implementation
                             const maxChars = 60;
                             const isExpanded = expandedTextIndex === index;
                             const fullDesc = item.description || "Check out this beautiful shot! ✨";
@@ -291,24 +322,24 @@ const TrendingFeed = ({ type, onClose }) => {
                                     key={index} 
                                     ref={(node) => handleObserver(node, index, !!item.isAdvertisement, item._id)}
                                     className="feed-item" 
-                                    style={{ height: '100dvh', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden', background: '#111' }}
+                                    style={{ height: '100dvh', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden', background: '#000' }}
                                 >
                                     {/* 📢 ADVERTISEMENT BADGE */}
                                     {item.isAdvertisement && (
-                                        <div style={{ position: 'absolute', top: '70px', left: '15px', background: 'rgba(255,255,255,0.8)', color: '#000', padding: '4px 8px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold', zIndex: 15, backdropFilter: 'blur(5px)' }}>
+                                        <div style={{ position: 'absolute', top: '80px', left: '15px', background: 'rgba(243, 156, 18, 0.9)', color: '#000', padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '900', zIndex: 15, textTransform: 'uppercase' }}>
                                             Sponsored
                                         </div>
                                     )}
 
                                     {/* ⏳ FOMO Expiry Timer */}
                                     {item.expiryDate && !item.isAdvertisement && (
-                                        <div style={{ position: 'absolute', top: '70px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg, #e74c3c, #c0392b)', color: '#fff', padding: '6px 15px', borderRadius: '20px', fontSize: '11px', fontWeight: 'bold', zIndex: 15, boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '1px solid #fff' }}>
-                                            ⏳ Offer Ends: {new Date(item.expiryDate).toLocaleDateString()}
+                                        <div style={{ position: 'absolute', top: '80px', right: '15px', background: 'rgba(231, 76, 60, 0.9)', color: '#fff', padding: '5px 12px', borderRadius: '15px', fontSize: '11px', fontWeight: 'bold', zIndex: 15, border: '1px solid rgba(255,255,255,0.2)' }}>
+                                            ⏳ Ends: {new Date(item.expiryDate).toLocaleDateString()}
                                         </div>
                                     )}
 
-                                    {/* ✅ FIX 5: Original Aspect Ratio (objectFit: contain) */}
-                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {/* 🔥 MEDIA VIEWER (Optimized for Ultra-Fast Loading) */}
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
                                         {isVid ? (
                                             <video 
                                                 ref={(el) => (videoRefs.current[index] = el)}
@@ -316,51 +347,65 @@ const TrendingFeed = ({ type, onClose }) => {
                                                 loop 
                                                 muted 
                                                 playsInline
-                                                preload="metadata"
+                                                preload={index === 0 ? "auto" : "metadata"} /* 🔥 पहली वीडियो तुरंत रेडी रहेगी */
                                                 style={{width:'100%', height:'100%', objectFit:'contain'}} 
                                             />
                                         ) : (
-                                            <img src={fileUrl} alt={`Feed ${index}`} loading="lazy" style={{width:'100%', height:'100%', objectFit:'contain'}} />
+                                            <img 
+                                                src={fileUrl} 
+                                                alt={`Feed ${index}`} 
+                                                /* 🔥 पहली इमेज बिना देरी के (eager) लोड होगी, बाकी बैकग्राउंड में (lazy) */
+                                                loading={index === 0 ? "eager" : "lazy"} 
+                                                decoding="async" /* 🔥 UI को हैंग नहीं होने देगा */
+                                                fetchPriority={index === 0 ? "high" : "auto"} /* 🔥 ब्राउज़र को इसे सबसे पहले डाउनलोड करने का कमांड */
+                                                style={{maxWidth:'100%', maxHeight:'100%', objectFit:'contain'}} 
+                                            />
                                         )}
                                     </div>
 
-                                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(to top, rgba(0,0,0,0.95), transparent)', zIndex: 1 }}></div>
+                                    {/* 🔥 Dark Gradient Overlay (Bottom) */}
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.5) 60%, transparent 100%)', zIndex: 1, pointerEvents: 'none' }}></div>
 
-                                    {/* Content Info (Left Bottom) */}
-                                    <div style={{ position: 'absolute', bottom: '30px', left: '15px', right: '80px', zIndex: 5, color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                                        
+                                    {/* 🔥 CONTENT INFO (Left Bottom - Premium Editorial Typography) */}
+                                    <div style={{ position: 'absolute', bottom: '90px', left: '20px', right: '80px', zIndex: 5, color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)', fontFamily: "'Poppins', sans-serif" }}>
                                         {item.isAdvertisement ? (
                                             <>
-                                                <h3 style={{margin: '0 0 5px 0', fontSize: '20px', color: '#f1c40f'}}>{item.title}</h3>
-                                                <button onClick={(e) => { e.stopPropagation(); window.open(item.actionLink, '_blank'); }} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '25px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', marginTop: '10px', width: '100%', boxShadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }}>
+                                                {/* 🔥 Luxe Font for Ad Title */}
+                                                <h3 style={{margin: '0 0 10px 0', fontSize: '18px', color: '#FFD700', fontWeight: '600', letterSpacing: '1.5px', textTransform: 'uppercase'}}>{item.title}</h3>
+                                                {/* 🔥 Luxe Font for "Learn More" Button */}
+                                                <button onClick={(e) => { e.stopPropagation(); window.open(item.actionLink, '_blank'); }} style={{ background: 'rgba(52, 152, 219, 0.9)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '10px 22px', borderRadius: '25px', fontWeight: '600', fontSize: '12px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', marginTop: '5px', width: 'auto', backdropFilter: 'blur(5px)', boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)', transition: 'transform 0.2s' }} onMouseEnter={(e)=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={(e)=>e.currentTarget.style.transform='scale(1)'}>
                                                     Learn More ↗️
                                                 </button>
                                             </>
                                         ) : (
                                             <>
-                                                <div onClick={(e) => openStudioProfile(e, item.studioMobile)} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer'}}>
-                                                    <div style={{width: '35px', height: '35px', borderRadius: '50%', background: 'linear-gradient(45deg, #f1c40f, #e67e22)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', color: '#000', border: '2px solid #fff'}}>
+                                                {/* Profile Area */}
+                                                <div onClick={(e) => openStudioProfile(e, item.studioMobile)} style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer', background: 'rgba(0,0,0,0.4)', padding: '6px 15px 6px 6px', borderRadius: '30px', width: 'max-content', backdropFilter: 'blur(5px)', border: '1px solid rgba(255,255,255,0.1)'}}>
+                                                    <div style={{width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(45deg, #FFD700, #F39C12)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', color: '#000', fontSize: '14px', border: '2px solid #fff', boxShadow: '0 2px 5px rgba(0,0,0,0.5)'}}>
                                                         {(item.studioName || 'S')[0].toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <h4 style={{margin: '0', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '5px'}}>{item.studioName || 'Featured Studio'} <span style={{color: '#3498db', fontSize: '14px'}}>✔️</span></h4>
-                                                        <p style={{margin: 0, fontSize: '11px', color: '#ccc'}}>Verified Creator • Click to view profile</p>
+                                                        <h4 style={{margin: '0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '500', letterSpacing: '0.5px'}}>{item.studioName || 'Featured Studio'} <span style={{color: '#3498db', fontSize: '12px', background: '#fff', borderRadius: '50%', padding: '2px'}}>✔️</span></h4>
                                                     </div>
                                                 </div>
                                                 
-                                                <p style={{margin: '0 0 10px 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9}}>
+                                                {/* Description */}
+                                                <p style={{margin: '0 0 15px 0', fontSize: '13px', lineHeight: '1.6', opacity: 0.95, color: '#eaeaea', fontWeight: '300', letterSpacing: '0.5px', maxWidth: '90%'}}>
                                                     {displayDesc}
                                                     {showReadMore && !isExpanded && (
-                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(index); }} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}> Read More</span>
+                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(index); }} style={{ color: '#FFD700', fontWeight: '500', marginLeft: '5px', cursor: 'pointer' }}> Read More</span>
                                                     )}
                                                     {showReadMore && isExpanded && (
-                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(null); }} style={{ color: '#ccc', fontWeight: 'bold', marginLeft: '5px', cursor: 'pointer' }}> Show Less</span>
+                                                        <span onClick={(e) => { e.stopPropagation(); setExpandedTextIndex(null); }} style={{ color: '#aaa', fontWeight: '500', marginLeft: '5px', cursor: 'pointer' }}> Show Less</span>
                                                     )}
                                                 </p>
 
+                                                {/* Buttons */}
                                                 <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                                    <button onClick={(e) => handleAddToCart(e, item)} style={{ flex: 1, background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid #fff', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', backdropFilter: 'blur(5px)' }}>🛒 Add to Cart</button>
-                                                    <button onClick={(e) => handleDirectBook(e, item)} disabled={bookingLoading} style={{ flex: 1.5, background: 'linear-gradient(90deg, #f1c40f, #f39c12)', color: '#000', border: 'none', padding: '10px 5px', borderRadius: '25px', fontWeight: 'bold', fontSize: '12px', cursor: bookingLoading ? 'not-allowed' : 'pointer', animation: 'pulse 2s infinite' }}>
+                                                    <button onClick={(e) => handleAddToCart(e, item)} style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '10px 18px', borderRadius: '25px', fontWeight: '500', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', backdropFilter: 'blur(10px)', transition: 'transform 0.2s' }} onMouseEnter={(e)=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={(e)=>e.currentTarget.style.transform='scale(1)'}>
+                                                        🛒 Add Cart
+                                                    </button>
+                                                    <button onClick={(e) => handleDirectBook(e, item)} disabled={bookingLoading} style={{ background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', border: 'none', padding: '10px 18px', borderRadius: '25px', fontWeight: '700', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: bookingLoading ? 'not-allowed' : 'pointer', boxShadow: '0 5px 15px rgba(243, 156, 18, 0.4)', transition: 'transform 0.2s' }} onMouseEnter={(e)=>e.currentTarget.style.transform='scale(1.05)'} onMouseLeave={(e)=>e.currentTarget.style.transform='scale(1)'}>
                                                         {bookingLoading ? '⏳ Wait...' : `⚡ Book @ ₹${item.price || 5000}`}
                                                     </button>
                                                 </div>
@@ -368,21 +413,24 @@ const TrendingFeed = ({ type, onClose }) => {
                                         )}
                                     </div>
 
-                                    {/* Action Bar (Right Side) */}
-                                    <div style={{ position: 'absolute', bottom: '50px', right: '15px', zIndex: 5, display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
+                                    {/* 🔥 ACTION BAR (Right Side - Raised Safely for Mobile Nav Bars) */}
+                                    <div style={{ position: 'absolute', bottom: '100px', right: '15px', zIndex: 5, display: 'flex', flexDirection: 'column', gap: '22px', alignItems: 'center' }}>
                                         <div onClick={(e) => { e.stopPropagation(); handleLike(index); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
-                                            <div style={{fontSize: '28px', transform: item.isLiked ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s'}}>{item.isLiked ? '❤️' : '🤍'}</div>
-                                            <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.likes || '1.2k'}</span>
+                                            <div style={{fontSize: '30px', transform: item.isLiked ? 'scale(1.2)' : 'scale(1)', transition: 'transform 0.2s', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>{item.isLiked ? '❤️' : '🤍'}</div>
+                                            {/* Real Likes */}
+                                            <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '4px', textShadow: '0 2px 4px rgba(0,0,0,0.8)'}}>{item.likes || 0}</span>
                                         </div>
                                         {!item.isAdvertisement && (
                                             <div onClick={(e) => { e.stopPropagation(); alert("Comments phase 2"); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
-                                                <div style={{fontSize: '28px'}}>💬</div>
-                                                <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.commentsCount || 45}</span>
+                                                <div style={{fontSize: '28px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>💬</div>
+                                                {/* Real Comments */}
+                                                <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '4px', textShadow: '0 2px 4px rgba(0,0,0,0.8)'}}>{item.commentsCount || 0}</span>
                                             </div>
                                         )}
                                         <div onClick={(e) => { e.stopPropagation(); handleShare(item); }} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer'}}>
-                                            <div style={{fontSize: '28px'}}>↗️</div>
-                                            <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '2px'}}>{item.shares || 12}</span>
+                                            <div style={{fontSize: '28px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>↗️</div>
+                                            {/* Real Shares */}
+                                            <span style={{color: '#fff', fontSize: '12px', fontWeight: 'bold', marginTop: '4px', textShadow: '0 2px 4px rgba(0,0,0,0.8)'}}>{item.shares || 0}</span>
                                         </div>
                                     </div>
 
@@ -390,47 +438,56 @@ const TrendingFeed = ({ type, onClose }) => {
                             );
                         })
                     ) : (
-                        <div style={{height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888'}}>
-                            <span style={{fontSize: '50px', marginBottom: '20px'}}>📭</span><p>No content uploaded to public feed yet.</p>
+                        <div style={{height: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#888', background: '#000', padding: '0 30px', textAlign: 'center', fontFamily: "'Poppins', sans-serif"}}>
+                            <div style={{ width: '80px', height: '80px', background: 'rgba(255, 215, 0, 0.05)', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '25px', boxShadow: '0 0 40px rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.15)' }}>
+                                <span style={{fontSize: '35px', filter: 'drop-shadow(0 0 15px rgba(255,215,0,0.6))'}}>✨</span>
+                            </div>
+                            {/* 🔥 Premium Editorial Typography */}
+                            <h3 style={{color: '#E0E0E0', fontSize: '18px', marginBottom: '12px', fontWeight: '400', letterSpacing: '4px', textTransform: 'uppercase'}}>
+                                Curating <span style={{color: '#FFD700', fontWeight: '600'}}>Magic</span>
+                            </h3>
+                            <p style={{fontSize: '13px', lineHeight: '1.8', maxWidth: '320px', color: '#888', fontWeight: '300', letterSpacing: '0.5px'}}>
+                                We are handpicking the most exclusive content for you. Check back soon for trending moments.
+                            </p>
                         </div>
                     )}
                     
                     {!loading && feedData.length > 0 && (
-                        <div style={{position: 'absolute', top: '20px', width: '100%', textAlign: 'center', color: 'rgba(255,255,255,0.7)', zIndex: 10, fontSize: '12px', fontWeight: 'bold'}}>
-                            Swipe {type === 'trending' ? 'Right 👉' : '👈 Left'} to go back
+                        <div style={{position: 'absolute', top: '80px', width: '100%', textAlign: 'center', color: 'rgba(255,255,255,0.5)', zIndex: 10, fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px'}}>
+                            SWIPE {type === 'trending' ? 'RIGHT 👉' : '👈 LEFT'} TO GO BACK
                         </div>
                     )}
 
                 </div>
             </div>
 
-            {/* ✅ FIX 6: STUDIO PROFILE POPUP (Z-Index increased drastically to overlap everything) */}
+            {/* ✅ STUDIO PROFILE POPUP (Glassmorphism + Ultra High Z-Index) */}
             {selectedStudio && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)' }} onClick={(e) => e.stopPropagation()}>
-                    <div style={{ background: '#fff', width: '90%', maxWidth: '350px', borderRadius: '20px', padding: '30px', textAlign: 'center', position: 'relative', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', zIndex: 10000000 }}>
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ position: 'absolute', top: '15px', right: '15px', background: '#eee', color: '#333', border: 'none', width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px', cursor: 'pointer' }}>✖</button>
+                    <div className="fade-in" style={{ background: 'rgba(25, 30, 40, 0.9)', border: '1px solid rgba(255,255,255,0.1)', width: '90%', maxWidth: '350px', borderRadius: '25px', padding: '30px', textAlign: 'center', position: 'relative', boxShadow: '0 20px 50px rgba(0,0,0,0.8)', zIndex: 10000000, backdropFilter: 'blur(20px)' }}>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', width: '30px', height: '30px', borderRadius: '50%', fontSize: '14px', cursor: 'pointer' }}>✖</button>
                         
-                        <div style={{ width: '80px', height: '80px', background: 'linear-gradient(45deg, #3498db, #8e44ad)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', color: '#fff', fontWeight: 'bold', border: '4px solid #fdfdfd', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                        <div style={{ width: '90px', height: '90px', background: 'linear-gradient(45deg, #3498db, #8e44ad)', borderRadius: '50%', margin: '0 auto 15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '35px', color: '#fff', fontWeight: 'bold', border: '4px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' }}>
                             {(selectedStudio.studioName || 'S')[0].toUpperCase()}
                         </div>
-                        <h2 style={{ margin: '0 0 5px 0', color: '#2c3e50', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                        <h2 style={{ margin: '0 0 5px 0', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '20px' }}>
                             {selectedStudio.studioName} <span style={{ color: '#3498db', fontSize: '18px' }}>✔️</span>
                         </h2>
-                        <p style={{ margin: '0 0 15px 0', color: '#7f8c8d', fontSize: '13px' }}>Location: {selectedStudio.location || 'India'}</p>
+                        <p style={{ margin: '0 0 20px 0', color: '#aaa', fontSize: '12px' }}>📍 Location: {selectedStudio.location || 'India'}</p>
 
                         {/* ✅ BULLETPROOF PORTFOLIO BUTTON */}
                         {selectedStudio.portfolioUrl ? (
                             <button 
                                 onClick={(e) => { e.stopPropagation(); handleOpenPortfolio(selectedStudio.portfolioUrl); }} 
-                                style={{ width: '100%', display: 'block', background: '#fdf2e9', color: '#e67e22', padding: '12px', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px', border: '1px solid #f8c471', marginBottom: '15px', cursor: 'pointer' }}
+                                style={{ width: '100%', display: 'block', background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', padding: '14px', borderRadius: '12px', fontWeight: '800', fontSize: '14px', border: 'none', marginBottom: '15px', cursor: 'pointer', boxShadow: '0 5px 15px rgba(243, 156, 18, 0.3)' }}
                             >
                                 🌐 View Complete Portfolio
                             </button>
                         ) : (
-                            <p style={{ background: '#f4f6f7', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#95a5a6', marginBottom: '15px' }}>No portfolio link available.</p>
+                            <p style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '10px', fontSize: '12px', color: '#777', marginBottom: '15px', border: '1px solid rgba(255,255,255,0.05)' }}>No portfolio link available.</p>
                         )}
 
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ width: '100%', padding: '12px', background: '#2c3e50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' }}>Close</button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedStudio(null); }} style={{ width: '100%', padding: '12px', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>Close Profile</button>
                     </div>
                 </div>
             )}

@@ -83,23 +83,30 @@ const ServicesPage = ({ onBack }) => {
     ];
 
     return (
-        <div className="services-container">
-            <div className="services-card">
+        <div className="services-container" style={{ fontFamily: "'Poppins', sans-serif" }}>
+            
+            {/* 🔥 Glass Back Button (Matched with Auth Pages) */}
+            <div className="home-btn-glass" onClick={onBack} title="Back to Main Page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span className="home-text">Go Back</span>
+            </div>
+
+            <div className="services-card-glass">
                 
-                {/* Header Section */}
+                {/* 🔥 Cinematic Header Section */}
                 <div className="services-header">
                     <h2 className="services-title">Ms Studio Indore</h2>
-                    <p className="services-subtitle">Service Chart</p>
+                    <p className="services-subtitle">Exclusive Services Portfolio</p>
                 </div>
 
-                {/* Services List (Accordion) */}
+                {/* 🔥 Luxe Accordion List */}
                 <div className="services-list">
                     {servicesData.map((service, index) => (
-                        <div key={index} className="service-item">
+                        <div key={index} className="service-item-glass">
                             
                             {/* Clickable Header */}
                             <div 
-                                className={`service-category-btn ${openSection === index ? 'active' : ''}`} 
+                                className={`service-category-btn-glass ${openSection === index ? 'active' : ''}`} 
                                 onClick={() => toggleSection(index)}
                             >
                                 <span className="category-icon">{service.icon}</span>
@@ -108,10 +115,10 @@ const ServicesPage = ({ onBack }) => {
                             </div>
 
                             {/* Dropdown Content */}
-                            <div className={`service-content ${openSection === index ? 'open' : ''}`}>
+                            <div className={`service-content-glass ${openSection === index ? 'open' : ''}`}>
                                 <ul>
                                     {service.items.map((item, idx) => (
-                                        <li key={idx}>🔹 {item}</li>
+                                        <li key={idx} className="service-li"><span className="li-bullet">✦</span> {item}</li>
                                     ))}
                                 </ul>
                             </div>
@@ -119,74 +126,47 @@ const ServicesPage = ({ onBack }) => {
                     ))}
                 </div>
 
-                {/* ✅ COLLABORATION FORM SECTION (NEW) */}
-                <div style={{ background: '#f5f6fa', padding: '20px', borderRadius: '10px', marginTop: '30px', border: '1px solid #ddd' }}>
-                    <h3 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#2c3e50', display:'flex', alignItems:'center', gap:'8px' }}>
-                        🤝 Want to Collaborate?
+                {/* 🔥 PREMIUM COLLABORATION FORM SECTION */}
+                <div className="collab-box-glass">
+                    <h3 style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#FFD700', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '600', display:'flex', alignItems:'center', gap:'10px' }}>
+                        <span>🤝</span> Request Collaboration
                     </h3>
                     
                     {submitSuccess ? (
-                        <div style={{ background: '#2ecc71', color: '#fff', padding: '15px', borderRadius: '5px', textAlign: 'center', fontWeight: 'bold' }}>
-                            ✅ Request Sent! Our team will contact you soon.
+                        <div className="success-badge fade-in">
+                            ✅ Request Sent! Our exclusive team will contact you.
                         </div>
                     ) : (
-                        <form onSubmit={handleCollabSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <input 
-                                type="text" 
-                                placeholder="Your Name" 
-                                value={collabData.name}
-                                onChange={(e) => setCollabData({...collabData, name: e.target.value})}
-                                required
-                                style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-                            />
-                            <input 
-                                type="text" 
-                                placeholder="Brand / Page Name" 
-                                value={collabData.brand}
-                                onChange={(e) => setCollabData({...collabData, brand: e.target.value})}
-                                required
-                                style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-                            />
-                            <input 
-                                type="email" 
-                                placeholder="Email Address" 
-                                value={collabData.email}
-                                onChange={(e) => setCollabData({...collabData, email: e.target.value})}
-                                required
-                                style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-                            />
-                            <button 
-                                type="submit" 
-                                disabled={isSubmitting}
-                                style={{ 
-                                    padding: '12px', 
-                                    background: isSubmitting ? '#95a5a6' : '#e50914', 
-                                    color: '#fff', 
-                                    border: 'none', 
-                                    borderRadius: '5px', 
-                                    fontWeight: 'bold', 
-                                    cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                                }}
-                            >
-                                {isSubmitting ? 'Sending...' : 'Send Request'}
+                        <form onSubmit={handleCollabSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div className="input-group">
+                                <label className="luxe-label">Your Name</label>
+                                <input type="text" className="luxe-input" placeholder="e.g. Rohan Mehta" value={collabData.name} onChange={(e) => setCollabData({...collabData, name: e.target.value})} required />
+                            </div>
+                            <div className="input-group">
+                                <label className="luxe-label">Brand / Page Name</label>
+                                <input type="text" className="luxe-input" placeholder="e.g. Zara Fashion" value={collabData.brand} onChange={(e) => setCollabData({...collabData, brand: e.target.value})} required />
+                            </div>
+                            <div className="input-group">
+                                <label className="luxe-label">Email Address</label>
+                                <input type="email" className="luxe-input" placeholder="contact@brand.com" value={collabData.email} onChange={(e) => setCollabData({...collabData, email: e.target.value})} required />
+                            </div>
+                            <button type="submit" className="btn-primary-luxe" disabled={isSubmitting} style={{marginTop: '5px'}}>
+                                {isSubmitting ? 'SENDING REQUEST...' : 'SEND INQUIRY ⚡'}
                             </button>
                         </form>
                     )}
                 </div>
 
-                {/* Contact Info Footer */}
-                <div className="contact-info-box" style={{ marginTop: '20px' }}>
-                    <h3>To Official Services</h3>
-                    <p><strong>Instagram:</strong> ms_studio</p>
-                    <p><strong>Contact:</strong> 7828011282</p>
-                    <p><strong>Email:</strong> msstudioindore7@gmail.com</p>
-                    <p><strong>Location:</strong> Vijay Nagar, Indore</p>
+                {/* 🔥 Luxe Contact Info Footer */}
+                <div className="contact-info-glass">
+                    <h3 style={{ margin: '0 0 15px 0', color: '#fff', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>Official Contact</h3>
+                    <div className="contact-grid">
+                        <div className="contact-row"><span className="c-icon">📸</span> <span><strong>IG:</strong> ms_studio</span></div>
+                        <div className="contact-row"><span className="c-icon">📞</span> <span><strong>Tel:</strong> +91 7828011282</span></div>
+                        <div className="contact-row"><span className="c-icon">✉️</span> <span><strong>Email:</strong> msstudioindore7@gmail.com</span></div>
+                        <div className="contact-row"><span className="c-icon">📍</span> <span><strong>Location:</strong> Vijay Nagar, Indore</span></div>
+                    </div>
                 </div>
-
-                {/* Back Button */}
-                <button className="back-btn" onClick={onBack} style={{ marginTop: '15px' }}>
-                    Back to Home
-                </button>
             </div>
         </div>
     );

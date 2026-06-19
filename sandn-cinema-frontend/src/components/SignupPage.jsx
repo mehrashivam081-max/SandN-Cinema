@@ -126,40 +126,47 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
     };
 
     return (
-        <div className="signup-page-container">
+        <div className="signup-page-container" style={{ fontFamily: "'Poppins', sans-serif" }}>
             
-            {/* ✅ Top-Left Home Button */}
-            <div style={{position: 'absolute', top: '20px', left: '20px', cursor: 'pointer', color: '#fff', fontSize: '18px', fontWeight: 'bold'}} onClick={() => { sessionStorage.removeItem('signupForm'); if(onBack) onBack(); else navigate('/'); }}>
-                🏠 Home
+            {/* 🔥 Ultra-Premium Floating Back Button (Matched with Login Page) */}
+            <div className="home-btn-glass" onClick={() => { sessionStorage.removeItem('signupForm'); if(onBack) onBack(); else navigate('/'); }} title="Back to Main Page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span className="home-text">Back to Website</span>
             </div>
 
-            {/* ✅ Terms Modal (Customizable by Super Admin Later) */}
+            {/* ✅ Terms Modal (Premium Glass Design) */}
             {showTermsModal && (
-                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:9999, display:'flex', justifyContent:'center', alignItems:'center'}}>
-                    <div style={{background:'white', padding:'25px', borderRadius:'15px', width:'85%', maxWidth:'400px', color:'black', textAlign:'left'}}>
-                        <h3>Terms & Privacy Access</h3>
-                        <div style={{fontSize:'13px', marginTop:'15px', lineHeight:'1.6', maxHeight:'300px', overflowY:'auto'}}>
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', justifyContent:'center', alignItems:'center', backdropFilter: 'blur(10px)'}}>
+                    <div className="fade-in" style={{background:'rgba(25, 30, 40, 0.95)', border: '1px solid rgba(255,255,255,0.1)', padding:'30px', borderRadius:'20px', width:'90%', maxWidth:'400px', color:'#fff', textAlign:'left', boxShadow: '0 20px 50px rgba(0,0,0,0.5)'}}>
+                        <h3 style={{margin: '0 0 15px 0', color: '#FFD700', fontSize: '16px', textTransform: 'uppercase', letterSpacing: '2px', fontWeight: '600'}}>Terms & Privacy Access</h3>
+                        <div style={{fontSize:'13px', lineHeight:'1.8', maxHeight:'300px', overflowY:'auto', color: '#ccc', paddingRight: '10px', fontWeight: '300', letterSpacing: '0.5px'}}>
                             <strong>1. Data Collection:</strong> We collect details and location to offer accurate services.<br/><br/>
                             <strong>2. Security:</strong> Your media is fully encrypted.<br/><br/>
                             <strong>3. Policy Update:</strong> Admin holds the right to alter content & guidelines.
                         </div>
-                        <button onClick={() => setShowTermsModal(false)} style={{marginTop:'20px', width:'100%', background:'#e50914', color:'white', padding:'10px', border:'none', borderRadius:'5px', fontWeight:'bold', cursor:'pointer'}}>I Understand</button>
+                        <button onClick={() => setShowTermsModal(false)} style={{marginTop:'25px', width:'100%', background:'linear-gradient(135deg, #FFD700, #F39C12)', color:'#000', padding:'14px', border:'none', borderRadius:'12px', fontWeight:'700', cursor:'pointer', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1.5px', boxShadow: '0 5px 15px rgba(243, 156, 18, 0.3)'}}>I Understand</button>
                     </div>
                 </div>
             )}
 
             <div className="signup-card-glass">
-                <h2 className="signup-title">{isOtpSent ? "Verify Account" : "Create Account"}</h2>
+                {/* 🔥 Luxe Typography for Headers */}
+                <h2 className="signup-title" style={{ fontWeight: '600', letterSpacing: '3px', textTransform: 'uppercase', color: '#FFD700', fontSize: '24px' }}>
+                    {isOtpSent ? "Verify Account" : "Create Account"}
+                </h2>
+                <p className="signup-subtitle" style={{ fontWeight: '300', letterSpacing: '1px', color: '#ccc', marginBottom: '30px', fontSize: '13px' }}>
+                    {isOtpSent ? "Enter the 6-digit code sent to you" : "Join the premium community today"}
+                </p>
                 
-                {/* ✅ SMART TABS LOGIC: Hide other tabs after OTP is sent */}
-                <div className="signup-tabs">
+                {/* 🔥 Apple-style Segmented Controls */}
+                <div className="auth-tabs" style={{ letterSpacing: '1px', textTransform: 'uppercase' }}>
                     {!isOtpSent ? (
                         <>
-                            <button className={activeTab === 'user' ? 'active' : ''} onClick={() => setActiveTab('user')}>User</button>
-                            <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => setActiveTab('studio')}>Studio</button>
+                            <button className={activeTab === 'user' ? 'active' : ''} onClick={() => setActiveTab('user')} style={{ fontWeight: '600', fontSize: '12px' }}>User</button>
+                            <button className={activeTab === 'studio' ? 'active' : ''} onClick={() => setActiveTab('studio')} style={{ fontWeight: '600', fontSize: '12px' }}>Studio</button>
                         </>
                     ) : (
-                        <button className="active" style={{ cursor: 'default', flex: 1, pointerEvents: 'none' }}>
+                        <button className="active" style={{ cursor: 'default', flex: 1, pointerEvents: 'none', fontWeight: '600', fontSize: '12px' }}>
                             {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Verification
                         </button>
                     )}
@@ -167,87 +174,101 @@ const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
 
                 {!isOtpSent ? (
                     <div className="signup-body">
-                        <input name="name" value={formData.name} placeholder={activeTab === 'studio' ? "Owner Full Name" : "Full Name"} onChange={handleChange} />
-                        <input name="email" value={formData.email} type="email" placeholder="Email Address (for Verification)" onChange={handleChange} />
+                        {/* 🔥 Minimalist & Spaced Labels */}
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>{activeTab === 'studio' ? "Owner Full Name" : "Full Name"}</label>
+                            <input name="name" value={formData.name} placeholder="e.g. Rahul Sharma" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '0.5px' }} />
+                        </div>
+
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Email Address</label>
+                            <input name="email" value={formData.email} type="email" placeholder="you@example.com" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '0.5px' }} />
+                        </div>
 
                         {activeTab === 'studio' && (
                             <>
-                                <input name="studioName" value={formData.studioName} placeholder="Studio Name" onChange={handleChange} />
-                                <input name="whatsapp" value={formData.whatsapp} placeholder="WhatsApp Number" onChange={handleChange} />
-                                <input name="adhaar" value={formData.adhaar} placeholder="Aadhaar Number (12 Digit)" onChange={handleChange} />
+                                <div className="input-group">
+                                    <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Studio Name</label>
+                                    <input name="studioName" value={formData.studioName} placeholder="e.g. Rahul Photography" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '0.5px' }} />
+                                </div>
+                                <div className="input-group">
+                                    <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>WhatsApp Number</label>
+                                    <input name="whatsapp" value={formData.whatsapp} placeholder="10-digit number" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                                </div>
+                                <div className="input-group">
+                                    <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Aadhaar Number</label>
+                                    <input name="adhaar" value={formData.adhaar} placeholder="12-digit number" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                                </div>
                             </>
                         )}
-                        <input name="mobile" value={formData.mobile} type="number" placeholder="Mobile Number" onChange={handleChange} />
                         
-                        <div className="password-wrapper">
-                            <input name="password" value={formData.password} type={showPass ? "text" : "password"} placeholder="Create Password" onChange={handleChange} />
-                            <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Mobile Number</label>
+                            <div className="input-with-icon">
+                                <span className="country-code" style={{ letterSpacing: '1px' }}>+91</span>
+                                <input name="mobile" value={formData.mobile} type="number" placeholder="10-digit number" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                            </div>
                         </div>
-
-                        <div className="password-wrapper">
-                            <input name="confirm" value={formData.confirm} type={showConfirm ? "text" : "password"} placeholder="Confirm Password" onChange={handleChange} />
-                            <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</span>
-                        </div>
-
-                        {/* ✅ 3-Button OTP Selection for Signup */}
-                        <div style={{ marginTop: '10px', marginBottom: '5px' }}>
-                            <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block', textAlign: 'left' }}>Receive OTP via:</label>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
-                                >
-                                    📱 SMS
-                                </button>
-                                <button 
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
-                                >
-                                    💬 WhatsApp
-                                </button>
-                                <button 
-                                    onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}
-                                    style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}
-                                >
-                                    ✉️ Email
-                                </button>
+                        
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Create Password</label>
+                            <div className="pass-wrapper">
+                                <input name="password" value={formData.password} type={showPass ? "text" : "password"} placeholder="Minimum 4 characters" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                                <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
                         </div>
 
-                        {/* ✅ Fixed Checkbox Alignment & Clickable Terms Text */}
-                        <div className="terms-check-aligned" style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', marginTop:'5px', marginBottom:'15px', color:'white', fontSize:'13px'}}>
-                            <input type="checkbox" id="terms" onChange={(e) => setTerms(e.target.checked)} style={{margin:0, width:'16px', height:'16px', cursor:'pointer'}} />
-                            <label htmlFor="terms" style={{cursor:'pointer'}}>I agree to <span onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} style={{color:'red', textDecoration:'underline'}}>Terms & Location Access</span></label>
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa' }}>Confirm Password</label>
+                            <div className="pass-wrapper">
+                                <input name="confirm" value={formData.confirm} type={showConfirm ? "text" : "password"} placeholder="Retype password" onChange={handleChange} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                                <span className="eye-icon" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? '🙈' : '👁️'}</span>
+                            </div>
                         </div>
 
-                        <button className="signup-btn-primary" onClick={handleSendOtp} disabled={loading}>
-                            {loading ? 'Sending OTP...' : 'PROCEED TO VERIFY'}
+                        {/* 🔥 Modern OTP Option Buttons */}
+                        <div style={{ marginTop: '20px', marginBottom: '25px' }}>
+                            <label style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px', display: 'block', textAlign: 'left', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Receive OTP via:</label>
+                            <div className="otp-methods">
+                                <button type="button" className={otpMethod === 'mobile' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>📱 SMS</button>
+                                <button type="button" className={otpMethod === 'whatsapp' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>💬 WhatsApp</button>
+                                <button type="button" className={otpMethod === 'email' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>✉️ Email</button>
+                            </div>
+                        </div>
+
+                        {/* 🔥 Clean Checkbox */}
+                        <div className="checkbox-wrapper" style={{ letterSpacing: '0.5px', fontWeight: '300', marginBottom: '25px' }}>
+                            <input type="checkbox" id="terms" checked={terms} onChange={(e) => setTerms(e.target.checked)} />
+                            <label htmlFor="terms">I agree to the <span onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }} style={{color:'#FFD700', textDecoration:'underline', fontWeight: '500', cursor: 'pointer'}}>Terms & Location Access</span></label>
+                        </div>
+
+                        <button className="signup-btn-primary" onClick={handleSendOtp} disabled={loading} style={{ letterSpacing: '2px', fontWeight: '700', fontSize: '13px' }}>
+                            {loading ? 'Sending OTP...' : 'PROCEED TO VERIFY ➡️'}
                         </button>
                     </div>
                 ) : (
-                    <div className="signup-body otp-verification-section">
-                        <p style={{color: 'white', textAlign: 'center', fontSize: '14px', marginBottom: '15px'}}>
-                            Verification code sent!
-                        </p>
-                        <input 
-                            type="text" 
-                            placeholder="Enter 6-Digit OTP" 
-                            value={otp} 
-                            onChange={(e) => setOtp(e.target.value)} 
-                            style={{textAlign: 'center', letterSpacing: '3px', fontSize: '16px'}}
-                        />
-                        <button className="signup-btn-primary" onClick={handleVerifyAndRegister} disabled={loading}>
-                            {loading ? 'Creating Account...' : 'VERIFY & REGISTER'}
+                    <div className="signup-body otp-verification-section fade-in">
+                        <div className="input-group" style={{marginTop: '20px'}}>
+                            <input 
+                                type="number" 
+                                placeholder="Enter 6-Digit OTP" 
+                                value={otp} 
+                                onChange={(e) => setOtp(e.target.value)} 
+                                style={{textAlign: 'center', letterSpacing: '8px', fontSize: '22px', fontWeight: '600', padding: '15px'}}
+                                autoFocus
+                            />
+                        </div>
+                        <button className="signup-btn-primary" onClick={handleVerifyAndRegister} disabled={loading} style={{ letterSpacing: '2px', fontWeight: '700', fontSize: '13px', marginTop: '10px' }}>
+                            {loading ? 'Creating Account...' : 'VERIFY & REGISTER 🚀'}
                         </button>
-                        {/* ✅ Step Back Logic (Return to Edit) */}
-                        <p className="text-link" style={{textAlign: 'center', marginTop: '10px', cursor:'pointer'}} onClick={() => setIsOtpSent(false)}>
+                        <p className="text-link" style={{textAlign: 'center', marginTop: '20px', cursor:'pointer', color: '#aaa', fontSize: '12px', fontWeight: '500', letterSpacing: '1px', textTransform: 'uppercase'}} onClick={() => setIsOtpSent(false)}>
                             ← Edit Details
                         </p>
                     </div>
                 )}
 
-                <div className="signup-footer">
-                    <p>Already have an account? <span className="text-link" onClick={goToLogin} style={{cursor:'pointer'}}>Login here</span></p>
+                <div className="signup-footer toggle-text" style={{ fontWeight: '300', letterSpacing: '0.5px', marginTop: '30px' }}>
+                    <p>Already have an account? <span onClick={goToLogin} style={{ fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>Login here</span></p>
                 </div>
             </div>
         </div>

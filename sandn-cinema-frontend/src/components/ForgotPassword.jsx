@@ -71,63 +71,92 @@ const ForgotPassword = ({ onLoginClick }) => {
     };
 
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <h2>Recovery</h2>
+        <div className="auth-container" style={{ fontFamily: "'Poppins', sans-serif" }}>
+            <div className="auth-card-glass">
+                {/* 🔥 Luxe Typography Header */}
+                <h2 style={{ fontWeight: '600', letterSpacing: '3px', textTransform: 'uppercase', color: '#FFD700', fontSize: '24px', margin: '0 0 5px 0' }}>
+                    Recovery
+                </h2>
+                <p style={{ fontWeight: '300', letterSpacing: '1px', color: '#ccc', marginBottom: '30px', fontSize: '13px' }}>
+                    {step === 1 ? "Reset your premium account password" : step === 2 ? "Enter the verification code" : "Create your new password"}
+                </p>
+
                 {step === 1 && (
-                    <>
-                        <input className="auth-input" placeholder="Mobile Number" type="number" value={mobile} onChange={(e) => setMobile(e.target.value)} />
-                        
-                        <label style={{ fontSize: '0.8rem', color: '#aaa', marginTop: '10px', display: 'block' }}>Receive OTP via:</label>
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
-                            <button type="button" onClick={() => setOtpMethod('mobile')} style={{ flex: 1, padding: '8px', background: otpMethod === 'mobile' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>SMS</button>
-                            <button type="button" onClick={() => setOtpMethod('whatsapp')} style={{ flex: 1, padding: '8px', background: otpMethod === 'whatsapp' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>WhatsApp</button>
-                            <button type="button" onClick={() => setOtpMethod('email')} style={{ flex: 1, padding: '8px', background: otpMethod === 'email' ? '#e50914' : '#333', border: 'none', color: 'white', borderRadius: '5px' }}>Email</button>
+                    <div className="fade-in">
+                        <div className="input-group">
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa', display: 'block', textAlign: 'left', marginBottom: '8px' }}>Registered Mobile Number</label>
+                            <div className="input-with-icon">
+                                <span className="country-code" style={{ letterSpacing: '1px', color: '#FFD700', padding: '0 15px', borderRight: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold' }}>+91</span>
+                                <input name="mobile" className="luxe-input" type="number" placeholder="10-digit number" value={mobile} onChange={(e) => setMobile(e.target.value)} style={{ fontWeight: '400', letterSpacing: '1px' }} />
+                            </div>
                         </div>
                         
-                        <button className="btn-primary" onClick={handleSendOTP} disabled={loading}>{loading ? "SENDING..." : "GET OTP"}</button>
-                    </>
+                        {/* 🔥 Segmented Controls for OTP */}
+                        <div style={{ marginTop: '25px', marginBottom: '25px' }}>
+                            <label style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px', display: 'block', textAlign: 'left', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Receive OTP via:</label>
+                            <div className="otp-methods">
+                                <button type="button" className={otpMethod === 'mobile' ? 'active' : ''} onClick={() => setOtpMethod('mobile')} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>📱 SMS</button>
+                                <button type="button" className={otpMethod === 'whatsapp' ? 'active' : ''} onClick={() => setOtpMethod('whatsapp')} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>💬 WhatsApp</button>
+                                <button type="button" className={otpMethod === 'email' ? 'active' : ''} onClick={() => setOtpMethod('email')} style={{ letterSpacing: '1px', fontWeight: '500', textTransform: 'uppercase', fontSize: '11px' }}>✉️ Email</button>
+                            </div>
+                        </div>
+                        
+                        {/* 🔥 Gold Pill Button */}
+                        <button className="btn-primary-luxe" onClick={handleSendOTP} disabled={loading}>
+                            {loading ? "SENDING..." : "GET OTP ➡️"}
+                        </button>
+                    </div>
                 )}
 
                 {/* Step 2: OTP Input */}
                 {step === 2 && (
                     <div className="fade-in">
-                        <p className="sub-text">Enter the 6-digit OTP sent to {mobile}</p>
-                        <input 
-                            className="auth-input" 
-                            placeholder="Enter OTP" 
-                            type="number"
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value)}
-                        />
-                        <button className="btn-primary" onClick={handleVerifyOTP} disabled={loading}>
-                            {loading ? "VERIFYING..." : "VERIFY OTP"}
+                        <div className="input-group" style={{marginTop: '20px', marginBottom: '30px'}}>
+                            <input 
+                                className="luxe-input-center" 
+                                placeholder="Enter 6-Digit OTP" 
+                                type="number"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+                        <button className="btn-primary-luxe" onClick={handleVerifyOTP} disabled={loading}>
+                            {loading ? "VERIFYING..." : "VERIFY OTP 🚀"}
                         </button>
+                        <p style={{textAlign: 'center', marginTop: '20px', cursor:'pointer', color: '#aaa', fontSize: '12px', fontWeight: '500', letterSpacing: '1px', textTransform: 'uppercase'}} onClick={() => setStep(1)}>
+                            ← Change Number
+                        </p>
                     </div>
                 )}
 
                 {/* Step 3: New Password */}
                 {step === 3 && (
                     <div className="fade-in">
-                        <p className="sub-text">Create a strong new password.</p>
-                        <input 
-                            className="auth-input" 
-                            placeholder="New Password" 
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                        />
-                        <button className="btn-primary" onClick={handleResetPassword} disabled={loading}>
-                            {loading ? "UPDATING..." : "RESET PASSWORD"}
+                        <div className="input-group" style={{ marginBottom: '30px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#aaa', display: 'block', textAlign: 'left', marginBottom: '8px' }}>Create New Password</label>
+                            <input 
+                                className="luxe-input" 
+                                placeholder="Minimum 4 characters" 
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                style={{ fontWeight: '400', letterSpacing: '1px', width: '100%', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <button className="btn-primary-luxe" onClick={handleResetPassword} disabled={loading}>
+                            {loading ? "UPDATING..." : "RESET PASSWORD ✔️"}
                         </button>
                     </div>
                 )}
 
                 {/* Messages */}
-                {error && <p className="error-msg">{error}</p>}
-                {message && <p className="success-msg">{message}</p>}
+                {error && <p className="error-msg" style={{ letterSpacing: '0.5px', fontWeight: '400' }}>{error}</p>}
+                {message && <p className="success-msg" style={{ letterSpacing: '0.5px', fontWeight: '400' }}>{message}</p>}
 
-                <p className="link-text" onClick={onLoginClick}>Back to Login</p>
+                <div style={{ marginTop: '35px', fontWeight: '300', letterSpacing: '0.5px', fontSize: '13px', color: '#888' }}>
+                    <p>Remembered your password? <span className="link-text-luxe" onClick={onLoginClick}>Login here</span></p>
+                </div>
             </div>
         </div>
     );

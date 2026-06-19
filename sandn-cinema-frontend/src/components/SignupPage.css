@@ -1,165 +1,231 @@
-/* Full Page Centering Wrapper */
+/* src/components/SignupPage.css */
+
+/* 🔥 Cinematic Background (Fixed for proper positioning) */
 .signup-page-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
-    background: transparent; /* Allows global theme background to show */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+  padding: 20px;
+  position: relative; /* 🔥 Important: iske bina Back Button hawa me ud jayega */
+  background: linear-gradient(rgba(18, 18, 18, 0.75), rgba(18, 18, 18, 0.95)), url('https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2069&auto=format&fit=crop');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  font-family: 'Poppins', sans-serif;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
-/* Glass Card */
+/* 🔥 Ultra-Premium Glass Back Button (Matched exactly with Login Page) */
+.home-btn-glass {
+  position: absolute;
+  top: 30px;
+  left: 35px;
+  background: rgba(20, 20, 25, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  padding: 10px 18px;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #ccc;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  z-index: 1000;
+  letter-spacing: 0.5px;
+}
+
+.home-btn-glass:hover {
+  background: rgba(255, 215, 0, 0.15); /* Soft Gold Glow */
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #FFD700;
+  transform: translateX(-4px); /* 🔥 हल्का सा पीछे की तरफ खिसकेगा */
+  box-shadow: 0 8px 25px rgba(255, 215, 0, 0.2);
+}
+
+.home-btn-glass svg {
+  transition: transform 0.3s;
+}
+
+.home-btn-glass:hover svg {
+  transform: translateX(-3px);
+}
+
+.home-btn-glass:hover {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #FFD700;
+  transform: translateX(-4px);
+  box-shadow: 0 8px 25px rgba(255, 215, 0, 0.2);
+}
+
+.home-btn-glass svg { transition: transform 0.3s; }
+.home-btn-glass:hover svg { transform: translateX(-3px); }
+
+/* 🔥 Premium Compact Glass Card */
 .signup-card-glass {
-    background: rgba(30, 0, 0, 0.85); /* Dark Red Tint */
-    backdrop-filter: blur(15px);
-    padding: 40px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-    width: 100%;
-    max-width: 450px;
-    text-align: center;
-    animation: slideUp 0.5s ease-out;
+  background: rgba(25, 25, 30, 0.6);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  padding: 40px 35px;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  max-width: 450px;
+  text-align: center;
+  z-index: 10;
+  animation: slideUp 0.5s ease-out;
+  box-sizing: border-box;
 }
 
 .signup-title {
-    color: white;
-    margin-bottom: 30px;
-    font-weight: 800;
-    font-size: 1.8rem;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+  font-size: 26px;
+  margin: 0 0 5px 0;
+  color: #ffffff;
+  letter-spacing: 2px;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-/* Tabs */
-.signup-tabs {
-    display: flex;
-    margin-bottom: 30px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.signup-subtitle {
+  color: #aaa;
+  font-size: 13px;
+  margin: 0 0 25px 0;
 }
 
-.signup-tabs button {
-    flex: 1;
-    background: transparent;
-    color: #a0a0a0;
-    padding: 12px;
-    font-weight: 600;
-    border: none;
-    border-bottom: 3px solid transparent;
-    transition: 0.3s;
-    font-size: 1rem;
+/* 🔥 Apple-Style Segmented Controls */
+.auth-tabs {
+  display: flex;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border-radius: 15px;
+  margin-bottom: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.signup-tabs button.active {
-    color: #e50914; /* Red Highlight */
-    border-bottom-color: #e50914;
+.auth-tabs button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #aaa;
+  padding: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: 10px;
 }
 
-/* Form Inputs */
-.signup-body {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+.auth-tabs button.active {
+  background: #FFD700;
+  color: #121212;
+  box-shadow: 0 4px 10px rgba(255, 215, 0, 0.3);
 }
 
-.signup-body input {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: white;
-    padding: 14px;
-    border-radius: 8px;
-    font-size: 1rem;
-    outline: none;
-    text-align: left;
+/* 🔥 Input Fields */
+.signup-body { display: flex; flex-direction: column; gap: 5px; }
+
+.input-group {
+  margin-bottom: 15px;
+  text-align: left;
 }
 
-.signup-body input:focus {
-    border-color: #e50914;
-    box-shadow: 0 0 8px rgba(229, 9, 20, 0.5);
+.input-group label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #bbb;
+  font-weight: 500;
 }
 
-/* Checkbox Alignment */
-.terms-check-aligned {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 10px;
-    margin: 10px 0 20px 0;
-    color: #b3b3b3;
-    font-size: 0.9rem;
-    text-align: left;
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: 0.3s;
 }
 
-.terms-check-aligned input {
-    width: auto;
-    margin: 0;
+.input-with-icon:focus-within { border-color: #FFD700; box-shadow: 0 0 15px rgba(255, 215, 0, 0.15); }
+
+.country-code { padding: 0 15px; color: #FFD700; font-weight: bold; border-right: 1px solid rgba(255, 255, 255, 0.1); }
+
+.input-group input, .input-with-icon input {
+  width: 100%;
+  padding: 12px 15px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: 0.3s;
+  box-sizing: border-box;
 }
 
-/* Register Button */
+.input-with-icon input { border: none; background: transparent; }
+.input-group input:focus { border-color: #FFD700; box-shadow: 0 0 15px rgba(255, 215, 0, 0.15); }
+.input-group input::placeholder { color: rgba(255,255,255,0.3); }
+
+/* Password wrapper & Checkbox */
+.pass-wrapper { position: relative; width: 100%; }
+.eye-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 1.2rem; opacity: 0.7; }
+.pass-wrapper input { padding-right: 45px; }
+
+/* 🔥 Modern OTP Option Buttons */
+.otp-methods { display: flex; gap: 10px; }
+.otp-methods button {
+  flex: 1; padding: 10px; font-size: 12px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.05);
+  color: #fff; cursor: pointer; font-weight: 600; transition: all 0.3s ease;
+}
+.otp-methods button:hover { background: rgba(255, 255, 255, 0.1); }
+.otp-methods button.active { background: rgba(255, 215, 0, 0.15); border-color: #FFD700; color: #FFD700; }
+
+/* 🔥 Clean Checkbox */
+.checkbox-wrapper {
+  display: flex; align-items: center; gap: 10px; margin: 5px 0 20px 0; text-align: left;
+}
+.checkbox-wrapper input { width: 16px; height: 16px; accent-color: #FFD700; cursor: pointer; margin: 0; }
+.checkbox-wrapper label { margin: 0; cursor: pointer; color: #ccc; font-size: 13px; }
+
+/* 🔥 Premium Gold Button */
 .signup-btn-primary {
-    width: 100%;
-    padding: 15px;
-    background: linear-gradient(135deg, #e50914, #b20710);
-    color: white;
-    border-radius: 8px;
-    font-weight: bold;
-    font-size: 1.1rem;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 5px 15px rgba(229, 9, 20, 0.4);
-    transition: transform 0.2s;
+  width: 100%; padding: 15px; background: linear-gradient(135deg, #FFD700, #F39C12);
+  color: #121212; border: none; border-radius: 12px; font-size: 15px; font-weight: 800;
+  cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+  text-transform: uppercase; letter-spacing: 1px;
+  box-shadow: 0 8px 20px rgba(243, 156, 18, 0.3);
 }
+.signup-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 25px rgba(243, 156, 18, 0.5); }
+.signup-btn-primary:disabled { background: #555; color: #aaa; cursor: not-allowed; box-shadow: none; transform: none; }
 
-.signup-btn-primary:active {
-    transform: scale(0.98);
-}
+/* Links */
+.toggle-text { margin-top: 25px; font-size: 13px; color: #888; }
+.toggle-text span { color: #FFD700; font-weight: bold; cursor: pointer; margin-left: 5px; transition: 0.3s; }
+.toggle-text span:hover { text-decoration: underline; color: #fff; }
 
-.signup-footer {
-    margin-top: 25px;
-    font-size: 0.95rem;
-    color: #b3b3b3;
-}
+.fade-in { animation: fadeIn 0.4s ease-out forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-.text-link {
-    color: #e50914;
-    font-weight: bold;
-    cursor: pointer;
-    margin-left: 5px;
-}
-
-@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-/* ... (पुराना CSS रखें, बस नीचे वाला ऐड करें) ... */
-
-/* Password Wrapper for Eye Icon */
-.password-wrapper {
-    position: relative;
-    width: 100%;
-    margin-bottom: 20px;
-}
-
-.password-wrapper input {
-    width: 100%;
-    margin-bottom: 0; /* Wrapper handles spacing */
-    padding-right: 40px; /* Space for icon */
-}
-
-.eye-icon {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
-    user-select: none;
-    z-index: 5;
-}
-
-.eye-icon:hover {
-    color: #e50914; /* Red Highlight on Hover */
-}
-
-/* Ensure global inputs behave correctly */
-.signup-body input {
-    margin-bottom: 20px;
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+  .signup-card-glass { padding: 30px 20px; border-radius: 20px; border: none; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .home-btn-glass { top: 15px; left: 15px; padding: 10px; font-size: 12px; border-radius: 50%; justify-content: center; }
+  .home-btn-glass .home-text { display: none; } /* Hide text on mobile */
+  .home-btn-glass svg { margin: 0; }
 }

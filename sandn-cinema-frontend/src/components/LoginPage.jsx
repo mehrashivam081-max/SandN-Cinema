@@ -244,17 +244,21 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
 
     return (
         <div className="login-page">
-            <div id="recaptcha-container"></div>
+            <div id="recaptcha-container" style={{ display: 'none' }}></div>
             
-            <div style={{position: 'absolute', top: '20px', left: '20px', cursor: 'pointer', color: '#fff', fontWeight: 'bold'}} onClick={() => { sessionStorage.clear(); if(onBack) onBack(); else navigate('/'); }}>
-                🏠 Home
+            {/* 🔥 Ultra-Premium Floating Back Button */}
+            <div className="home-btn-glass" onClick={() => { sessionStorage.clear(); if(onBack) onBack(); else navigate('/'); }} title="Back to Main Page">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                <span className="home-text">Back to Website</span>
             </div>
 
             <div className="login-container">
-                <h2 style={{ fontSize: '1.8rem', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    {activeTab === 'code' ? 'Security Access' : 'SNEVIO'}
+                <h2 className="login-brand-title">
+                    {activeTab === 'code' ? 'Security Access' : <>SNE<span style={{color: '#FFD700'}}>VIO</span></>}
                 </h2>
+                <p className="login-subtitle">{activeTab === 'code' ? 'Enter admin credentials' : 'Login to your premium account'}</p>
 
+                {/* 🔥 Apple-style Segmented Controls */}
                 <div className="auth-tabs">
                     {step === 1 ? (
                         <>
@@ -269,113 +273,113 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     )}
                 </div>
 
-                {error && <div className="error-msg">{error}</div>}
+                {error && <div className="error-msg">⚠️ {error}</div>}
 
+                {/* STEP 1: MOBILE INPUT */}
                 {step === 1 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleCheckUser(); }}>
                         <div className="input-group">
                             <label>{activeTab === 'code' ? "Enter Secret Code" : "Registered Mobile Number"}</label>
-                            <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
-                        </div>
-                        
-                        <div style={{ marginBottom: '15px' }}>
-                            <label style={{ fontSize: '0.85rem', color: '#aaa', marginBottom: '8px', display: 'block' }}>Receive OTP via:</label>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'mobile' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>📱 SMS</button>
-                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'whatsapp' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>💬 WhatsApp</button>
-                                <button type="button" onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }} style={{ flex: 1, padding: '8px', fontSize: '12px', borderRadius: '8px', border: '1px solid #444', background: otpMethod === 'email' ? '#e50914' : 'transparent', color: '#fff', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.3s ease' }}>✉️ Email</button>
+                            <div className="input-with-icon">
+                                {activeTab !== 'code' && <span className="country-code">+91</span>}
+                                <input type={activeTab === 'code' ? "password" : "number"} placeholder="Type here..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} autoFocus />
                             </div>
                         </div>
+                        
+                        {activeTab !== 'code' && (
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ fontSize: '0.8rem', color: '#aaa', marginBottom: '10px', display: 'block', textAlign: 'left' }}>Receive OTP via:</label>
+                                <div className="otp-methods">
+                                    <button type="button" className={otpMethod === 'mobile' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}>📱 SMS</button>
+                                    <button type="button" className={otpMethod === 'whatsapp' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}>💬 WhatsApp</button>
+                                    <button type="button" className={otpMethod === 'email' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}>✉️ Email</button>
+                                </div>
+                            </div>
+                        )}
 
-                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Checking...' : 'GET OTP'}</button>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Checking...' : 'CONTINUE ➡️'}</button>
                     </form>
                 )}
 
+                {/* STEP 2: OTP VERIFICATION */}
                 {step === 2 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleVerifyOTP(); }}>
                         <div className="input-group">
-                            <label>Enter OTP</label>
-                            <input type="number" placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+                            <label>Enter Verification Code</label>
+                            <input type="number" placeholder="6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} style={{letterSpacing: '4px', textAlign: 'center', fontSize: '1.2rem'}} autoFocus />
                         </div>
-                        <button type="submit" className="login-btn" disabled={loading}>VERIFY OTP</button>
-                        <p className="resend-text" onClick={handleStepBack} style={{cursor: 'pointer'}}>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Verifying...' : 'VERIFY OTP'}</button>
+                        <p className="resend-text" onClick={handleStepBack}>
                             {activeTab === 'code' ? '← Edit Secret Code' : '← Edit Number'}
                         </p>
                     </form>
                 )}
 
+                {/* STEP 3: LOGIN (PASSWORD) */}
                 {step === 3 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
                         <div className="input-group">
-                            <label>Password</label>
+                            <label>Account Password</label>
                             <div className="pass-wrapper">
-                                <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                                <input type={showPass ? "text" : "password"} placeholder="Enter Password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
-                    {/* 🔥 NEW: PERSISTENCE CHECKBOX */}
-                    <div style={{ margin: '10px 0', fontSize: '12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember" style={{cursor: 'pointer'}} />
-                        <label htmlFor="remember" style={{cursor: 'pointer'}}>Keep me logged in</label>
-                    </div>
-                </div>
-                <button type="submit" className="login-btn" disabled={loading}>LOGIN NOW</button>
-                        <p className="resend-text" onClick={handleStepBack} style={{cursor: 'pointer'}}>← Back</p>
+                            
+                            <div className="checkbox-wrapper">
+                                <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember" />
+                                <label htmlFor="remember">Keep me securely logged in</label>
+                            </div>
+                        </div>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Authenticating...' : 'SECURE LOGIN 🔒'}</button>
+                        <p className="resend-text" onClick={handleStepBack}>← Back</p>
                     </form>
                 )}
 
+                {/* STEP 4: NEW USER SETUP */}
                 {step === 4 && (
                     <form className="fade-in" onSubmit={(e) => { e.preventDefault(); handleSetupAccount(); }}>
-                        <p style={{ color: '#28a745', fontSize: '12px', marginBottom: '15px' }}>✅ Number Verified! Please complete your profile setup.</p>
+                        <div style={{ background: 'rgba(46, 204, 113, 0.1)', border: '1px solid #2ecc71', padding: '10px', borderRadius: '8px', marginBottom: '20px' }}>
+                            <p style={{ color: '#2ecc71', fontSize: '12px', margin: 0, fontWeight: 'bold' }}>✅ Number Verified! Complete setup to continue.</p>
+                        </div>
                         
                         <div className="input-group">
-                            <label>Your Email Address</label>
-                            <input type="email" placeholder="example@gmail.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                            <input type="email" placeholder="Email Address (For Recovery)" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoFocus />
                         </div>
 
                         <div className="input-group">
-                            <label>Create New Password</label>
                             <div className="pass-wrapper">
-                                <input type={showPass ? "text" : "password"} placeholder="Strong Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                                <input type={showPass ? "text" : "password"} placeholder="Create Strong Password" value={password} onChange={(e) => setPassword(e.target.value)} />
                                 <span className="eye-icon" onClick={() => setShowPass(!showPass)}>{showPass ? '🙈' : '👁️'}</span>
                             </div>
                         </div>
 
                         <div className="input-group">
-                            <label>Confirm Password</label>
-                            <div className="pass-wrapper">
-                                <input type={showConfirmPass ? "text" : "password"} placeholder="Retype Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                                <span className="eye-icon" onClick={() => setShowConfirmPass(!showConfirmPass)}>{showConfirmPass ? '🙈' : '👁️'}</span>
-                            </div>
-                        </div>
+                            <div className="pass-wrapper">
+                                <input type={showConfirmPass ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                                <span className="eye-icon" onClick={() => setShowConfirmPass(!showConfirmPass)}>{showConfirmPass ? '🙈' : '👁️'}</span>
+                            </div>
+                        </div>
 
-                        {/* 🔥 NAYA: REFERRAL CODE INPUT 🔥 */}
                         <div className="input-group">
-                            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span>Referral Code (Optional)</span>
-                                <span style={{ color: '#2ecc71', fontSize: '10px', background: 'rgba(46, 204, 113, 0.1)', padding: '2px 5px', borderRadius: '4px' }}>Get 20 Free Coins!</span>
+                                <span style={{ color: '#2ecc71', fontSize: '10px', background: 'rgba(46, 204, 113, 0.15)', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold' }}>+20 Free Coins</span>
                             </label>
-                            <input 
-                                type="text" 
-                                placeholder="Enter Invite Code" 
-                                value={referralCode} 
-                                onChange={(e) => setReferralCode(e.target.value.toUpperCase())} 
-                                style={{ textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 'bold' }}
-                            />
+                            <input type="text" placeholder="Got an invite code?" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} style={{ textTransform: 'uppercase', letterSpacing: '2px', fontWeight: 'bold', color: '#f1c40f' }} />
                         </div>
 
-                        {/* 🔥 NEW: PERSISTENCE CHECKBOX FOR NEW USERS */}
-                        <div style={{ margin: '10px 0 15px', fontSize: '12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember-new" style={{cursor: 'pointer'}} />
-                            <label htmlFor="remember-new" style={{cursor: 'pointer'}}>Keep me logged in</label>
+                        <div className="checkbox-wrapper">
+                            <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} id="remember-new" />
+                            <label htmlFor="remember-new">Keep me logged in</label>
                         </div>
 
-                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Setting up...' : 'COMPLETE SETUP & LOGIN'}</button>
+                        <button type="submit" className="login-btn" disabled={loading}>{loading ? 'Creating Account...' : 'CREATE & LOGIN 🚀'}</button>
                     </form>
                 )}
 
                 <div className="toggle-text">
                     {step === 1 && activeTab !== 'code' && (
-                        <>New here? <span onClick={onSignupClick || (() => navigate('/signup'))}>Create Account</span></>
+                        <>Don't have an account? <span onClick={onSignupClick || (() => navigate('/signup'))}>Sign Up</span></>
                     )}
                 </div>
             </div>
