@@ -296,21 +296,22 @@ const LaptopView = ({
       )}
 
       {/* ==========================================
-          💎 MAIN CONTENT AREA
+          💎 MAIN CONTENT AREA (Fixed Dashboard Spacing)
           ========================================== */}
       <div 
         className="laptop-main-content" 
         style={{ 
-            minHeight: 'calc(100vh - 80px)', 
-            backgroundColor: searchStep === 3 ? '#f9f9f9' : 'transparent', 
+            minHeight: searchStep === 3 ? '100vh' : 'calc(100vh - 80px)', /* 🔥 FIX: Dashboard takes full 100vh */
+            backgroundColor: searchStep === 3 ? '#0a0a0a' : 'transparent', /* 🔥 FIX: Premium dark background for dashboard */
             transition: 'background-color 0.3s ease',
             width: '100%', 
             display: 'flex', 
-            flexDirection: 'column'
+            flexDirection: 'column',
+            margin: 0, padding: 0 /* 🔥 FIX: Removed any accidental gaps */
         }}
       >
         {searchStep === 3 ? (
-            <div style={{width: '100%', height: '100vh', padding: '0', margin: '0'}}> 
+            <div style={{width: '100%', minHeight: '100vh', padding: '0', margin: '0', display: 'flex', flexDirection: 'column'}}> 
                 {renderDashboard()}
             </div>
         ) : (

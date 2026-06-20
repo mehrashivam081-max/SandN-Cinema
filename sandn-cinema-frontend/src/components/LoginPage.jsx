@@ -286,13 +286,14 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                             </div>
                         </div>
                         
+                        {/* 🔥 Responsive & Secure OTP Methods (Disabled during loading) */}
                         {activeTab !== 'code' && (
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ fontSize: '0.8rem', color: '#aaa', marginBottom: '10px', display: 'block', textAlign: 'left' }}>Receive OTP via:</label>
-                                <div className="otp-methods">
-                                    <button type="button" className={otpMethod === 'mobile' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }}>📱 SMS</button>
-                                    <button type="button" className={otpMethod === 'whatsapp' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }}>💬 WhatsApp</button>
-                                    <button type="button" className={otpMethod === 'email' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }}>✉️ Email</button>
+                            <div style={{ marginBottom: '25px' }}>
+                                <label style={{ fontSize: '11px', color: '#aaa', marginBottom: '12px', display: 'block', textAlign: 'left', fontWeight: '500', letterSpacing: '1px', textTransform: 'uppercase' }}>Receive OTP via:</label>
+                                <div style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '5px' }}>
+                                    <button type="button" disabled={loading} onClick={(e) => { e.preventDefault(); setOtpMethod('mobile'); }} style={{ flex: 1, minWidth: '85px', padding: '10px 5px', fontSize: '11px', borderRadius: '10px', border: '1px solid', borderColor: otpMethod === 'mobile' ? '#FFD700' : 'rgba(255, 255, 255, 0.2)', background: otpMethod === 'mobile' ? 'rgba(255, 215, 0, 0.15)' : 'rgba(255, 255, 255, 0.05)', color: otpMethod === 'mobile' ? '#FFD700' : '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, fontWeight: '600', transition: 'all 0.3s ease', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>📱 SMS</button>
+                                    <button type="button" disabled={loading} onClick={(e) => { e.preventDefault(); setOtpMethod('whatsapp'); }} style={{ flex: 1, minWidth: '95px', padding: '10px 5px', fontSize: '11px', borderRadius: '10px', border: '1px solid', borderColor: otpMethod === 'whatsapp' ? '#FFD700' : 'rgba(255, 255, 255, 0.2)', background: otpMethod === 'whatsapp' ? 'rgba(255, 215, 0, 0.15)' : 'rgba(255, 255, 255, 0.05)', color: otpMethod === 'whatsapp' ? '#FFD700' : '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, fontWeight: '600', transition: 'all 0.3s ease', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>💬 WhatsApp</button>
+                                    <button type="button" disabled={loading} onClick={(e) => { e.preventDefault(); setOtpMethod('email'); }} style={{ flex: 1, minWidth: '85px', padding: '10px 5px', fontSize: '11px', borderRadius: '10px', border: '1px solid', borderColor: otpMethod === 'email' ? '#FFD700' : 'rgba(255, 255, 255, 0.2)', background: otpMethod === 'email' ? 'rgba(255, 215, 0, 0.15)' : 'rgba(255, 255, 255, 0.05)', color: otpMethod === 'email' ? '#FFD700' : '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1, fontWeight: '600', transition: 'all 0.3s ease', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>✉️ Email</button>
                                 </div>
                             </div>
                         )}
