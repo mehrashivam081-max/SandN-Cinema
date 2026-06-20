@@ -434,6 +434,7 @@ const MobileView = ({
 
       </div>
     </div>
+    
   );
 };
 
