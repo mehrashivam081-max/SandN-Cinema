@@ -268,12 +268,10 @@ const MobileView = ({
 
   return (
     <div className="mobile-container" style={{ 
-        overflowX: 'hidden', 
-        overflowY: isDashboard ? 'auto' : 'hidden', /* 🔥 FIX 1: डैशबोर्ड में स्क्रॉल चालू कर दिया */
+        overflow: 'hidden', /* 🔥 FIX: पूरे पेज का स्क्रॉल लॉक कर दिया (App Like Feel) */
         position: 'relative', 
-        background: isDashboard ? '#0f172a' : '#000', /* 🔥 FIX 2: डैशबोर्ड के लिए डार्क बैकग्राउंड */
-        minHeight: '100dvh', 
-        height: isDashboard ? 'auto' : '100dvh', /* 🔥 FIX 3: हाइट को लॉक से हटा दिया */
+        background: isDashboard ? '#0f172a' : '#000', 
+        height: '100dvh', /* 🔥 FIX: स्क्रीन साइज़ फिक्स कर दी */
         width: '100vw' 
     }}>
       

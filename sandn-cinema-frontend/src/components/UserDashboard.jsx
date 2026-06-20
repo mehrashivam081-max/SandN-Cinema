@@ -3681,8 +3681,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             </header>
 
-            {/* 🔥 Added padding-top so content scrolls perfectly UNDER the fixed header */}
-            <main className="user-main-content" style={{ paddingTop: '90px' }}>
+            {/* 🔥 MAIN DASHBOARD CONTENT AREA (Scrolls Internally Only) */}
+            <main className="user-main-content" style={{ 
+                paddingTop: '85px', 
+                paddingBottom: '90px', 
+                height: '100dvh', /* 🔥 हाइट फिक्स कर दी */
+                overflowY: 'auto', /* 🔥 सिर्फ ये बीच का हिस्सा स्क्रॉल होगा */
+                boxSizing: 'border-box', 
+                background: '#0a0a0a', 
+                width: '100%', 
+                overflowX: 'hidden' 
+            }}>
                 {renderContent()}
             </main>
 
@@ -3804,10 +3813,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* 🔥 NAYA: ZEN MODE - Hide Nav Bar when inside Selection Album to avoid distraction */}
-            {!activeSelectionProject && (
-            <nav className="bottom-nav-bar" style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 5px' }}>
-                <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
+            {/* 🔥 NAYA: ZEN MODE - Hide Nav Bar when inside Selection Album */}
+            {!activeSelectionProject && (
+            <nav className="bottom-nav-bar" style={{ 
+                display: 'flex', justifyContent: 'space-around', padding: '10px 5px',
+                position: 'fixed', bottom: 0, left: 0, width: '100%', /* 🔥 FIX: Bottom में फिक्स कर दिया */
+                background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)', zIndex: 9999, boxSizing: 'border-box'
+            }}>
+                <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
                     🏠<span>Home</span>
                 </button>
                 <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
