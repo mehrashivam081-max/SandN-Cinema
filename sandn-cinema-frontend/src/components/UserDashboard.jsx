@@ -1308,13 +1308,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
+                        {/* 🔥 NATIVE PREMIUM HEADER & BACK BUTTON */}
+                        <div className="folder-header-nav" style={{ background: 'linear-gradient(90deg, #27ae60, #2ecc71)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(39, 174, 96, 0.4)', borderBottom: '1px solid rgba(255,255,255,0.2)', position: 'relative', zIndex: 10 }}>
                             <button onClick={() => { 
                                 if (showSelectedPreview) setShowSelectedPreview(false);
                                 else if (viewingSplitAlbum) setViewingSplitAlbum(null); 
                                 else { setActiveSelectionProject(null); setCurrentTab('HOME'); }
-                            }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>
+                            }} style={{ background: 'rgba(0, 0, 0, 0.25)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.3)', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(10px)', transition: 'all 0.3s ease' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.4)'; e.currentTarget.style.borderColor = '#fff'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.25)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'; }}
+                            >
+                                {/* 🌟 Sleek SVG Arrow */}
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> 
+                                Back
+                            </button>
+                            <h3 style={{color: '#fff', margin: 0, fontSize: '16px', letterSpacing: '0.5px', textShadow: '0 2px 4px rgba(0,0,0,0.2)'}}>
                                 {showSelectedPreview ? 'Selected Photos 👁️' : (viewingSplitAlbum ? viewingSplitAlbum : 'Album in Production 🚚')}
                             </h3>
                         </div>
