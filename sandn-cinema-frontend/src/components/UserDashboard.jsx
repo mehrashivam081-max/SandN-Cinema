@@ -16,6 +16,26 @@ const getValidToken = () => {
     return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
 };
 
+// 🌟 PREMIUM REUSABLE BACK BUTTON COMPONENT
+const BackButton = ({ onClick, label = "Back", color = "#fff", border = "rgba(255,255,255,0.3)" }) => (
+    <button 
+        onClick={onClick} 
+        style={{ 
+            background: 'rgba(0, 0, 0, 0.25)', color: color, 
+            border: `1px solid ${border}`, padding: '6px 14px', 
+            borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', 
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', 
+            backdropFilter: 'blur(10px)', transition: 'all 0.3s ease',
+            whiteSpace: 'nowrap'
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.4)'; e.currentTarget.style.borderColor = color; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.25)'; e.currentTarget.style.borderColor = border; }}
+    >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        {label}
+    </button>
+);
+
 const UserDashboard = ({ user, userData, onLogout }) => {
 
     // 🧾 AUTOMATED PDF INVOICE GENERATOR (CRASH-PROOF)
@@ -169,10 +189,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // ✅ WALLET MODAL & GLOBAL CHARGES STATES
-    const [showWalletModal, setShowWalletModal] = useState(false);
+    const [showWalletModal, setShowWalletModal] = useState(false);
     const [walletTab, setWalletTab] = useState('BUY'); // 'BUY' or 'FREE'
     const [coinPackages, setCoinPackages] = useState([]);
     const [miniEvents, setMiniEvents] = useState([]);
+    const [tutorials, setTutorials] = useState([]); // 👈 NAYA: Dynamic Video Guides ke liye
 
     // ✅ LIVE DOWNLOAD STATES
     const [downloadingFile, setDownloadingFile] = useState(null);
@@ -182,6 +203,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // --- PROFILE STATES ---
     const [profileImage, setProfileImage] = useState(user?.profileImage || null);
+    const [dpFile, setDpFile] = useState(null); // 👈 NAYA: To store the actual image file
     const [editProfileMode, setEditProfileMode] = useState(false);
     const [profileData, setProfileData] = useState({
         email: user?.email || '',
@@ -202,6 +224,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [showCartModal, setShowCartModal] = useState(false);
     const [showEmergencyModal, setShowEmergencyModal] = useState(false);
     const [emergencyData, setEmergencyData] = useState({ reason: '', location: '' });
+    const [showSupportModal, setShowSupportModal] = useState(false); 
+    const [showTutorialsModal, setShowTutorialsModal] = useState(false); // 👈 VIDEO GUIDES STATE
     
     // ✅ NEW: ACCEPT PROPOSAL MODAL
     const [viewProposalBooking, setViewProposalBooking] = useState(null);
@@ -303,6 +327,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     // Update name only if it's the initial load to prevent overwriting user typing
                     if(isInitialLoad) setEditName(dbData.name || '');
                     if(isInitialLoad) setProfileData({ email: dbData.email || '', location: dbData.location || '' });
+                    if(isInitialLoad) setProfileImage(dbData.profileImage || null); // 👈 DP ko DB se load karna zaroori hai!
                     
                     if(dbData.wallet) {
                         setWallet({ ...dbData.wallet, unlockedFiles: dbData.wallet.unlockedFiles || [] });
@@ -352,6 +377,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     if (platformRes.data.success && platformRes.data.data) {
                         setCoinPackages(platformRes.data.data.coinPackages || []);
                         setMiniEvents(platformRes.data.data.miniEvents || []);
+                        setTutorials(platformRes.data.data.tutorials || []); // 👈 NAYA: DB se video links fetch karega
                     }
                 }
 
@@ -560,17 +586,62 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- PROFILE HANDLERS ---
     const handleDPChange = (e) => {
         const file = e.target.files[0];
-        if (file) setProfileImage(URL.createObjectURL(file)); 
+        if (file) {
+            setProfileImage(URL.createObjectURL(file)); 
+            setDpFile(file); // 👈 Save file for backend upload
+        }
     };
 
-    const handleRemoveDP = () => setProfileImage(null);
+    const handleRemoveDP = () => {
+        setProfileImage(null);
+        setDpFile(null); // 👈 Clear file state too
+    };
 
-    const handleSaveProfile = () => {
-        alert("Profile Updated Successfully!");
-        setEditProfileMode(false);
-        const updatedLocalUser = { ...syncUser, name: editName, email: profileData.email, location: profileData.location };
-        setSyncUser(updatedLocalUser);
-        sessionStorage.setItem('user', JSON.stringify(updatedLocalUser));
+    const handleSaveProfile = async () => {
+        setLoading(true);
+        try {
+            let finalDpUrl = profileImage; // Default to existing DP if no new file is uploaded
+            
+            // 1️⃣ JAB NAYA PHOTO UPLOAD KIYA HO
+            if (dpFile) {
+                const fd = new FormData();
+                fd.append('file', dpFile);
+                // Upload image to cloud via proxy
+                const cloudRes = await axios.post(`${API_BASE}/proxy-upload`, fd, {
+                    headers: { 'Authorization': `Bearer ${getValidToken()}` }
+                });
+                if(cloudRes.data.url) finalDpUrl = cloudRes.data.url;
+            }
+
+            // 2️⃣ SAVE ALL DATA TO DATABASE
+            const payload = {
+                mobile: syncUser.mobile,
+                name: editName,
+                email: profileData.email,
+                location: profileData.location,
+                profileImage: finalDpUrl // 👈 Naya DP url backend ko bhej rahe hain
+            };
+
+            const res = await axios.post(`${API_BASE}/update-profile`, payload, {
+                headers: { 'Authorization': `Bearer ${getValidToken()}` }
+            });
+
+            if (res.data.success) {
+                alert("✅ Profile Updated Successfully!");
+                setEditProfileMode(false);
+                const updatedLocalUser = { ...syncUser, ...payload };
+                setSyncUser(updatedLocalUser);
+                sessionStorage.setItem('user', JSON.stringify(updatedLocalUser));
+                localStorage.setItem('user', JSON.stringify(updatedLocalUser));
+            } else {
+                alert("❌ Failed to update profile.");
+            }
+        } catch (err) {
+            console.error("Profile Save Error:", err);
+            alert("Server error while saving profile. Please check connection.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     // ✅ NEW: BATCH SELECTION HELPERS
@@ -1228,9 +1299,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#e74c3c', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>Session Closed</h3>
+                        <div className="folder-header-nav" style={{background: 'linear-gradient(90deg, #e74c3c, #c0392b)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(231, 76, 60, 0.4)'}}>
+                            <BackButton onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} />
+                            <h3 style={{color: '#fff', margin: 0, fontSize: '16px'}}>Session Closed</h3>
                         </div>
                         <div style={{ padding: '20px', background: '#fdedec', border: '1px solid #e74c3c', margin: '20px', borderRadius: '10px', textAlign: 'center' }}>
                             <div style={{ fontSize: '40px', marginBottom: '10px' }}>⏳</div>
@@ -1250,9 +1321,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#27ae60', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>Selection Submitted</h3>
+                        <div className="folder-header-nav" style={{background: 'linear-gradient(90deg, #27ae60, #2ecc71)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(46, 204, 113, 0.4)'}}>
+                            <BackButton onClick={() => { setActiveSelectionProject(null); setCurrentTab('HOME'); }} />
+                            <h3 style={{color: '#fff', margin: 0, fontSize: '16px'}}>Selection Submitted</h3>
                         </div>
                         <div style={{ padding: '15px', background: '#e8f8f5', border: '1px solid #2ecc71', margin: '15px', borderRadius: '10px', textAlign: 'center' }}>
                             <h3 style={{ margin: '0 0 5px 0', color: '#27ae60' }}>🎉 Thank You, {currentFamilyMember?.nickname}!</h3>
@@ -1310,18 +1381,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
                         {/* 🔥 NATIVE PREMIUM HEADER & BACK BUTTON */}
                         <div className="folder-header-nav" style={{ background: 'linear-gradient(90deg, #27ae60, #2ecc71)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(39, 174, 96, 0.4)', borderBottom: '1px solid rgba(255,255,255,0.2)', position: 'relative', zIndex: 10 }}>
-                            <button onClick={() => { 
+                            <BackButton onClick={() => { 
                                 if (showSelectedPreview) setShowSelectedPreview(false);
                                 else if (viewingSplitAlbum) setViewingSplitAlbum(null); 
                                 else { setActiveSelectionProject(null); setCurrentTab('HOME'); }
-                            }} style={{ background: 'rgba(0, 0, 0, 0.25)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.3)', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', backdropFilter: 'blur(10px)', transition: 'all 0.3s ease' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.4)'; e.currentTarget.style.borderColor = '#fff'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.25)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'; }}
-                            >
-                                {/* 🌟 Sleek SVG Arrow */}
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> 
-                                Back
-                            </button>
+                            }} />
                             <h3 style={{color: '#fff', margin: 0, fontSize: '16px', letterSpacing: '0.5px', textShadow: '0 2px 4px rgba(0,0,0,0.2)'}}>
                                 {showSelectedPreview ? 'Selected Photos 👁️' : (viewingSplitAlbum ? viewingSplitAlbum : 'Album in Production 🚚')}
                             </h3>
@@ -1563,9 +1627,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#8e44ad', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>{activeSelectionProject.folderName}</h3>
+                        <div className="folder-header-nav" style={{background: 'linear-gradient(90deg, #8e44ad, #9b59b6)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(142, 68, 173, 0.4)'}}>
+                            <BackButton onClick={() => { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); }} />
+                            <h3 style={{color: '#fff', margin: 0, fontSize: '16px'}}>{activeSelectionProject.folderName}</h3>
                         </div>
                     </div>
 
@@ -1669,9 +1733,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#3498db', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => setSelectionSubView('OVERVIEW')} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
-                            <h3 style={{color: '#fff', margin: 0}}>📁 {viewingMember.nickname}</h3>
+                        <div className="folder-header-nav" style={{background: 'linear-gradient(90deg, #3498db, #2980b9)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(52, 152, 219, 0.4)'}}>
+                            <BackButton onClick={() => setSelectionSubView('OVERVIEW')} />
+                            <h3 style={{color: '#fff', margin: 0, fontSize: '16px'}}>📁 {viewingMember.nickname}</h3>
                         </div>
                         <p style={{textAlign: 'center', fontSize: '13px', color: '#555', margin: '15px 0 0 0', fontWeight: 'bold'}}>Total Selected: {memberImages.length}</p>
                     </div>
@@ -1695,9 +1759,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             return (
                 <div className="folders-view" style={{ paddingBottom: '100px' }}>
                     <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                        <div className="folder-header-nav" style={{background: '#f1c40f', margin: 0, borderRadius: 0}}>
-                            <button onClick={() => setSelectionSubView('OVERVIEW')} className="back-btn" style={{color:'#000'}}>⬅ Back</button>
-                            <h3 style={{color: '#000', margin: 0}}>🗂️ Merged Folder</h3>
+                        <div className="folder-header-nav" style={{background: 'linear-gradient(90deg, #f1c40f, #f39c12)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(241, 196, 15, 0.4)'}}>
+                            <BackButton color="#000" border="rgba(0,0,0,0.3)" onClick={() => setSelectionSubView('OVERVIEW')} />
+                            <h3 style={{color: '#000', margin: 0, fontSize: '16px'}}>🗂️ Merged Folder</h3>
                         </div>
                         <div style={{ padding: '15px' }}>
                             <p style={{textAlign: 'center', fontSize: '13px', color: '#555', margin: '0 0 15px 0'}}>This folder contains {mergedImages.length} deduplicated images from your family.</p>
@@ -1790,11 +1854,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return (
             <div className="folders-view" style={{ paddingBottom: '120px' }}>
                 <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
-                    <div className="folder-header-nav" style={{background: isFinalPhase ? '#e74c3c' : '#8e44ad', margin: 0, borderRadius: 0}}>
-                        <button onClick={() => { 
+                    <div className="folder-header-nav" style={{background: isFinalPhase ? 'linear-gradient(90deg, #e74c3c, #c0392b)' : 'linear-gradient(90deg, #8e44ad, #9b59b6)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)'}}>
+                        <BackButton onClick={() => { 
                             if(isFamilyMember) { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); setActiveSelectionCategory('ALL'); }
                             else { setSelectionSubView('OVERVIEW'); setActiveSelectionCategory('ALL'); }
-                        }} className="back-btn" style={{color:'#fff'}}>⬅ Back</button>
+                        }} />
                         <h3 style={{color: '#fff', margin: 0, fontSize: '15px'}}>{isFamilyMember ? 'Family Selection' : (isFinalPhase ? 'Final Album Review' : `Phase ${currentPhase} Selection`)}</h3>
                     </div>
 
@@ -2477,31 +2541,140 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         );
     };
 
-    const renderProfileTab = () => (
-        <div className="profile-tab-vip">
-            <h2>Your Profile</h2>
-            <div className="profile-card-vip">
-                <div className="dp-section">
-                    <div className="dp-circle">{profileImage ? <img src={profileImage} alt="DP" /> : <span>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}</div>
-                    {editProfileMode && (
-                        <div className="dp-controls"><label className="dp-btn upload">Change<input type="file" accept="image/*" hidden onChange={handleDPChange}/></label><button className="dp-btn remove" onClick={handleRemoveDP}>Remove</button></div>
-                    )}
+    const renderProfileTab = () => {
+        // 🔥 Bug Fix for Location: Ensure it's always a string, not an object.
+        const safeLocation = typeof profileData.location === 'object' ? '' : profileData.location;
+
+        // 📝 VIEW 1: EDIT PROFILE MODE (Clean Form)
+        if (editProfileMode) {
+            return (
+                <div style={{ padding: '20px', paddingBottom: '100px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                        <BackButton onClick={() => setEditProfileMode(false)} label="Cancel" />
+                        <h2 style={{ color: '#fff', margin: 0, fontSize: '20px' }}>Edit Profile</h2>
+                    </div>
+                    
+                    <div style={{ background: '#1a1a2e', padding: '25px', borderRadius: '20px', border: '1px solid #333' }}>
+                        <div className="dp-section" style={{ marginBottom: '20px', textAlign: 'center' }}>
+                            <div className="dp-circle" style={{ width: '90px', height: '90px', margin: '0 auto', border: '3px solid #d4af37', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '35px', background: '#2c3e50', overflow: 'hidden' }}>
+                                {profileImage ? <img src={profileImage} alt="DP" style={{width:'100%', height:'100%', objectFit:'cover'}} /> : <span style={{color: '#d4af37'}}>{editName ? editName.charAt(0).toUpperCase() : 'U'}</span>}
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '15px' }}>
+                                <label style={{ background: '#3498db', color: '#fff', padding: '6px 15px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    Change <input type="file" accept="image/*" hidden onChange={handleDPChange}/>
+                                </label>
+                                <button onClick={handleRemoveDP} style={{ background: 'rgba(231, 76, 60, 0.1)', color: '#e74c3c', border: '1px solid #e74c3c', padding: '6px 15px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>Remove</button>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <div>
+                                <label style={{ color: '#888', fontSize: '12px', marginBottom: '5px', display: 'block' }}>Full Name</label>
+                                <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #444', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ color: '#888', fontSize: '12px', marginBottom: '5px', display: 'block' }}>Email Address</label>
+                                <input type="email" value={profileData.email} onChange={(e) => setProfileData({...profileData, email: e.target.value})} placeholder="Add your email" style={{ width: '100%', padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #444', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                            </div>
+                            <div>
+                                <label style={{ color: '#888', fontSize: '12px', marginBottom: '5px', display: 'block' }}>Location / City</label>
+                                <input type="text" value={safeLocation} onChange={(e) => setProfileData({...profileData, location: e.target.value})} placeholder="e.g. Indore" style={{ width: '100%', padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #444', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} />
+                            </div>
+                        </div>
+
+                        <button onClick={handleSaveProfile} style={{ width: '100%', padding: '15px', background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', marginTop: '25px', fontSize: '15px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(46, 204, 113, 0.3)' }}>
+                            Save Changes
+                        </button>
+                    </div>
                 </div>
-                <div className="profile-details">
-                    <label>Registered Mobile No.</label>
-                    <input type="text" value={syncUser?.mobile || ''} disabled className="vip-input disabled" />
-                    <label>Full Name</label>
-                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} disabled={!editProfileMode} className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-                    <label>Email Address</label>
-                    <input type="email" value={profileData.email} onChange={(e) => setProfileData({...profileData, email: e.target.value})} disabled={!editProfileMode} placeholder="Add your email" className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-                    <label>Location / City</label>
-                    <input type="text" value={profileData.location} onChange={(e) => setProfileData({...profileData, location: e.target.value})} disabled={!editProfileMode} placeholder="e.g. Indore" className={`vip-input ${!editProfileMode ? 'disabled' : ''}`} />
-                    {editProfileMode ? <button className="vip-btn-gold mt-20" onClick={handleSaveProfile} style={{background: '#2ecc71', color: '#fff', border: 'none'}}>Save Changes</button> : <button className="vip-btn-outline mt-20" onClick={() => setEditProfileMode(true)}>Edit Profile</button>}
+            );
+        }
+
+        // 📱 VIEW 2: MAIN MENU VIEW (Modern App Style)
+        return (
+            <div style={{ padding: '20px', paddingBottom: '100px' }}>
+                <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                    <div style={{ width: '100px', height: '100px', margin: '0 auto 15px auto', border: '3px solid #d4af37', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', overflow: 'hidden', boxShadow: '0 10px 25px rgba(212, 175, 55, 0.2)' }}>
+                        {profileImage ? <img src={profileImage} alt="DP" style={{width:'100%', height:'100%', objectFit:'cover'}} /> : <span style={{color: '#d4af37'}}>{(editName || 'U').charAt(0).toUpperCase()}</span>}
+                    </div>
+                    <h2 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '22px' }}>{editName || 'Snevio User'}</h2>
+                    <span style={{ background: 'rgba(52, 152, 219, 0.1)', color: '#3498db', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', border: '1px solid rgba(52, 152, 219, 0.3)' }}>
+                        📱 +91 {syncUser?.mobile || 'N/A'}
+                    </span>
+                </div>
+
+                <h3 style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', paddingLeft: '5px' }}>Account Settings</h3>
+                
+                <div style={{ background: '#1a1a2e', borderRadius: '15px', overflow: 'hidden', border: '1px solid #333', marginBottom: '20px' }}>
+                    <div onClick={() => setEditProfileMode(true)} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #222', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: '#3498db', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>👤</div>
+                            <div>
+                                <h4 style={{ color: '#fff', margin: '0 0 3px 0', fontSize: '15px' }}>Personal Details</h4>
+                                <p style={{ color: '#aaa', margin: 0, fontSize: '11px' }}>Name, Email, Location</p>
+                            </div>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+
+                    <div onClick={() => setCurrentTab('HISTORY')} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #222', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: '#f1c40f', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>📜</div>
+                            <div>
+                                <h4 style={{ color: '#fff', margin: '0 0 3px 0', fontSize: '15px' }}>Transaction History</h4>
+                                <p style={{ color: '#aaa', margin: 0, fontSize: '11px' }}>Invoices and Coin logs</p>
+                            </div>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+
+                    <div onClick={() => setShowWalletModal(true)} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #222', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: '#e67e22', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🪙</div>
+                            <div>
+                                <h4 style={{ color: '#fff', margin: '0 0 3px 0', fontSize: '15px' }}>Snevio Wallet</h4>
+                                <p style={{ color: '#aaa', margin: 0, fontSize: '11px' }}>Balance: {wallet.coins} Coins</p>
+                            </div>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+
+                    {/* 🎁 NAYA: Snevio Gift Card (Coming Soon) */}
+                    <div onClick={() => alert("Snevio Gift Cards are coming soon! Stay tuned. 🎁")} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'rgba(255,255,255,0.02)', opacity: 0.8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: 'linear-gradient(45deg, #8e44ad, #9b59b6)', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🎁</div>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 3px 0' }}>
+                                    <h4 style={{ color: '#fff', margin: 0, fontSize: '15px' }}>Snevio Gift Card</h4>
+                                    <span style={{ background: '#e74c3c', color: '#fff', fontSize: '9px', padding: '3px 6px', borderRadius: '10px', fontWeight: 'bold', letterSpacing: '0.5px', boxShadow: '0 2px 5px rgba(231,76,60,0.4)' }}>COMING SOON</span>
+                                </div>
+                                <p style={{ color: '#aaa', margin: 0, fontSize: '11px' }}>Send or redeem premium gift cards</p>
+                            </div>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+                </div>
+
+                <h3 style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', paddingLeft: '5px' }}>Support & Security</h3>
+
+                <div style={{ background: '#1a1a2e', borderRadius: '15px', overflow: 'hidden', border: '1px solid #333' }}>
+                    {/* 👇 NAYA ACTION LAGA DIYA HAI 👇 */}
+                    <div onClick={() => setShowSupportModal(true)} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #222', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: 'linear-gradient(45deg, #3498db, #2980b9)', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🎧</div>
+                            <h4 style={{ color: '#fff', margin: '0', fontSize: '15px' }}>Help & Support</h4>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+
+                    <div onClick={onLogout} style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer', background: 'rgba(231, 76, 60, 0.05)' }}>
+                        <div style={{ background: 'rgba(231, 76, 60, 0.2)', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', color: '#e74c3c' }}>🚪</div>
+                        <h4 style={{ color: '#e74c3c', margin: '0', fontSize: '15px', fontWeight: 'bold' }}>Logout Securely</h4>
+                    </div>
                 </div>
             </div>
-            <button className="logout-btn-full mt-20" onClick={onLogout} style={{background: '#e74c3c'}}>Logout Securely</button>
-        </div>
-    );
+        );
+    };
 
     const renderHomeTab = () => {
     // ✅ 1. वेरिएबल को फंक्शन के शुरुआत में ही define करें
@@ -2544,12 +2717,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             return (
                 <div className="folder-gallery-view">
-                    <div className="folder-header-nav">
-                        <button onClick={() => { 
+                    <div className="folder-header-nav" style={{ padding: '0 5px' }}>
+                        <BackButton color="#fff" onClick={() => { 
                             if(activeSubFolder) { setActiveSubFolder(null); setIsSelectionMode(false); setSelectedMediaFiles([]); }
                             else { setActiveFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); } 
-                        }} className="back-btn">⬅ Back</button>
-                        <h3 style={{fontSize: '16px'}}>{currentFolderName}</h3>
+                        }} />
+                        <h3 style={{fontSize: '16px', margin: 0}}>{currentFolderName}</h3>
                     </div>
 
                     {/* 🔥 SNEVIO EXCLUSIVE MARKETING BANNER (Only shows for the default/Snevio folder) */}
@@ -2722,9 +2895,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         if (activeFolder && activeFolder.subFolders && activeFolder.subFolders.length > 0 && !activeSubFolder) {
             return (
                 <div className="folders-view">
-                    <div className="folder-header-nav">
-                        <button onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} className="back-btn">⬅ Back to Main Folders</button>
-                        <h3>{activeFolder.folderName}</h3>
+                    <div className="folder-header-nav" style={{ padding: '0 5px' }}>
+                        <BackButton label="Back to Main Folders" color="#fff" onClick={() => { setActiveFolder(null); setMediaFilter('ALL'); }} />
+                        <h3 style={{margin: 0}}>{activeFolder.folderName}</h3>
                     </div>
                     
                     {/* Display Root Files if any exist along with sub-folders */}
@@ -3112,6 +3285,81 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <p style={{ textAlign: 'center', fontSize: '11px', color: '#aaa', marginTop: '10px' }}>
                             Proposal Expires: {new Date(viewProposalBooking.proposal.expiryTime).toLocaleString()}
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW SUPPORT & HELP MODAL */}
+            {showSupportModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', border: '1px solid #333' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ color: '#fff', margin: 0, fontSize: '20px' }}>🎧 Help & Support</h2>
+                            <button onClick={() => setShowSupportModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#888', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>How can we assist you today? Choose an option below.</p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* WhatsApp Support */}
+                            <button onClick={() => window.open('https://wa.me/917828011282', '_blank')} style={{ background: 'rgba(37, 211, 102, 0.1)', border: '1px solid #25D366', color: '#2ecc71', padding: '15px', borderRadius: '12px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                💬 Chat on WhatsApp
+                            </button>
+
+                            {/* Email Support */}
+                            <button onClick={() => window.location.href = 'mailto:support@snevio.com'} style={{ background: 'rgba(52, 152, 219, 0.1)', border: '1px solid #3498db', color: '#3498db', padding: '15px', borderRadius: '12px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                📧 Send an Email
+                            </button>
+
+                            {/* Call Request */}
+                            <button onClick={() => { alert('Call request sent! Our team will contact you shortly.'); setShowSupportModal(false); }} style={{ background: 'rgba(241, 196, 15, 0.1)', border: '1px solid #f1c40f', color: '#f1c40f', padding: '15px', borderRadius: '12px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                📞 Request a Call Back
+                            </button>
+
+                            {/* 📺 NEW: Video Guides Button */}
+                            <button onClick={() => { setShowSupportModal(false); setShowTutorialsModal(true); }} style={{ background: 'rgba(155, 89, 182, 0.1)', border: '1px solid #9b59b6', color: '#9b59b6', padding: '15px', borderRadius: '12px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                📺 Watch Video Guides
+                            </button>
+
+                            {/* Existing Emergency Booking */}
+                            <button onClick={() => { setShowSupportModal(false); setShowEmergencyModal(true); }} style={{ background: 'linear-gradient(45deg, #e74c3c, #c0392b)', border: 'none', color: '#fff', padding: '15px', borderRadius: '12px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                                🚨 Urgent Emergency Booking
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ NEW: VIDEO TUTORIALS MODAL */}
+            {showTutorialsModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '25px', borderRadius: '20px', width: '90%', maxWidth: '450px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', border: '1px solid #333' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ color: '#fff', margin: 0, fontSize: '20px' }}>📺 App Guides</h2>
+                            <button onClick={() => setShowTutorialsModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#888', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '20px' }}>Learn how to use the Snevio App with these quick video tutorials.</p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '60vh', overflowY: 'auto', paddingRight: '5px' }}>
+                            
+                            {tutorials && tutorials.length > 0 ? tutorials.map((tut, idx) => (
+                                <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '12px', border: '1px solid #444', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <h4 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '14px' }}>{tut.title}</h4>
+                                        {tut.description && <p style={{ color: '#aaa', margin: '0 0 5px 0', fontSize: '11px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{tut.description}</p>}
+                                        {tut.duration && <span style={{ color: '#3498db', fontSize: '10px', fontWeight: 'bold', background: 'rgba(52,152,219,0.1)', padding: '2px 6px', borderRadius: '4px' }}>⏱️ {tut.duration}</span>}
+                                    </div>
+                                    <button onClick={() => window.open(tut.link, '_blank')} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                                        ▶ Play
+                                    </button>
+                                </div>
+                            )) : (
+                                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#888' }}>
+                                    <span style={{ fontSize: '40px', display: 'block', marginBottom: '10px' }}>🎥</span>
+                                    <p style={{ margin: 0, fontSize: '13px' }}>Video guides are currently being updated. Check back soon!</p>
+                                </div>
+                            )}
+
+                        </div>
                     </div>
                 </div>
             )}

@@ -39,6 +39,7 @@ const OwnerDashboard = ({ user, onLogout }) => {
     const [globalPricing, setGlobalPricing] = useState({ imageCost: '5', videoCost: '10' });
     const [coinPackages, setCoinPackages] = useState([]);
     const [miniEvents, setMiniEvents] = useState([]);
+    const [tutorials, setTutorials] = useState([]); // 👈 NAYA: Video Guides State
 
     // --- UPLOAD DATA STATES ---
     const [formData, setFormData] = useState({ 
@@ -789,6 +790,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                 }
                 if (res.data.data.coinPackages) setCoinPackages(res.data.data.coinPackages);
                 if (res.data.data.miniEvents) setMiniEvents(res.data.data.miniEvents);
+                if (res.data.data.tutorials) setTutorials(res.data.data.tutorials); // 👈 NAYA: Load Tutorials
                 
                 // 🔥 THE FIX: Safely merge DB data into the form state so it survives refresh
                 if (res.data.data.cloudRouting) {
@@ -1747,13 +1749,14 @@ const handleEditFileUpload = async (e, isFolder = false) => {
     };
 
     const handleSaveGlobalCharges = async () => {
-        if (!window.confirm("Save all Global Charges, Coin Packages, and Events?")) return;
+        if (!window.confirm("Save all Global Charges, Coin Packages, Events, and Tutorials?")) return;
         try {
             const payload = {
                 imageCost: globalPricing.imageCost,
                 videoCost: globalPricing.videoCost,
                 coinPackages: coinPackages,
-                miniEvents: miniEvents
+                miniEvents: miniEvents,
+                tutorials: tutorials // 👈 NAYA: Save Tutorials
             };
             const res = await axios.post(`${API_BASE}/update-global-charges`, payload);
             if (res.data.success) {
@@ -3497,6 +3500,30 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                     </div>
                                 ))}
                                 <button onClick={()=>setMiniEvents([...miniEvents, { id: Date.now().toString(), title: '', reward: 5, link: ''}])} className="global-update-btn" style={{background: '#8e44ad', padding: '10px', marginTop: '10px'}}>➕ Add Mini Event</button>
+                            </div>
+
+                            {/* 4. APP VIDEO GUIDES / TUTORIALS */}
+                            <div className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #e74c3c' }}>
+                                <h3>📺 4. App Video Guides (Tutorials)</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>Add YouTube links to guide users on how to use the app.</p>
+
+                                {tutorials.map((tut, i) => (
+                                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px', background: '#fdf2e9', padding: '15px', borderRadius: '5px', border: '1px solid #e67e22' }}>
+                                        <div style={{display: 'flex', gap: '10px'}}>
+                                            <div style={{flex: 2}}><label style={{fontSize:'11px', fontWeight: 'bold'}}>Video Title</label><input type="text" placeholder="e.g. How to Login?" value={tut.title} onChange={e=>{let arr=[...tutorials]; arr[i].title=e.target.value; setTutorials(arr)}} className="custom-admin-input" style={{margin:0, padding:'8px'}}/></div>
+                                            <div style={{flex: 1}}><label style={{fontSize:'11px', fontWeight: 'bold'}}>Duration / Tag</label><input type="text" placeholder="e.g. 2:30 Mins" value={tut.duration} onChange={e=>{let arr=[...tutorials]; arr[i].duration=e.target.value; setTutorials(arr)}} className="custom-admin-input" style={{margin:0, padding:'8px'}}/></div>
+                                        </div>
+                                        <div>
+                                            <label style={{fontSize:'11px', fontWeight: 'bold'}}>Short Description (Optional)</label>
+                                            <input type="text" placeholder="Learn the basics of login and signup..." value={tut.description} onChange={e=>{let arr=[...tutorials]; arr[i].description=e.target.value; setTutorials(arr)}} className="custom-admin-input" style={{margin:0, padding:'8px'}}/>
+                                        </div>
+                                        <div style={{display: 'flex', gap: '10px', alignItems:'center'}}>
+                                            <div style={{flex: 1}}><label style={{fontSize:'11px', fontWeight: 'bold'}}>YouTube Video Link</label><input type="url" placeholder="https://youtube.com/..." value={tut.link} onChange={e=>{let arr=[...tutorials]; arr[i].link=e.target.value; setTutorials(arr)}} className="custom-admin-input" style={{margin:0, padding:'8px'}}/></div>
+                                            <button onClick={()=>{let arr=[...tutorials]; arr.splice(i,1); setTutorials(arr)}} style={{background:'#c0392b', color:'white', border:'none', padding:'8px 12px', borderRadius:'5px', cursor:'pointer', marginTop:'15px'}}>🗑️ Remove</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <button onClick={()=>setTutorials([...tutorials, { title: '', description: '', duration: '', link: ''}])} className="global-update-btn" style={{background: '#e67e22', padding: '10px', marginTop: '10px'}}>➕ Add Video Guide</button>
                             </div>
 
                         </div>
