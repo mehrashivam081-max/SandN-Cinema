@@ -217,7 +217,7 @@ const platformSettingSchema = new mongoose.Schema({
     },
 
     // GLOBAL DEFAULT PRICING
-    defaultPricing: {
+    defaultPricing: {
         imageCost: { type: Number, default: 5 },
         videoCost: { type: Number, default: 10 }
     },
@@ -227,6 +227,14 @@ const platformSettingSchema = new mongoose.Schema({
     
     // ✅ NEW: Mini Events for Organic Growth (from Admin Panel)
     miniEvents: { type: Array, default: [] },
+
+    // 📺 NEW: Video Tutorials for Help & Support section (Admin Managed)
+    tutorials: [{
+        title: String,
+        description: String,
+        duration: String,
+        link: String
+    }],
     
     lastUpdated: { type: Date, default: Date.now }
 });
