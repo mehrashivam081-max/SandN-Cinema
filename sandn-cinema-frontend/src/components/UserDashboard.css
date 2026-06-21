@@ -5,7 +5,7 @@
     width: 100%;
     min-height: 100vh;
     background-color: #0d0d0d; /* Deep Dark Background */
-    padding-bottom: 90px; /* Space for bottom nav */
+    padding-bottom: 0px; /* 🔥 THE FIX: हटा दिया 90px का काला गैप! */
     font-family: 'Poppins', sans-serif;
     color: #f4f4f4;
     overflow-x: hidden;
@@ -73,7 +73,7 @@
 
 /* --- MAIN CONTENT & FOLDERS --- */
 .user-main-content {
-    padding: 20px 25px;
+    padding: 0px 0px 90px 0px !important; /* 🔥 FIX: पैडिंग स्क्रॉल के 'अंदर' डाल दी! */
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -310,7 +310,7 @@
 /* Responsive Fixes */
 @media (max-width: 768px) {
     .ud-header-vip { padding: 15px 20px; }
-    .user-main-content { padding: 15px 15px; }
+    .user-main-content { padding: 0px 0px 90px 0px !important; } /* 🔥 FIX: मोबाइल में भी लास्ट आइटम नहीं छुपेगा */
     .ud-grid-vip { grid-template-columns: repeat(auto-fill, minmax(100%, 1fr)); }
 }
 

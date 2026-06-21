@@ -278,7 +278,13 @@ const MobileView = ({
       {feedType && <TrendingFeed type={feedType} onClose={() => setFeedType(null)} />}
       {isNotRegistered && <NotRegisteredPage onTryAgain={() => setIsNotRegistered(false)} onLogin={() => {setIsNotRegistered(false); setViewState('SIGNUP');}} />}
       {viewState === 'BOOKING' && <BookingForm onClose={goHome} />}
-      <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} />
+      <ProfilePage 
+          isOpen={menuOpen} 
+          onClose={() => setMenuOpen(false)} 
+          onOpenService={() => setViewState('SERVICE')} 
+          onOpenAuth={() => setViewState('AUTH')} 
+          onOpenRecovery={() => setViewState('RECOVERY')} 
+      />
 
       {/* 🔥 PREMIUM OTP POPUP (Added Email & Luxe Theme) */}
       {showOtpPopup && (

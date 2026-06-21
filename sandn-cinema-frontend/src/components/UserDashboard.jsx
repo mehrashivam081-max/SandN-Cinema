@@ -2149,7 +2149,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const displayedInvites = sharedTabFilter === 'RECEIVED' ? receivedInvites : sentInvitesList;
 
         return (
-            <div className="folders-view" style={{ paddingBottom: '80px' }}>
+            <div className="folders-view" style={{ paddingBottom: '20px' }}>
                 <div className="welcome-banner" style={{ background: 'linear-gradient(135deg, #8e44ad, #3498db)' }}>
                     <h1>🔐 Media Sharing</h1>
                     <p>Manage access to premium content & album collabs.</p>
@@ -2277,7 +2277,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ NATIVE SERVICES TAB (UPDATED WITH DISCOUNT & OFFER UI)
     const renderServicesTab = () => {
         return (
-            <div className="services-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
+            <div className="services-tab-wrapper" style={{ padding: '20px', paddingBottom: '20px' }}>
                 <div className="section-header" style={{ marginBottom: '20px' }}>
                     <h2 style={{ color: '#fff', fontSize: '22px', margin: 0 }}>Explore Services</h2>
                     <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Discover premium packages curated just for you.</p>
@@ -2358,7 +2358,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             });
 
         return (
-            <div className="bookings-tab-wrapper" style={{ padding: '20px', paddingBottom: '80px', height: '100%', overflowY: 'auto' }}>
+            <div className="bookings-tab-wrapper" style={{ padding: '20px', paddingBottom: '20px' }}>
                 <div className="section-header" style={{ marginBottom: '20px' }}>
                     <h2 style={{ color: '#fff', fontSize: '22px', margin: 0 }}>My Bookings</h2>
                     <p style={{ color: '#aaa', fontSize: '13px', margin: '5px 0 0 0' }}>Track the status of your active and past services.</p>
@@ -2444,7 +2444,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const renderHistoryTab = () => {
         const historyData = wallet?.history || [ { date: new Date().toLocaleDateString(), action: "Account Registered", amount: "0", type: "neutral" } ];
         return (
-            <div className="history-tab-vip" style={{padding: '20px', paddingBottom: '80px'}}>
+            <div className="history-tab-vip" style={{padding: '20px', paddingBottom: '20px'}}>
                 <div className="section-header" style={{marginBottom: '20px'}}>
                     <h2 style={{color: '#fff', fontSize: '20px', margin: 0}}>📜 Transaction History</h2>
                     <p style={{color: '#aaa', fontSize: '12px', margin: '5px 0 0 0'}}>Your platform activity and coin logs.</p>
@@ -2741,7 +2741,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
         return (
-            <div className="folders-view" style={{ padding: '20px', paddingBottom: '40px', boxSizing: 'border-box', width: '100%' }}>
+            <div className="folders-view" style={{ padding: '20px', paddingBottom: '20px', boxSizing: 'border-box', width: '100%' }}>
                 <div className="welcome-banner" style={{ textAlign: 'center', marginBottom: '25px', marginTop: '10px' }}>
                     <h1 style={{ color: '#fff', fontSize: '24px', margin: '0 0 8px 0', letterSpacing: '1px' }}>Your Digital Memories</h1>
                     <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>Select a folder to view your curated albums.</p>
@@ -2770,25 +2770,30 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         style={{ 
                                             opacity: isLocked ? 0.6 : 1, margin: 0, cursor: 'pointer', background: bgGradient,
                                             border: `1px solid ${themeColor}55`, boxShadow: `0 10px 20px ${shadowColor}`,
-                                            borderRadius: '16px', padding: '25px 15px', display: 'flex', flexDirection: 'column',
+                                            borderRadius: '16px', padding: '30px 15px 20px 15px', display: 'flex', flexDirection: 'column',
+                                            justifyContent: 'space-between', height: '100%', minHeight: '220px', boxSizing: 'border-box', /* 🔥 FIX: Uniform Height */
                                             alignItems: 'center', position: 'relative', transition: 'all 0.3s ease'
                                         }}
                                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = `0 15px 30px ${shadowColor}`; e.currentTarget.style.border = `1px solid ${themeColor}`; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 10px 20px ${shadowColor}`; e.currentTarget.style.border = `1px solid ${themeColor}55`; }}
                                     >
-                                        <div style={{ position: 'absolute', top: '-12px', background: 'linear-gradient(90deg, #f1c40f, #d4af37)', color: '#000', fontSize: '10px', padding: '5px 18px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', boxShadow: '0 4px 12px rgba(241, 196, 15, 0.6)', zIndex: 10, textTransform: 'uppercase' }}>
-                                            {/* 🔥 Logic: Default folder ke liye alag badge, baki Admin folders ke liye Exclusive */}
+                                        <div style={{ position: 'absolute', top: '-10px', background: 'linear-gradient(90deg, #f1c40f, #d4af37)', color: '#000', fontSize: '9px', padding: '5px 15px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', boxShadow: '0 4px 12px rgba(241, 196, 15, 0.6)', zIndex: 10, textTransform: 'uppercase' }}>
                                             {folder.isDefault ? "📸 Spotted by Snevio" : "✨ Snevio Exclusive"}
                                         </div>
                                         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'rgba(243, 156, 18, 0.1)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
 
-                                        <div style={{ fontSize: '45px', filter: `drop-shadow(0px 5px 15px ${themeColor}88)`, marginBottom: '12px', position: 'relative', zIndex: 2 }}>
-                                            {isLocked ? '🔒' : '🗂️'}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', zIndex: 2 }}>
+                                            <div style={{ fontSize: '40px', filter: `drop-shadow(0px 5px 15px ${themeColor}88)`, marginBottom: '10px', marginTop: '10px' }}>
+                                                {isLocked ? '🔒' : '🗂️'}
+                                            </div>
+                                            <h4 style={{ color: '#fff', fontSize: '15px', margin: '0 0 5px 0', textAlign: 'center', fontWeight: 'bold', letterSpacing: '0.5px' }}>{folder.folderName}</h4>
+                                            <p style={{ color: '#aaa', fontSize: '11px', margin: '0' }}>{totalFiles} Total Media</p>
                                         </div>
-                                        <h4 style={{ color: '#fff', fontSize: '15px', margin: '0 0 6px 0', textAlign: 'center', fontWeight: 'bold', letterSpacing: '0.5px', position: 'relative', zIndex: 2 }}>{folder.folderName}</h4>
-                                        <p style={{ color: '#aaa', fontSize: '11px', margin: '0 0 10px 0', position: 'relative', zIndex: 2 }}>{totalFiles} Total Media</p>
-                                        {folder.subFolders && folder.subFolders.length > 0 && <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: '#bdc3c7', padding: '4px 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', position: 'relative', zIndex: 2 }}>🗓️ Organized Events</span>}
-                                        {isExpired && <span style={{display:'block', fontSize:'11px', color:'#fff', marginTop:'10px', background: '#c0392b', padding: '3px 10px', borderRadius: '15px', fontWeight: 'bold', position: 'relative', zIndex: 2}}>Expired</span>}
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 'auto', paddingTop: '15px', zIndex: 2 }}>
+                                            {folder.subFolders && folder.subFolders.length > 0 && <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: '#bdc3c7', padding: '4px 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>🗓️ Organized Events</span>}
+                                            {isExpired && <span style={{fontSize:'10px', color:'#fff', marginTop: folder.subFolders?.length ? '5px' : '0', background: '#c0392b', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold'}}>Expired</span>}
+                                        </div>
                                     </div>
                                 )
                             })}
@@ -2807,7 +2812,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     <div 
                                                 className="folder-card" 
                                                 onClick={() => openSmartAlbum(sel)}
-                                                style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '260px', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative' }}
+                                                style={{ background: bgGradient, border: `1px solid ${borderColor}`, boxShadow: `0 10px 20px ${shadowColor}`, animation: 'pulse 2s infinite', margin: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minHeight: '220px', boxSizing: 'border-box', alignItems: 'center', cursor: 'pointer', borderRadius: '16px', padding: '30px 15px 20px 15px', position: 'relative' }}
                                             >
                                                 {/* Premium Badge */}
                                                 <div style={{ position: 'absolute', top: '-10px', background: isAdminUpload ? 'linear-gradient(90deg, #f1c40f, #d4af37)' : '#e74c3c', color: isAdminUpload ? '#000' : '#fff', fontSize: '9px', padding: '5px 15px', borderRadius: '20px', fontWeight: '900', letterSpacing: '1px', zIndex: 10, textTransform: 'uppercase', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
@@ -2929,7 +2934,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         style={{ 
                                             opacity: isLocked ? 0.6 : 1, margin: 0, cursor: 'pointer', background: bgGradient,
                                             border: `1px solid ${themeColor}55`, boxShadow: `0 10px 20px ${shadowColor}`,
-                                            borderRadius: '16px', padding: '25px 15px', display: 'flex', flexDirection: 'column',
+                                            borderRadius: '16px', padding: '30px 15px 20px 15px', display: 'flex', flexDirection: 'column',
+                                            justifyContent: 'space-between', height: '100%', minHeight: '220px', boxSizing: 'border-box', /* 🔥 FIX: Uniform Height */
                                             alignItems: 'center', position: 'relative', transition: 'all 0.3s ease'
                                         }}
                                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = `0 15px 30px ${shadowColor}`; e.currentTarget.style.border = `1px solid ${themeColor}`; }}
@@ -2937,13 +2943,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     >
                                         <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '150px', height: '150px', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '50%', filter: 'blur(40px)', zIndex: 0 }}></div>
 
-                                        <div style={{ fontSize: '45px', filter: `drop-shadow(0px 5px 15px ${themeColor}88)`, marginBottom: '12px', position: 'relative', zIndex: 2 }}>
-                                            {isLocked ? '🔒' : '📁'}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', zIndex: 2 }}>
+                                            <div style={{ fontSize: '40px', filter: `drop-shadow(0px 5px 15px ${themeColor}88)`, marginBottom: '10px', marginTop: '10px' }}>
+                                                {isLocked ? '🔒' : '📁'}
+                                            </div>
+                                            <h4 style={{ color: '#fff', fontSize: '15px', margin: '0 0 5px 0', textAlign: 'center', fontWeight: 'bold', letterSpacing: '0.5px' }}>{folder.folderName}</h4>
+                                            <p style={{ color: '#aaa', fontSize: '11px', margin: '0' }}>{totalFiles} Total Media</p>
                                         </div>
-                                        <h4 style={{ color: '#fff', fontSize: '15px', margin: '0 0 6px 0', textAlign: 'center', fontWeight: 'bold', letterSpacing: '0.5px', position: 'relative', zIndex: 2 }}>{folder.folderName}</h4>
-                                        <p style={{ color: '#aaa', fontSize: '11px', margin: '0 0 10px 0', position: 'relative', zIndex: 2 }}>{totalFiles} Total Media</p>
-                                        {folder.subFolders && folder.subFolders.length > 0 && <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: '#bdc3c7', padding: '4px 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)', position: 'relative', zIndex: 2 }}>🗓️ Organized Events</span>}
-                                        {isExpired && <span style={{display:'block', fontSize:'11px', color:'#fff', marginTop:'10px', background: '#c0392b', padding: '3px 10px', borderRadius: '15px', fontWeight: 'bold', position: 'relative', zIndex: 2}}>Expired</span>}
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginTop: 'auto', paddingTop: '15px', zIndex: 2 }}>
+                                            {folder.subFolders && folder.subFolders.length > 0 && <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', color: '#bdc3c7', padding: '4px 10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>🗓️ Organized Events</span>}
+                                            {isExpired && <span style={{fontSize:'10px', color:'#fff', marginTop: folder.subFolders?.length ? '5px' : '0', background: '#c0392b', padding: '4px 10px', borderRadius: '12px', fontWeight: 'bold'}}>Expired</span>}
+                                        </div>
                                     </div>
                                 )
                             })}
@@ -2985,6 +2996,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             {/* Inline CSS for Pulse Animation (Emergency Button) */}
             <style>{`
+                /* 🔥 THE FIX: Remove unused bottom gaps from all tabs */
+                .folders-view, .folder-gallery-view, .services-tab-wrapper, .bookings-tab-wrapper, .history-tab-vip, .profile-tab-vip {
+                    padding-bottom: 15px !important;
+                }
+                /* 🔥 FIX: Prevent double scrollbars on Services and Bookings */
+                .services-tab-wrapper, .bookings-tab-wrapper {
+                    height: auto !important;
+                    overflow-y: visible !important;
+                }
+
                 /* 🔥 SECURITY: Disable Long-Press Image Download Popup in Mobile */
                 .gallery-item-vip img {
                     -webkit-touch-callout: none !important;

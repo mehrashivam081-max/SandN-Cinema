@@ -6,7 +6,7 @@ import './ForgotPassword.css'; // ✅ Apni nayi CSS file import ki
 // ✅ Live Backend URL
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-const ForgotPassword = ({ onLoginClick }) => {
+const ForgotPassword = ({ onLoginClick, onBack }) => {
     const [step, setStep] = useState(1); // 1: Mobile, 2: OTP, 3: New Password
     const [mobile, setMobile] = useState('');
     const [otp, setOtp] = useState('');
@@ -71,7 +71,32 @@ const ForgotPassword = ({ onLoginClick }) => {
     };
 
     return (
-        <div className="auth-container" style={{ fontFamily: "'Poppins', sans-serif" }}>
+        <div className="auth-container" style={{ fontFamily: "'Poppins', sans-serif", position: 'relative' }}>
+            
+            {/* 🔥 CIRCULAR NATIVE BACK BUTTON (Matches Login Screen) */}
+            <button 
+                onClick={onBack} 
+                style={{ 
+                    position: 'absolute', top: '20px', left: '20px', 
+                    width: '40px', height: '40px',
+                    background: 'rgba(0, 0, 0, 0.5)', /* Dark translucent background */
+                    color: '#fff', 
+                    border: '1px solid rgba(255, 255, 255, 0.1)', 
+                    borderRadius: '50%', /* Perfect Circle */
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    backdropFilter: 'blur(10px)', zIndex: 50, transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.8)'; e.currentTarget.style.borderColor = '#FFD700'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0, 0, 0, 0.5)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                title="Back to Login"
+            >
+                {/* Sleek SVG Arrow */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+            </button>
+
             <div className="auth-card-glass">
                 {/* 🔥 Luxe Typography Header */}
                 <h2 style={{ fontWeight: '600', letterSpacing: '3px', textTransform: 'uppercase', color: '#FFD700', fontSize: '24px', margin: '0 0 5px 0' }}>
