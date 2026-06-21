@@ -202,18 +202,43 @@ const LaptopView = ({
 
       <ProfilePage isOpen={menuOpen} onClose={() => setMenuOpen(false)} onOpenService={() => setViewState('SERVICE')} onOpenAuth={() => setViewState('AUTH')} onOpenRecovery={() => setViewState('RECOVERY')} />
 
-      {/* OTP POPUP OVERLAY */}
+      {/* 🔥 PREMIUM ANIMATED OTP POPUP (Laptop View) */}
       {showOtpPopup && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
-              <div style={{ background: '#fff', padding: '30px', borderRadius: '15px', width: '350px', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.3)', animation: 'popIn 0.3s ease' }}>
-                  <h3 style={{ margin: '0 0 10px', color: '#333' }}>Send OTP to {mobile}</h3>
-                  <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>Select verification method:</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <button onClick={() => handleSendOtp('mobile')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#2b5876', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>📱 Send via Text SMS</button>
-                      <button onClick={() => handleSendOtp('whatsapp')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>💬 Send via WhatsApp</button>
-                      <button onClick={() => handleSendOtp('email')} disabled={loading} style={{ padding: '12px', borderRadius: '8px', border: 'none', background: '#EA4335', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>✉️ Send via Email</button>
+          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(15px)' }}>
+              <div className="fade-in" style={{ background: 'rgba(20, 20, 25, 0.85)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '35px 30px', borderRadius: '24px', width: '380px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.8)', backdropFilter: 'blur(25px)' }}>
+                  
+                  <h3 style={{ color: '#fff', margin: '0 0 8px 0', fontSize: '20px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase' }}>Verify Number</h3>
+                  <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '25px', letterSpacing: '0.5px' }}>Send OTP to <strong style={{color:'#FFD700', fontSize: '15px'}}>{mobile}</strong></p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <button 
+                          disabled={loading} 
+                          onClick={() => handleSendOtp('mobile')} 
+                          style={{ padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #FFD700, #F39C12)', color: '#000', fontWeight: '800', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)', boxShadow: loading ? 'none' : '0 8px 20px rgba(243, 156, 18, 0.3)', opacity: loading && otpMethod !== 'mobile' ? 0.4 : 1, transform: loading && otpMethod === 'mobile' ? 'scale(0.95)' : 'scale(1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                          {loading && otpMethod === 'mobile' ? '⏳ SENDING...' : '📱 Send via Text SMS'}
+                      </button>
+                      
+                      <button 
+                          disabled={loading} 
+                          onClick={() => handleSendOtp('whatsapp')} 
+                          style={{ padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', fontWeight: '800', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)', boxShadow: loading ? 'none' : '0 8px 20px rgba(46, 204, 113, 0.3)', opacity: loading && otpMethod !== 'whatsapp' ? 0.4 : 1, transform: loading && otpMethod === 'whatsapp' ? 'scale(0.95)' : 'scale(1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                          {loading && otpMethod === 'whatsapp' ? '⏳ SENDING...' : '💬 Send via WhatsApp'}
+                      </button>
+                      
+                      <button 
+                          disabled={loading} 
+                          onClick={() => handleSendOtp('email')} 
+                          style={{ padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg, #3498db, #2980b9)', color: '#fff', fontWeight: '800', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)', boxShadow: loading ? 'none' : '0 8px 20px rgba(52, 152, 219, 0.3)', opacity: loading && otpMethod !== 'email' ? 0.4 : 1, transform: loading && otpMethod === 'email' ? 'scale(0.95)' : 'scale(1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                          {loading && otpMethod === 'email' ? '⏳ SENDING...' : '✉️ Send via Email'}
+                      </button>
                   </div>
-                  <p onClick={() => setShowOtpPopup(false)} style={{ marginTop: '20px', color: '#999', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}>Cancel</p>
+                  
+                  {/* Cancel Button */}
+                  {loading ? (
+                      <p style={{ color: '#555', marginTop: '25px', fontSize: '13px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '1px', marginBottom: '0' }}>Please Wait...</p>
+                  ) : (
+                      <p onClick={() => setShowOtpPopup(false)} style={{ color: '#888', marginTop: '25px', cursor: 'pointer', fontSize: '13px', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '1px', transition: '0.3s', marginBottom: '0' }} onMouseEnter={(e)=>e.target.style.color='#fff'} onMouseLeave={(e)=>e.target.style.color='#888'}>Cancel</p>
+                  )}
               </div>
           </div>
       )}
