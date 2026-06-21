@@ -2741,10 +2741,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         // ✅ SCENARIO 3: Viewing Main Folders List (Default View)
         return (
-            <div className="folders-view">
-                <div className="welcome-banner">
-                    <h1>Your Digital Memories</h1>
-                    <p>Select a folder to view your curated albums.</p>
+            <div className="folders-view" style={{ padding: '20px', paddingBottom: '40px', boxSizing: 'border-box', width: '100%' }}>
+                <div className="welcome-banner" style={{ textAlign: 'center', marginBottom: '25px', marginTop: '10px' }}>
+                    <h1 style={{ color: '#fff', fontSize: '24px', margin: '0 0 8px 0', letterSpacing: '1px' }}>Your Digital Memories</h1>
+                    <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>Select a folder to view your curated albums.</p>
                 </div>
                 
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
@@ -2955,7 +2955,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         };
 
     return (
-        <div className="ud-container-vip" onContextMenu={(e) => e.preventDefault()}>
+        <div className="ud-container-vip" onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', overflow: 'hidden', background: '#0a0a0a' }}>
+            {/* 🔥 NATIVE APP LAYOUT: Flexbox Container locks screen size and prevents Nav hiding */}
 
             {/* ✅ USER EXIT APP POPUP */}
             {showExitPopup && (
@@ -3647,13 +3648,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* ✅ HEADER MODIFIED: App-Like Fixed Header (आपके Header.jsx वाले लॉजिक के साथ) */}
+            {/* ✅ NATIVE HEADER: Flex Item, Shrink-Proof */}
             <header className="ud-header-vip" style={{ 
+                flexShrink: 0, /* 🔥 FIX: हेडर कभी नहीं सिकुड़ेगा */
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                position: 'fixed', top: 0, left: 0, width: '100%', boxSizing: 'border-box', /* 🔥 Your Fixed Logic */
-                zIndex: 9999, 
-                background: 'rgba(15, 23, 42, 0.85)', 
-                backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', 
+                width: '100%', boxSizing: 'border-box',
+                zIndex: 50, 
+                background: 'rgba(15, 23, 42, 0.95)', 
                 borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                 padding: '15px 25px'
             }}>
@@ -3681,16 +3682,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             </header>
 
-            {/* 🔥 MAIN DASHBOARD CONTENT AREA (Scrolls Internally Only) */}
+            {/* 🔥 MAIN CONTENT: Takes remaining space & scrolls internally. Zero Padding needed! */}
             <main className="user-main-content" style={{ 
-                paddingTop: '85px', 
-                paddingBottom: '90px', 
-                height: '100dvh', /* 🔥 हाइट फिक्स कर दी */
-                overflowY: 'auto', /* 🔥 सिर्फ ये बीच का हिस्सा स्क्रॉल होगा */
+                flex: 1, /* 🔥 FIX: हेडर और फुटर के बीच की जगह ले लेगा */
+                overflowY: 'auto', /* 🔥 सिर्फ बीच का हिस्सा स्क्रॉल होगा */
+                overflowX: 'hidden', 
                 boxSizing: 'border-box', 
                 background: '#0a0a0a', 
-                width: '100%', 
-                overflowX: 'hidden' 
+                width: '100%',
+                padding: '0px', /* 🔥 THE FIX: गैप खत्म! */
+                margin: '0px'
             }}>
                 {renderContent()}
             </main>
@@ -3813,13 +3814,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 </div>
             )}
 
-            {/* 🔥 NAYA: ZEN MODE - Hide Nav Bar when inside Selection Album */}
+            {/* 🔥 NATIVE BOTTOM NAV: Flex Item at bottom */}
             {!activeSelectionProject && (
             <nav className="bottom-nav-bar" style={{ 
+                flexShrink: 0, /* 🔥 FIX: बॉटम बार कभी नहीं छुपेगा */
                 display: 'flex', justifyContent: 'space-around', padding: '10px 5px',
-                position: 'fixed', bottom: 0, left: 0, width: '100%', /* 🔥 FIX: Bottom में फिक्स कर दिया */
-                background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)',
-                borderTop: '1px solid rgba(255, 255, 255, 0.05)', zIndex: 9999, boxSizing: 'border-box'
+                width: '100%', 
+                background: 'rgba(15, 23, 42, 0.98)', 
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)', zIndex: 50, boxSizing: 'border-box'
             }}>
                 <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
                     🏠<span>Home</span>
