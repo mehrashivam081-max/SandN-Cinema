@@ -212,6 +212,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     const [rewardPopup, setRewardPopup] = useState({ show: false, type: '', coins: 0, streak: 0 });
 
+    // 🔔 NOTIFICATION & 🎁 GIFT CARD STATES
+    const [notifications, setNotifications] = useState([]);
+    const [showNotifModal, setShowNotifModal] = useState(false);
+    const [showGiftCardModal, setShowGiftCardModal] = useState(false);
+    const [giftCode, setGiftCode] = useState('');
+    const [giftLoading, setGiftLoading] = useState(false);
+
     // ✅ NATIVE SERVICES & BOOKINGS STATES
     const [availableServices, setAvailableServices] = useState([]);
     const [userBookings, setUserBookings] = useState([]);
@@ -382,9 +389,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }
 
                 // 🔥 Auto-refresh Bookings and Shared Media silently
-                fetchServicesAndBookings(activeUser.mobile);
-                fetchSharedMedia(activeUser.mobile);
+                fetchServicesAndBookings(activeUser.mobile, !isInitialLoad); // 👈 Passes true if it's a background refresh
+                fetchSharedMedia(activeUser.mobile, !isInitialLoad);         // 👈 Passes true if it's a background refresh
                 fetchUserSelections(activeUser.mobile);
+                fetchNotifications(activeUser.mobile);
 
             } catch (error) {
                 console.error("Fetch error:", error);
@@ -397,26 +405,38 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         // 1. Run immediately on mount
         fetchRealTimeData(true);
         
-        // 2. Setup Background Polling (Every 30 seconds)
+        // 2. 🕒 SETUP BACKGROUND POLLING (Every 10 Seconds)
         const refreshInterval = setInterval(() => {
-            console.log("🔄 User Auto-Refresh: Syncing latest data...");
-            fetchRealTimeData(false); // false means silent load (no loader screen)
-        }, 30000); // 30 seconds
+            fetchRealTimeData(false); // false = Silent load (no loader screen)
+        }, 10000); 
         
-        // 3. 🛡️ SECURE DAILY REWARD LOGIC (Backend Verifies Everything)
+        // 🚀 3. SOCKET.IO (REAL-TIME MAGIC - 0 DELAY)
+        const socket = io(SERVER_URL);
+        const currentUserMobile = user?.mobile || JSON.parse(sessionStorage.getItem('user'))?.mobile;
+        
+        if (currentUserMobile) {
+            // Join personal room so we only get notifications meant for this user
+            socket.emit('join_user_room', currentUserMobile);
+        }
+        
+        socket.on('data_updated', (data) => {
+            console.log("⚡ Instant Socket Update:", data?.message);
+            fetchRealTimeData(false); // Instantly fetch without loader
+        });
+
+        // 🔄 4. WINDOW FOCUS SYNC (Instant refresh when user switches back to the app)
+        const handleFocus = () => fetchRealTimeData(false);
+        window.addEventListener('focus', handleFocus);
+        
+        // 5. 🛡️ SECURE DAILY REWARD LOGIC (Backend Verifies Everything)
         const checkDailyReward = async () => {
-            const activeUser = user || JSON.parse(sessionStorage.getItem('user'));
-            if (!activeUser || !activeUser.mobile) return;
-            
+            if (!currentUserMobile) return;
             try {
-                const res = await axios.post(`${API_BASE}/claim-daily-login`, { mobile: activeUser.mobile });
-                
-                // If Backend says success: true, it means it's the first login of the day!
+                const res = await axios.post(`${API_BASE}/claim-daily-login`, { mobile: currentUserMobile });
                 if (res.data.success) {
                     setWallet(res.data.wallet); 
                     setRewardPopup({ show: true, type: 'EARNED', coins: 1, streak: res.data.streak });
                     
-                    // 🪄 MAGIC ANIMATION
                     setTimeout(() => {
                         const coinBadge = document.querySelector('.ud-coin-badge-vip');
                         if (coinBadge) {
@@ -427,16 +447,17 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     
                     setTimeout(() => setRewardPopup({ show: false }), 4000);
                 }
-            } catch(e) { 
-                console.log("Daily reward check silently failed."); 
-            }
+            } catch(e) { console.log("Daily reward check silently failed."); }
         };
 
-        // Fire the check ONCE when Dashboard loads
         checkDailyReward();
 
-        // Cleanup interval on unmount
-        return () => clearInterval(refreshInterval);
+        // 🧹 6. CLEANUP (Prevent memory leaks when component unmounts)
+        return () => {
+            clearInterval(refreshInterval);
+            socket.disconnect();
+            window.removeEventListener('focus', handleFocus);
+        };
     }, [user?.mobile]);
 
     // ⏳ 15 SECOND TIMER FOR INSTALL POPUP
@@ -451,8 +472,40 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         return () => clearTimeout(timer);
     }, []);
 
-    const fetchSharedMedia = async (userMobile) => {
-        setFetchingShared(true);
+    const fetchNotifications = async (userMobile) => {
+        try {
+            const res = await axios.post(`${API_BASE}/get-notifications`, { mobile: userMobile });
+            if (res.data.success) setNotifications(res.data.data);
+        } catch (e) { console.error("Notif Error"); }
+    };
+
+    const handleMarkNotificationsRead = async () => {
+        try {
+            await axios.post(`${API_BASE}/mark-notifications-read`, { mobile: syncUser.mobile });
+            setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+        } catch (e) {}
+    };
+
+    const handleRedeemGiftCard = async (e) => {
+        e.preventDefault();
+        if (!giftCode.trim()) return alert("Please enter a valid Gift Code.");
+        setGiftLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/redeem-gift-card`, { mobile: syncUser.mobile, code: giftCode });
+            if (res.data.success) {
+                alert(res.data.message);
+                setWallet(res.data.wallet); // Update Wallet
+                setShowGiftCardModal(false);
+                setGiftCode('');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (err) { alert("Server error. Try again."); }
+        setGiftLoading(false);
+    };
+
+    const fetchSharedMedia = async (userMobile, isSilent = false) => {
+        if (!isSilent) setFetchingShared(true); // 👈 Agar silent mode hai, toh loader nahi chalega
         try {
             const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
             const res = await axios.post(`${API_BASE}/get-shared-media`, { mobile: userMobile }, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -461,8 +514,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 setSharedByMe(res.data.data.sharedByMe || []);
             }
         } catch (e) { console.log(e); }
-        finally { setFetchingShared(false); }
-    };
+        finally { if (!isSilent) setFetchingShared(false); }
+    };
 
     // ✅ FETCH SMART ALBUM SELECTIONS
     const fetchUserSelections = async (userMobile) => {
@@ -474,8 +527,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // --- FETCH SERVICES AND BOOKINGS ---
-    const fetchServicesAndBookings = async (userMobile) => {
-        setServicesLoading(true);
+    const fetchServicesAndBookings = async (userMobile, isSilent = false) => {
+        if (!isSilent) setServicesLoading(true); // 👈 Silent mode logic applied here
         try {
             const servRes = await axios.get(`${API_BASE}/get-available-services`);
             if (servRes.data.success) setAvailableServices(servRes.data.data || []);
@@ -486,7 +539,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } catch (e) {
             console.error("Failed to load services/bookings", e);
         } finally {
-            setServicesLoading(false);
+            if (!isSilent) setServicesLoading(false);
         }
     };
 
@@ -2655,8 +2708,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <span style={{ color: '#666', fontSize: '18px' }}>›</span>
                     </div>
 
-                    {/* 🎁 NAYA: Snevio Gift Card (Coming Soon) */}
-                    <div onClick={() => alert("Snevio Gift Cards are coming soon! Stay tuned. 🎁")} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'rgba(255,255,255,0.02)', opacity: 0.8 }}>
+                    {/* 🎁 NAYA: Snevio Gift Card */}
+                    <div onClick={() => setShowGiftCardModal(true)} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                             <div style={{ background: 'linear-gradient(45deg, #8e44ad, #9b59b6)', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🎁</div>
                             <div>
@@ -3166,7 +3219,55 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         <div className="ud-container-vip" onContextMenu={(e) => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', overflow: 'hidden', background: '#0a0a0a' }}>
             {/* 🔥 NATIVE APP LAYOUT: Flexbox Container locks screen size and prevents Nav hiding */}
 
-            {/* ✅ USER EXIT APP POPUP */}
+            {/* 🔔 NOTIFICATION MODAL */}
+            {showNotifModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 999999, display: 'flex', alignItems: 'flex-end', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', width: '100%', maxHeight: '85vh', borderTopLeftRadius: '25px', borderTopRightRadius: '25px', padding: '20px', overflowY: 'auto', animation: 'slideUp 0.3s ease-out' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '15px' }}>
+                            <h2 style={{ color: '#fff', margin: 0 }}>🔔 Notifications</h2>
+                            <button onClick={() => setShowNotifModal(false)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {notifications.length > 0 ? notifications.map((n, idx) => (
+                                <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '12px', borderLeft: `4px solid ${n.type === 'SUCCESS' ? '#2ecc71' : n.type === 'WARNING' ? '#e74c3c' : '#3498db'}` }}>
+                                    <h4 style={{ color: '#fff', margin: '0 0 5px 0', fontSize: '14px' }}>{n.title}</h4>
+                                    <p style={{ color: '#aaa', margin: 0, fontSize: '12px' }}>{n.message}</p>
+                                    <p style={{ color: '#777', margin: '5px 0 0 0', fontSize: '10px' }}>{new Date(n.createdAt).toLocaleString()}</p>
+                                </div>
+                            )) : <p style={{ color: '#888', textAlign: 'center', padding: '20px' }}>No new notifications.</p>}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🎁 GIFT CARD MODAL */}
+            {showGiftCardModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' }}>
+                    <div style={{ background: '#1a1a2e', padding: '30px', borderRadius: '20px', width: '90%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 20px 50px rgba(142,68,173,0.3)', border: '1px solid #8e44ad' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2 style={{ color: '#8e44ad', margin: 0 }}>🎁 Redeem Gift Card</h2>
+                            <button onClick={() => setShowGiftCardModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#888', cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '25px' }}>Got a secret code from an event or offer? Enter it below to claim free coins!</p>
+                        
+                        <form onSubmit={handleRedeemGiftCard}>
+                            <input 
+                                type="text" 
+                                placeholder="Enter Gift Code (e.g. DIWALI500)" 
+                                value={giftCode} 
+                                onChange={e => setGiftCode(e.target.value.toUpperCase())}
+                                style={{ width: '100%', padding: '15px', borderRadius: '10px', border: '2px solid #3498db', background: '#0f172a', color: '#fff', fontSize: '16px', fontWeight: 'bold', textAlign: 'center', textTransform: 'uppercase', outline: 'none', marginBottom: '15px' }} 
+                                required 
+                            />
+                            <button type="submit" disabled={giftLoading} style={{ width: '100%', background: 'linear-gradient(45deg, #8e44ad, #3498db)', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '16px', fontWeight: 'bold', cursor: giftLoading ? 'not-allowed' : 'pointer', boxShadow: '0 5px 15px rgba(142,68,173,0.4)' }}>
+                                {giftLoading ? 'Checking...' : '🎉 Claim Reward Now'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ✅ USER EXIT APP POPUP A*/}
             {showExitPopup && (
                 <div className="popup-overlay-fixed" style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center', backdropFilter: 'blur(5px)'}}>
                     <div style={{background:'#1a1a2e', padding:'30px', borderRadius:'15px', textAlign:'center', color:'#fff', boxShadow:'0 10px 30px rgba(0,0,0,0.7)', border: '1px solid #333', maxWidth: '300px', width: '90%'}}>
@@ -3963,6 +4064,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <button onClick={() => setShowEmergencyModal(true)} className="emergency-pulse-btn">
                         🚨 Emergency
                     </button>
+
+                    <div className="cart-icon-wrapper" onClick={() => { setShowNotifModal(true); handleMarkNotificationsRead(); }}>
+                        🔔
+                        {notifications.filter(n => !n.isRead).length > 0 && <span className="cart-badge">{notifications.filter(n => !n.isRead).length}</span>}
+                    </div>
 
                     <div className="cart-icon-wrapper" onClick={() => setShowCartModal(true)}>
                         🛒
