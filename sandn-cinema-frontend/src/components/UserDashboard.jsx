@@ -618,8 +618,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 mobile: syncUser.mobile,
                 name: editName,
                 email: profileData.email,
-                location: profileData.location,
-                profileImage: finalDpUrl // 👈 Naya DP url backend ko bhej rahe hain
+                location: typeof profileData.location === 'object' ? '' : profileData.location, // 👈 THE 500 ERROR FIX
+                profileImage: finalDpUrl
             };
 
             const res = await axios.post(`${API_BASE}/update-profile`, payload, {
