@@ -1171,6 +1171,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     };
 
+    // 🔄 NAYA: SILENT AUTO-SAVE LOGIC
+    // Jab bhi user photo select/deselect karega, 3 second baad background me chup-chaap save ho jayega.
+    useEffect(() => {
+        if (!activeSelectionProject) return;
+        
+        const autoSaveTimer = setTimeout(() => {
+            saveDraftOnly();
+        }, 3000); // 3 Seconds wait
+
+        return () => clearTimeout(autoSaveTimer);
+    }, [selectionDraft, activeSelectionProject]);
+
     const submitPhaseSelection = async (finalPhase = false) => {
         if (!activeSelectionProject) return;
 
@@ -1855,7 +1867,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             <div className="folders-view" style={{ paddingBottom: '120px' }}>
                 <div style={{ position: 'sticky', top: 0, zIndex: 90, background: '#f5f6fa', paddingBottom: '5px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
                     <div className="folder-header-nav" style={{background: isFinalPhase ? 'linear-gradient(90deg, #e74c3c, #c0392b)' : 'linear-gradient(90deg, #8e44ad, #9b59b6)', margin: 0, padding: '15px 20px', borderRadius: 0, display: 'flex', alignItems: 'center', gap: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)'}}>
-                        <BackButton onClick={() => { 
+                        <BackButton onClick={async () => { 
+                            await saveDraftOnly(); // 👈 Back dabane par turant save hoga
                             if(isFamilyMember) { setActiveSelectionProject(null); setSelectionDraft([]); setCurrentTab('HOME'); setActiveSelectionCategory('ALL'); }
                             else { setSelectionSubView('OVERVIEW'); setActiveSelectionCategory('ALL'); }
                         }} />
@@ -2190,13 +2203,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     {loading ? 'Starting...' : `🚀 Start Phase ${currentPhase + 1} Now`}
                                 </button>
                                 
-                                <button onClick={() => {
+                                <button onClick={async () => {
+                                    setLoading(true);
+                                    await saveDraftOnly(); // 👈 Yahan properly database me data jayega
                                     alert("Progress saved! You can resume from Home anytime.");
                                     setShowSelectionReview(false);
                                     setActiveSelectionProject(null);
                                     setCurrentTab('HOME');
+                                    setLoading(false);
                                 }} disabled={loading} style={{ background: 'transparent', color: '#aaa', border: '1px solid #555', padding: '12px', borderRadius: '12px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}>
-                                    ⏸️ Save & Do it Later
+                                    {loading ? 'Saving...' : '⏸️ Save & Do it Later'}
                                 </button>
                             </div>
 
