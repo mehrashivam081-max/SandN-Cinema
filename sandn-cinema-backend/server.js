@@ -2222,7 +2222,7 @@ app.post('/api/auth/add-coins', async (req, res) => {
 
 app.post('/api/auth/update-global-charges', async (req, res) => {
     try {
-        const { imageCost, videoCost, coinPackages, miniEvents } = req.body;
+        const { imageCost, videoCost, coinPackages, miniEvents, tutorials } = req.body; // 👈 Tutorials added
         await PlatformSetting.updateOne(
             { settingId: 'GLOBAL' }, 
             { 
@@ -2231,12 +2231,13 @@ app.post('/api/auth/update-global-charges', async (req, res) => {
                     "defaultPricing.videoCost": videoCost,
                     coinPackages: coinPackages,
                     miniEvents: miniEvents,
+                    tutorials: tutorials, // 👈 Save tutorials to DB
                     lastUpdated: Date.now() 
                 } 
             }, 
             { upsert: true }
         );
-        res.json({ success: true, message: "Global Charges & Events Updated!" });
+        res.json({ success: true, message: "Global Configs & Tutorials Updated!" });
     } catch (e) {
         console.error(e);
         res.status(500).json({ success: false, message: "Failed to save global charges." });
@@ -4651,6 +4652,48 @@ app.post('/api/auth/rollback-uploads', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error("Rollback Error:", error);
         res.status(500).json({ success: false, message: "Failed to rollback uploads." });
+    }
+});
+
+// ✅ UPDATE USER PROFILE API (Fixed for 404 Route & Schema)
+app.post('/api/auth/update-profile', authenticateToken, async (req, res) => {
+    try {
+        const { mobile, name, email, location, profileImage } = req.body;
+
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: 'Mobile number is required' });
+        }
+
+        // 🔍 Both USER and STUDIO profiles can be updated via this route
+        let updatedAccount = null;
+
+        if (req.user.role === 'STUDIO') {
+            updatedAccount = await Studio.findOneAndUpdate(
+                { mobile: mobile },
+                { $set: { ownerName: name, studioName: name, email: email, city: location, profileImage: profileImage } },
+                { new: true }
+            );
+        } else {
+            updatedAccount = await User.findOneAndUpdate(
+                { mobile: mobile },
+                { $set: { name: name, email: email, city: location, profileImage: profileImage } },
+                { new: true }
+            );
+        }
+
+        if (!updatedAccount) {
+            return res.status(404).json({ success: false, message: 'Account not found in database.' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Profile updated successfully!', 
+            data: updatedAccount 
+        });
+
+    } catch (error) {
+        console.error("Profile Update Error:", error);
+        res.status(500).json({ success: false, message: 'Server error while updating profile.' });
     }
 });
 
