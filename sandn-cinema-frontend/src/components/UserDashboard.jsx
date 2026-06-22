@@ -607,34 +607,47 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } catch (e) { alert("Error revoking access."); }
     };
 
-    // ✅ CHECK IF FILE IS UNLOCKED (VALIDITY CHECK)
-    const isFileUnlocked = (filePath) => {
-        if (!wallet.unlockedFiles) return false;
-        const unlockedEntry = wallet.unlockedFiles.find(f => f.fileUrl === filePath);
-        if (!unlockedEntry) return false;
-        
-        if (unlockedEntry.expiry === 'Permanent') return true;
-        return new Date(unlockedEntry.expiry) > new Date(); // True if not expired
-    };
+    // ✅ CHECK IF FILE IS UNLOCKED (SMART VALIDITY CHECK)
+    const isFileUnlocked = (filePath) => {
+        if (!wallet.unlockedFiles) return false;
+        
+        // 🔥 THE FIX: Check if there is AT LEAST ONE valid/unexpired entry for this file
+        return wallet.unlockedFiles.some(f => {
+            if (f.fileUrl !== filePath) return false;
+            if (f.expiry === 'Permanent') return true;
+            return new Date(f.expiry) > new Date(); // True if not expired
+        });
+    };
 
-    // 🔥 NAYA: TIME CALCULATOR FOR FOMO UI (LIVE COUNTDOWN)
-    const getUnlockTimerText = (filePath) => {
-        if (!wallet.unlockedFiles) return null;
-        const unlockedEntry = wallet.unlockedFiles.find(f => f.fileUrl === filePath);
-        if (!unlockedEntry || unlockedEntry.expiry === 'Permanent') return null;
+    // 🔥 TIME CALCULATOR FOR FOMO UI (LIVE COUNTDOWN - FIXED)
+    const getUnlockTimerText = (filePath) => {
+        if (!wallet.unlockedFiles) return null;
+        
+        // 🔥 THE FIX: Get ONLY the valid entries for this file
+        const validEntries = wallet.unlockedFiles.filter(f => f.fileUrl === filePath && (f.expiry === 'Permanent' || new Date(f.expiry) > new Date()));
+        
+        if (validEntries.length === 0) return null; // No valid unlock found
+        
+        // If any of the valid entries is 'Permanent', no timer is needed
+        if (validEntries.some(f => f.expiry === 'Permanent')) return null;
 
-        const timeDiff = new Date(unlockedEntry.expiry) - new Date();
-        if (timeDiff <= 0) return null; // Time is up
+        // Find the latest expiry date among valid entries
+        const latestExpiryEntry = validEntries.reduce((latest, current) => {
+            return new Date(current.expiry) > new Date(latest.expiry) ? current : latest;
+        });
 
-        const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-        const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-        
-        // Make it look professional (09h 05m)
-        const hDisp = hours < 10 ? `0${hours}` : hours;
-        const mDisp = minutes < 10 ? `0${minutes}` : minutes;
-        
-        return `⏳ Locks in ${hDisp}h ${mDisp}m`;
-    };
+        const timeDiff = new Date(latestExpiryEntry.expiry) - new Date();
+        if (timeDiff <= 0) return null; // Time is up
+
+        const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+        const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        // Make it look professional (09h 05m)
+        const hDisp = hours < 10 ? `0${hours}` : hours;
+        const mDisp = minutes < 10 ? `0${minutes}` : minutes;
+        
+        return `⏳ Locks in ${hDisp}h ${mDisp}m`;
+    };
 
     // --- PROFILE HANDLERS ---
     const handleDPChange = (e) => {
