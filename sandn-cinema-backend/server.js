@@ -61,6 +61,28 @@ const withdrawalSchema = new mongoose.Schema({
 });
 const WithdrawalRequest = mongoose.models.WithdrawalRequest || mongoose.model('WithdrawalRequest', withdrawalSchema);
 
+// 🔔 NEW: Notification Model
+const notificationSchema = new mongoose.Schema({
+    mobile: String,
+    title: String,
+    message: String,
+    type: { type: String, default: 'INFO' }, // INFO, SUCCESS, WARNING
+    isRead: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
+});
+const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
+
+// 🎁 NEW: Gift Card Model
+const giftCardSchema = new mongoose.Schema({
+    code: { type: String, unique: true, required: true },
+    coins: { type: Number, required: true },
+    isActive: { type: Boolean, default: true },
+    usedBy: [{ type: String }], // Track which mobiles used it
+    usageLimit: { type: Number, default: 1 }, // Total times it can be redeemed overall
+    createdAt: { type: Date, default: Date.now }
+});
+const GiftCard = mongoose.models.GiftCard || mongoose.model('GiftCard', giftCardSchema);
+
 // ✅ Setup Multer for MULTIPLE File Uploads
 const multer = require('multer');
 const uploadDir = path.join(__dirname, 'uploads');
@@ -2094,12 +2116,28 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
 
         let wallet = account.data.wallet || { coins: 0, history: [], unlockedFiles: [] };
         
-        if (wallet.coins < parseInt(amount)) {
+        // 🛡️ BACKEND SECURITY: Check active plan to prevent hacking
+        const activePlan = account.data.activePlan;
+        const isVIP = activePlan && activePlan.type === 'VIP' && new Date(activePlan.validUntil) > new Date();
+        const isPremium = activePlan && activePlan.type === 'PREMIUM' && new Date(activePlan.validUntil) > new Date();
+
+        let finalAmount = parseInt(amount);
+        let finalExpiry = expiryDate;
+
+        if (isVIP) {
+            finalAmount = 0; // VIP pays 0 coins
+            finalExpiry = 'Permanent'; // VIP gets lifetime access
+        } else if (isPremium) {
+            // Premium gets 1 Year expiry securely forced by backend
+            finalExpiry = new Date(new Date().getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+        }
+
+        if (finalAmount > 0 && wallet.coins < finalAmount) {
             return res.json({ success: false, message: "Not enough coins!" });
         }
 
         // Deduct Total Coins
-        wallet.coins -= parseInt(amount);
+        wallet.coins -= finalAmount;
 
         // Add all selected files to unlocked array with Expiry Date
         const newUnlocked = filesToUnlock.map(fileUrl => ({
@@ -2325,6 +2363,8 @@ app.post('/api/auth/create-payment', authenticateToken, async (req, res) => {
         let webhookUrl = 'https://sandn-cinema.onrender.com/api/auth/payment-webhook';
         if (itemType && itemValue) {
             webhookUrl = `${webhookUrl}?itemType=${itemType}&itemValue=${itemValue}`;
+            // 👈 NAYA: Plan type ko webhook URL me bhejna zaroori hai
+            if (req.body.planType) webhookUrl += `&planType=${req.body.planType}`; 
         }
 
         const payload = {
@@ -2402,27 +2442,59 @@ app.post('/api/auth/payment-webhook', async (req, res) => {
                 }
             }
             // 🚀 SCENARIO C: Studio Plan Auto-Upgrade
-            else if (itemType === 'PLAN_UPGRADE' && itemValue) {
-                const [planName, planGB] = itemValue.split('|'); // e.g., "Elite Plan|500"
-                const studio = await Studio.findOne({ mobile: buyerPhone });
-                if (studio) {
-                    let wallet = studio.wallet || { coins: 0, history: [], revenue: 0 };
-                    wallet.history.unshift({
-                        action: `Upgraded to ${planName} (${planGB}GB)`,
-                        amount: `-₹${amount}`,
-                        date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
-                        type: "debit"
-                    });
-                    
-                    await Studio.updateOne(
-                        { _id: studio._id }, 
-                        { $set: { storagePlan: planName, allocatedStorageGB: parseInt(planGB), wallet: wallet } }, 
-                        { strict: false }
-                    );
-                    console.log(`✅ Studio ${buyerPhone} Auto-Upgraded to ${planName}!`);
-                }
-            }
-            // 🪙 SCENARIO B: Normal Coin Purchase
+            else if (itemType === 'PLAN_UPGRADE' && itemValue) {
+                const [planName, planGB] = itemValue.split('|'); // e.g., "Elite Plan|500"
+                const studio = await Studio.findOne({ mobile: buyerPhone });
+                if (studio) {
+                    let wallet = studio.wallet || { coins: 0, history: [], revenue: 0 };
+                    wallet.history.unshift({
+                        action: `Upgraded to ${planName} (${planGB}GB)`,
+                        amount: `-₹${amount}`,
+                        date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                        type: "debit"
+                    });
+                    
+                    await Studio.updateOne(
+                        { _id: studio._id }, 
+                        { $set: { storagePlan: planName, allocatedStorageGB: parseInt(planGB), wallet: wallet } }, 
+                        { strict: false }
+                    );
+                    console.log(`✅ Studio ${buyerPhone} Auto-Upgraded to ${planName}!`);
+                }
+            }
+            // 👑 SCENARIO D: User App Subscription (VIP/Premium)
+            else if (itemType === 'SUBSCRIPTION' && itemValue) {
+                const planId = itemValue;
+                const planType = req.query.planType || 'PREMIUM';
+                
+                const account = await findAccount(buyerPhone);
+                if (account) {
+                    // Plan Valid for 30 Days (1 Month)
+                    const validUntil = new Date();
+                    validUntil.setDate(validUntil.getDate() + 30); 
+
+                    const activePlan = {
+                        id: planId,
+                        type: planType.toUpperCase(),
+                        purchasedAt: new Date(),
+                        validUntil: validUntil
+                    };
+
+                    let wallet = account.data.wallet || { coins: 0, history: [] };
+                    wallet.history.unshift({
+                        action: `Upgraded to ${planType}`,
+                        amount: `-₹${amount}`,
+                        date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                        type: "debit"
+                    });
+
+                    if (account.type === 'STUDIO') await Studio.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
+                    else await User.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
+                    
+                    console.log(`👑 User ${buyerPhone} Subscribed to ${planType}!`);
+                }
+            }
+            // 🪙 SCENARIO B: Normal Coin Purchase
             else {
                 const account = await findAccount(buyerPhone);
                 if (account) {
@@ -3712,7 +3784,13 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
         if (!account) return res.json({ success: false, message: "Account not found" });
 
         let wallet = account.data.wallet || { coins: 0, history: [] };
-        if (wallet.coins < cost) return res.json({ success: false, message: "Not enough coins!" });
+        
+        // 🛡️ BACKEND SECURITY: VIP Invite is Free
+        const activePlan = account.data.activePlan;
+        const isVIP = activePlan && activePlan.type === 'VIP' && new Date(activePlan.validUntil) > new Date();
+        const finalCost = isVIP ? 0 : parseInt(cost);
+
+        if (wallet.coins < finalCost) return res.json({ success: false, message: "Not enough coins!" });
 
         const selection = await AlbumSelection.findById(projectId);
         if (!selection) return res.json({ success: false, message: "Selection project not found." });
@@ -4670,14 +4748,14 @@ app.post('/api/auth/update-profile', authenticateToken, async (req, res) => {
         if (req.user.role === 'STUDIO') {
             updatedAccount = await Studio.findOneAndUpdate(
                 { mobile: mobile },
-                { $set: { ownerName: name, studioName: name, email: email, city: location, profileImage: profileImage } },
-                { new: true }
+                { $set: { ownerName: name, studioName: name, email: email, location: location, profileImage: profileImage } },
+                { new: true, strict: false } // 👈 NAYA: strict false ensures DB doesn't crash on missing fields
             );
         } else {
             updatedAccount = await User.findOneAndUpdate(
                 { mobile: mobile },
-                { $set: { name: name, email: email, city: location, profileImage: profileImage } },
-                { new: true }
+                { $set: { name: name, email: email, location: location, profileImage: profileImage } },
+                { new: true, strict: false } // 👈 NAYA: strict false ensures DB doesn't crash
             );
         }
 
@@ -4694,6 +4772,66 @@ app.post('/api/auth/update-profile', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error("Profile Update Error:", error);
         res.status(500).json({ success: false, message: 'Server error while updating profile.' });
+    }
+});
+
+// ==========================================
+// 🔔 NOTIFICATIONS API
+// ==========================================
+app.post('/api/auth/get-notifications', async (req, res) => {
+    try {
+        const notifications = await Notification.find({ mobile: req.body.mobile }).sort({ createdAt: -1 }).limit(20);
+        res.json({ success: true, data: notifications });
+    } catch (e) { res.status(500).json({ success: false, message: "Error fetching notifications" }); }
+});
+
+app.post('/api/auth/mark-notifications-read', async (req, res) => {
+    try {
+        await Notification.updateMany({ mobile: req.body.mobile, isRead: false }, { $set: { isRead: true } });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false }); }
+});
+
+// ==========================================
+// 🎁 GIFT CARD REDEEM API
+// ==========================================
+app.post('/api/auth/redeem-gift-card', async (req, res) => {
+    try {
+        const { mobile, code } = req.body;
+        const cleanCode = code.trim().toUpperCase();
+
+        const gift = await GiftCard.findOne({ code: cleanCode, isActive: true });
+        if (!gift) return res.json({ success: false, message: "❌ Invalid or Expired Gift Code!" });
+        
+        if (gift.usedBy.includes(mobile)) return res.json({ success: false, message: "⚠️ You have already redeemed this code!" });
+        if (gift.usedBy.length >= gift.usageLimit) return res.json({ success: false, message: "❌ This Gift Code has reached its max usage limit!" });
+
+        const account = await findAccount(mobile);
+        if (!account) return res.json({ success: false, message: "Account not found" });
+
+        let wallet = account.data.wallet || { coins: 0, history: [] };
+        wallet.coins += gift.coins;
+        
+        const historyEntry = {
+            action: `Redeemed Gift Card: ${cleanCode}`,
+            amount: `+${gift.coins} Coins`,
+            date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+            type: "credit"
+        };
+        wallet.history = [historyEntry, ...(wallet.history || [])];
+
+        if (account.type === 'STUDIO') await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+        else await User.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
+
+        // Update Gift Card state
+        gift.usedBy.push(mobile);
+        if (gift.usedBy.length >= gift.usageLimit) gift.isActive = false;
+        await gift.save();
+
+        res.json({ success: true, message: `🎉 Congratulations! ${gift.coins} Coins added to your Wallet.`, wallet });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Server Error redeeming gift card." });
     }
 });
 
