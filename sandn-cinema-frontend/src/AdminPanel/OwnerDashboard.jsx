@@ -602,10 +602,14 @@ const handleEditFileUpload = async (e, isFolder = false) => {
     const [customLimitGB, setCustomLimitGB] = useState('');
 
     // 🏷️ NEW: DYNAMIC SUBSCRIPTION PLANS STATES
-    const [subPlans, setSubPlans] = useState([]);
-    const [subPlanForm, setSubPlanForm] = useState({ id: null, planName: '', storageLimitGB: '', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
+    const [subPlans, setSubPlans] = useState([]);
+    const [subPlanForm, setSubPlanForm] = useState({ id: null, planName: '', storageLimitGB: '', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
 
-    // ☁️ NEW: CLOUD STORAGE MANAGER STATES
+    // 👑 NEW: USER APP SUBSCRIPTIONS (VIP/PREMIUM)
+    const [userSubPlans, setUserSubPlans] = useState([]);
+    const [userSubPlanForm, setUserSubPlanForm] = useState({ id: null, planName: '', type: 'PREMIUM', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
+
+    // ☁️ NEW: CLOUD STORAGE MANAGER STATES
     const [storageAccounts, setStorageAccounts] = useState([]);
     const [editingStorageId, setEditingStorageId] = useState(null); // ✅ Tracking ID
     const [storageForm, setStorageForm] = useState({
@@ -695,10 +699,11 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         fetchServices(); 
         fetchAds(); 
         fetchVacancies();
-        fetchStorageConfigs(); // ☁️ Load Storage configs
-        fetchSubPlans(); // 🏷️ Load Subscription Plans
+        fetchStorageConfigs(); // ☁️ Load Storage configs
+        fetchSubPlans(); // 🏷️ Load Subscription Plans (Studio)
+        fetchUserSubPlans(); // 👑 Load Subscription Plans (User App)
 
-        // 👑 GOD VIEW API CALL
+        // 👑 GOD VIEW API CALL
         const fetchAllSelections = async () => {
             try {
                 const res = await axios.get(`${API_BASE}/admin-get-all-selections`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
@@ -968,15 +973,87 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         setLoading(false);
     };
 
-    // 🏷️ SUBSCRIPTION PLANS API CALLS
-    const fetchSubPlans = async () => {
-        try {
-            const res = await axios.get(`${API_BASE}/admin-get-subscription-plans`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
-            if(res.data.success) setSubPlans(res.data.data);
-        } catch(e) { console.log("Failed to fetch sub plans"); }
-    };
+    // 🏷️ SUBSCRIPTION PLANS API CALLS (STUDIOS)
+    const fetchSubPlans = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/admin-get-subscription-plans`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+            if(res.data.success) setSubPlans(res.data.data);
+        } catch(e) { console.log("Failed to fetch sub plans"); }
+    };
 
-    const handleSaveSubPlan = async (e) => {
+    // 👑 SUBSCRIPTION PLANS API CALLS (USERS)
+    const fetchUserSubPlans = async () => {
+        try {
+            // Note: Since this is global pricing, we fetch it with Platform Settings
+            const res = await axios.get(`${API_BASE}/get-platform-settings`);
+            if (res.data.success && res.data.data && res.data.data.userSubPlans) {
+                setUserSubPlans(res.data.data.userSubPlans);
+            }
+        } catch(e) { console.log("Failed to fetch user sub plans"); }
+    };
+
+    const handleSaveUserSubPlan = async (e) => {
+        e.preventDefault();
+        if (!window.confirm(`Publish/Update this User App Subscription?`)) return;
+        setLoading(true);
+        try {
+            const featuresArray = typeof userSubPlanForm.features === 'string' ? userSubPlanForm.features.split(',').map(f => f.trim()).filter(f => f) : userSubPlanForm.features;
+            const newPlan = { ...userSubPlanForm, features: featuresArray, id: userSubPlanForm.id || Date.now().toString() };
+            
+            // If editing, replace. If new, append.
+            let updatedPlans = [...userSubPlans];
+            if (userSubPlanForm.id) {
+                updatedPlans = updatedPlans.map(p => p.id === newPlan.id ? newPlan : p);
+            } else {
+                updatedPlans.push(newPlan);
+            }
+
+            // Save via Global Settings API
+            const payload = {
+                imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost,
+                coinPackages: coinPackages, miniEvents: miniEvents, tutorials: tutorials,
+                userSubPlans: updatedPlans // 👈 Sending new plans to DB
+            };
+            
+            const res = await axios.post(`${API_BASE}/update-global-charges`, payload);
+            if (res.data.success) {
+                alert("✅ User Subscription Plan Saved!");
+                setUserSubPlans(updatedPlans);
+                setUserSubPlanForm({ id: null, planName: '', type: 'PREMIUM', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' });
+            }
+        } catch (e) { alert("Server error saving user plan."); }
+        setLoading(false);
+    };
+
+    const handleDeleteUserSubPlan = async (id) => {
+        if (!window.confirm("Delete this Subscription Plan permanently from the User App?")) return;
+        setLoading(true);
+        try {
+            const updatedPlans = userSubPlans.filter(p => p.id !== id);
+            const payload = {
+                imageCost: globalPricing.imageCost, videoCost: globalPricing.videoCost,
+                coinPackages: coinPackages, miniEvents: miniEvents, tutorials: tutorials,
+                userSubPlans: updatedPlans
+            };
+            const res = await axios.post(`${API_BASE}/update-global-charges`, payload);
+            if (res.data.success) {
+                alert("🗑️ User Plan Deleted.");
+                setUserSubPlans(updatedPlans);
+            }
+        } catch (e) { alert("Failed to delete user plan."); }
+        setLoading(false);
+    };
+
+    const editUserSubPlan = (plan) => {
+        setUserSubPlanForm({
+            id: plan.id, planName: plan.planName, type: plan.type || 'PREMIUM',
+            monthlyPrice: plan.monthlyPrice, yearlyPrice: plan.yearlyPrice, discountPercentage: plan.discountPercentage,
+            offerText: plan.offerText, features: (plan.features || []).join(', ')
+        });
+        document.getElementById('user-plan-form-section')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const handleSaveSubPlan = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
@@ -3524,6 +3601,85 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                     </div>
                                 ))}
                                 <button onClick={()=>setTutorials([...tutorials, { title: '', description: '', duration: '', link: ''}])} className="global-update-btn" style={{background: '#e67e22', padding: '10px', marginTop: '10px'}}>➕ Add Video Guide</button>
+                            </div>
+
+                            {/* 👑 5. USER APP SUBSCRIPTIONS (VIP / PREMIUM) */}
+                            <div id="user-plan-form-section" className="update-creation-container" style={{ margin: 0, borderTop: '4px solid #8e44ad' }}>
+                                <h3 style={{color: '#8e44ad'}}>👑 5. App Subscriptions (VIP / Premium)</h3>
+                                <p style={{fontSize: '12px', color: '#666', marginBottom: '20px'}}>Create monthly/yearly recurring plans for users. Let them bypass coin limits and enjoy ad-free premium experience.</p>
+
+                                <form onSubmit={handleSaveUserSubPlan} style={{ display: 'flex', flexDirection: 'column', gap: '15px', background: '#f5eef8', padding: '20px', borderRadius: '12px', border: '1px solid #d2b4de', marginBottom: '30px' }}>
+                                    <h4 style={{ margin: '0 0 10px 0', color: '#2c3e50' }}>{userSubPlanForm.id ? '✏️ Edit User Plan' : '➕ Create New User Plan'}</h4>
+                                    
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Plan Name</label>
+                                            <input type="text" required placeholder="e.g. Snevio VIP" value={userSubPlanForm.planName} onChange={e => setUserSubPlanForm({...userSubPlanForm, planName: e.target.value})} className="custom-admin-input"/>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Tier Type</label>
+                                            <select value={userSubPlanForm.type} onChange={e => setUserSubPlanForm({...userSubPlanForm, type: e.target.value})} className="custom-admin-input">
+                                                <option value="PREMIUM">PREMIUM (Discounted Coins)</option>
+                                                <option value="VIP">VIP (0 Coins / Unlimited)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Monthly Price (₹)</label><input type="number" required placeholder="e.g. 199" value={userSubPlanForm.monthlyPrice} onChange={e => setUserSubPlanForm({...userSubPlanForm, monthlyPrice: e.target.value})} className="custom-admin-input"/></div>
+                                        <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Yearly Price (₹)</label><input type="number" placeholder="e.g. 1999" value={userSubPlanForm.yearlyPrice} onChange={e => setUserSubPlanForm({...userSubPlanForm, yearlyPrice: e.target.value})} className="custom-admin-input"/></div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 'bold', color: '#e74c3c' }}>Discount Tag (%)</label><input type="number" placeholder="e.g. 30" value={userSubPlanForm.discountPercentage} onChange={e => setUserSubPlanForm({...userSubPlanForm, discountPercentage: e.target.value})} className="custom-admin-input" style={{borderColor: '#e74c3c'}}/></div>
+                                        <div style={{ flex: 2 }}><label style={{ fontSize: '12px', fontWeight: 'bold', color: '#e74c3c' }}>Offer Text (Badge)</label><input type="text" placeholder="e.g. Most Popular!" value={userSubPlanForm.offerText} onChange={e => setUserSubPlanForm({...userSubPlanForm, offerText: e.target.value})} className="custom-admin-input" style={{borderColor: '#e74c3c'}}/></div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Features List (Comma Separated)</label>
+                                        <textarea rows="3" placeholder="e.g. No Ads, Unlimited Downloads, Priority Support" value={userSubPlanForm.features} onChange={e => setUserSubPlanForm({...userSubPlanForm, features: e.target.value})} className="custom-admin-input"></textarea>
+                                        <p style={{fontSize:'10px', color:'#888', margin:'3px 0 0 0'}}>Use commas to separate bullet points for the UI checklist.</p>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        {userSubPlanForm.id && <button type="button" onClick={() => setUserSubPlanForm({ id: null, planName: '', type: 'PREMIUM', monthlyPrice: '', yearlyPrice: '', discountPercentage: '', offerText: '', features: '' })} style={{ background: '#95a5a6', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>}
+                                        <button type="submit" disabled={loading} style={{ flex: 1, background: userSubPlanForm.id ? '#2ecc71' : '#8e44ad', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                            {loading ? 'Saving...' : (userSubPlanForm.id ? '💾 Update User Plan' : '🚀 Publish User Plan')}
+                                        </button>
+                                    </div>
+                                </form>
+
+                                {/* Live User Plans Table */}
+                                <h4 style={{ color: '#2c3e50', margin: '0 0 10px 0', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>📱 Live Plans on User App</h4>
+                                <div className="data-table-container">
+                                    <table className="admin-table">
+                                        <thead><tr><th>Plan Details</th><th>Pricing</th><th>Tier</th><th>Actions</th></tr></thead>
+                                        <tbody>
+                                            {userSubPlans.map((plan, idx) => (
+                                                <tr key={idx} style={{background: plan.type === 'VIP' ? '#fdf2e9' : 'transparent'}}>
+                                                    <td>
+                                                        <strong style={{color: plan.type === 'VIP' ? '#d35400' : '#2980b9'}}>{plan.planName}</strong><br/>
+                                                        {plan.offerText && <span style={{fontSize:'9px', background:'#e74c3c', color:'#fff', padding:'2px 4px', borderRadius:'3px', fontWeight:'bold'}}>{plan.offerText}</span>}
+                                                    </td>
+                                                    <td style={{fontSize:'12px'}}>
+                                                        <strong>₹{plan.monthlyPrice}</strong>/mo <br/>
+                                                        {plan.yearlyPrice > 0 && <span style={{color: '#8e44ad'}}><strong>₹{plan.yearlyPrice}</strong>/yr</span>} 
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '3px 8px', borderRadius: '10px', background: plan.type === 'VIP' ? '#f39c12' : '#3498db', color: '#fff' }}>
+                                                            {plan.type}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <button onClick={() => editUserSubPlan(plan)} style={{background: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px', fontSize:'11px'}}>Edit</button>
+                                                        <button onClick={() => handleDeleteUserSubPlan(plan.id)} style={{background: '#e74c3c', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize:'11px'}}>Delete</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {userSubPlans.length === 0 && <tr><td colSpan="4" style={{textAlign:'center', padding:'15px', color:'#777'}}>No User Subscription Plans Created Yet.</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
 
                         </div>

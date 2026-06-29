@@ -103,6 +103,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [showExitPopup, setShowExitPopup] = useState(false);
     const [timeTicker, setTimeTicker] = useState(Date.now()); // 🔥 For live countdown ticking
 
+    // 👑 VIP/PREMIUM SUBSCRIPTION STATES
+    const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+    const [userSubPlans, setUserSubPlans] = useState([]); // Will fetch from global settings
+    const [activeSubscription, setActiveSubscription] = useState(user?.activePlan || null);
+
     // Live Timer Refresh Effect (Ticks every second)
     useEffect(() => {
         const timer = setInterval(() => setTimeTicker(Date.now()), 1000);
@@ -384,7 +389,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     if (platformRes.data.success && platformRes.data.data) {
                         setCoinPackages(platformRes.data.data.coinPackages || []);
                         setMiniEvents(platformRes.data.data.miniEvents || []);
-                        setTutorials(platformRes.data.data.tutorials || []); // 👈 NAYA: DB se video links fetch karega
+                        setTutorials(platformRes.data.data.tutorials || []);
+                        setUserSubPlans(platformRes.data.data.userSubPlans || []); // 👑 NAYA: Subscription Plans Fetch karega
                     }
                 }
 
@@ -715,11 +721,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         setSelectedMediaFiles(prev => prev.includes(filePath) ? prev.filter(f => f !== filePath) : [...prev, filePath]);
     };
 
+    // 🧠 SMART PRICING LOGIC (VIP & PREMIUM)
+    const calculateItemCost = (filePath) => {
+        if (!activeFolder) return 0;
+        let baseCost = isVideo(filePath) ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
+        
+        if (activeSubscription?.type === 'VIP') return 0; // VIP is 100% Free
+        if (activeSubscription?.type === 'PREMIUM') return Math.ceil(baseCost / 2); // Premium is 50% OFF
+        
+        return baseCost; // Free user pays full
+    };
+
     const getBatchCost = () => {
         let total = 0;
         selectedMediaFiles.forEach(file => {
             if (!isFileUnlocked(file)) {
-                total += isVideo(file) ? (activeFolder?.videoCost || 10) : (activeFolder?.imageCost || 5);
+                total += calculateItemCost(file);
             }
         });
         return total;
@@ -734,29 +751,26 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const triggerMonetization = (filePath) => {
         if (!activeFolder) return;
         const fileType = isVideo(filePath) ? 'Video' : 'Photo';
-        const fileCost = fileType === 'Video' ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
-
-        setPurchaseModal({ show: true, file: filePath, files: [filePath], cost: fileCost, type: fileType, isBatch: false });
+        setPurchaseModal({ show: true, file: filePath, files: [filePath], cost: calculateItemCost(filePath), type: fileType, isBatch: false });
     };
 
     // ✅ OPEN NEW MEDIA INTERFACE (Share, Collab, Unlock)
     const openMediaInterface = (filePath) => {
         if (!activeFolder) return;
         const fileType = isVideo(filePath) ? 'Video' : 'Photo';
-        const fileCost = fileType === 'Video' ? (activeFolder.videoCost || 10) : (activeFolder.imageCost || 5);
         
         setSelectedMedia({
             url: filePath,
             type: fileType,
-            cost: fileCost,
-            isUnlocked: isFileUnlocked(filePath)
+            cost: calculateItemCost(filePath),
+            isUnlocked: isFileUnlocked(filePath) || activeSubscription?.type === 'VIP' // 👑 VIP is auto-unlocked visually
         });
     };
 
     const getCostLabel = (filePath) => {
         if(!activeFolder) return '';
-        const isVid = isVideo(filePath);
-        return isVid ? `${activeFolder.videoCost || 10} Coins` : `${activeFolder.imageCost || 5} Coins`;
+        if (activeSubscription?.type === 'VIP') return `FREE (VIP)`;
+        return `${calculateItemCost(filePath)} Coins`;
     };
 
     // ✅ Process Purchase with Coins and Update Unlock Status (Supports BATCH & SINGLE)
@@ -765,7 +779,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const targetFiles = purchaseModal.isBatch ? purchaseModal.files : (purchaseModal.file ? [purchaseModal.file] : [selectedMedia?.url]);
         const targetType = purchaseModal.type || selectedMedia?.type;
 
-        if (wallet.coins < targetCost) {
+        // Bypassing coin check for VIP since cost is 0
+        if (targetCost > 0 && wallet.coins < targetCost) {
             alert("Not enough coins! Watch Ads to earn or buy more.");
             setShowWalletModal(true); 
             return;
@@ -773,11 +788,19 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
         setLoading(true);
         try {
+            // 🧠 SMART EXPIRY LOGIC (VIP & PREMIUM)
             let expiryDate = 'Permanent';
-            if (activeFolder?.unlockValidity === '24 Hours' || activeFolder?.folderName === 'Snevio Photography') {
-                expiryDate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString();
-            } else if (activeFolder?.unlockValidity === '7 Days') {
-                expiryDate = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            if (activeSubscription?.type === 'VIP') {
+                expiryDate = 'Permanent'; // VIP gets lifetime
+            } else if (activeSubscription?.type === 'PREMIUM') {
+                expiryDate = new Date(new Date().getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(); // Premium gets 1 Year
+            } else {
+                // Free user gets normal expiry
+                if (activeFolder?.unlockValidity === '24 Hours' || activeFolder?.folderName === 'Snevio Photography') {
+                    expiryDate = new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString();
+                } else if (activeFolder?.unlockValidity === '7 Days') {
+                    expiryDate = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+                }
             }
 
             const res = await axios.post(`${API_BASE}/deduct-coins-batch`, {
@@ -859,33 +882,62 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // ✅ REAL MONEY PACKAGE PURCHASE (VIA INSTAMOJO)
-    const handleBuyPackage = async (pkg) => {
-        if (!window.confirm(`Proceed to pay ₹${pkg.price} for ${pkg.coins} Coins?`)) return;
-        
-        setLoading(true);
-        try {
-            const res = await axios.post(`${API_BASE}/create-payment`, {
-                amount: pkg.price,
-                purpose: `${pkg.coins} Coins Package`,
-                buyer_name: syncUser.name || 'Snevio User',
-                email: profileData.email || 'dummy@snevio.com',
-                phone: syncUser.mobile,
-                itemType: 'COINS',
-                itemValue: pkg.coins
-            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+    const handleBuyPackage = async (pkg) => {
+        if (!window.confirm(`Proceed to pay ₹${pkg.price} for ${pkg.coins} Coins?`)) return;
+        
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/create-payment`, {
+                amount: pkg.price,
+                purpose: `${pkg.coins} Coins Package`,
+                buyer_name: syncUser.name || 'Snevio User',
+                email: profileData.email || 'dummy@snevio.com',
+                phone: syncUser.mobile,
+                itemType: 'COINS',
+                itemValue: pkg.coins
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
 
-            if (res.data.success && res.data.paymentUrl) {
-                // 🚀 Redirect user securely to Instamojo Payment Gateway
-                window.location.href = res.data.paymentUrl;
-            } else {
-                alert("Failed to initialize payment gateway. Please try again.");
-                setLoading(false);
-            }
-        } catch (e) { 
-            alert("Connection error. Could not start payment.");
-            setLoading(false);
-        }
-    };
+            if (res.data.success && res.data.paymentUrl) {
+                // 🚀 Redirect user securely to Instamojo Payment Gateway
+                window.location.href = res.data.paymentUrl;
+            } else {
+                alert("Failed to initialize payment gateway. Please try again.");
+                setLoading(false);
+            }
+        } catch (e) { 
+            alert("Connection error. Could not start payment.");
+            setLoading(false);
+        }
+    };
+
+    // 👑 REAL MONEY SUBSCRIPTION PURCHASE (VIA INSTAMOJO)
+    const handleBuySubscription = async (plan) => {
+        if (!window.confirm(`Proceed to upgrade to ${plan.planName} for ₹${plan.monthlyPrice}/month?`)) return;
+        
+        setLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE}/create-payment`, {
+                amount: plan.monthlyPrice,
+                purpose: `Subscription: ${plan.planName}`,
+                buyer_name: syncUser.name || 'Snevio User',
+                email: profileData.email || 'dummy@snevio.com',
+                phone: syncUser.mobile,
+                itemType: 'SUBSCRIPTION', // 👈 Backend isko read karke plan update karega
+                itemValue: plan.id,
+                planType: plan.type // VIP or PREMIUM
+            }, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
+
+            if (res.data.success && res.data.paymentUrl) {
+                window.location.href = res.data.paymentUrl;
+            } else {
+                alert("Failed to initialize payment gateway. Please try again.");
+                setLoading(false);
+            }
+        } catch (e) { 
+            alert("Connection error. Could not start payment.");
+            setLoading(false);
+        }
+    };
 
     // ✅ CLAIM MINI EVENT
     const handleClaimEvent = async (ev) => {
@@ -2736,6 +2788,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         <span style={{ color: '#666', fontSize: '18px' }}>›</span>
                     </div>
                 </div>
+                
+                <h3 style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', paddingLeft: '5px' }}>Premium Access</h3>
+                
+                <div style={{ background: '#1a1a2e', borderRadius: '15px', overflow: 'hidden', border: '1px solid #333', marginBottom: '20px' }}>
+                    {/* 👑 NAYA: MY SUBSCRIPTIONS (VIP/PREMIUM) */}
+                    <div onClick={() => setShowSubscriptionModal(true)} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #222', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ background: 'linear-gradient(45deg, #f39c12, #d35400)', width: '35px', height: '35px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', boxShadow: '0 4px 10px rgba(243, 156, 18, 0.4)' }}>👑</div>
+                            <div>
+                                <h4 style={{ color: '#fff', margin: '0 0 3px 0', fontSize: '15px' }}>My Subscriptions</h4>
+                                <p style={{ color: '#f39c12', margin: 0, fontSize: '11px', fontWeight: 'bold' }}>{activeSubscription ? `Active: ${activeSubscription.planName}` : 'Upgrade to VIP / Premium'}</p>
+                            </div>
+                        </div>
+                        <span style={{ color: '#666', fontSize: '18px' }}>›</span>
+                    </div>
+                </div>
 
                 <h3 style={{ color: '#888', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px', paddingLeft: '5px' }}>Support & Security</h3>
 
@@ -3490,6 +3558,104 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             )}
 
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 👑 VIP/PREMIUM SUBSCRIPTION MODAL (PRO SAAS STYLE) */}
+            {showSubscriptionModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(10, 10, 10, 0.9)', zIndex: 9999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+                    <div style={{ background: '#111827', padding: '30px', borderRadius: '25px', width: '95%', maxWidth: '1050px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', border: '1px solid #1f2937' }}>
+                        
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <h2 style={{ color: '#fff', margin: 0, fontSize: '28px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '900', letterSpacing: '0.5px' }}>
+                                <span style={{fontSize: '32px'}}>👑</span> Choose Your Premium Plan
+                            </h2>
+                            <button onClick={() => setShowSubscriptionModal(false)} style={{ background: '#374151', border: 'none', fontSize: '18px', color: '#fff', cursor: 'pointer', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.2s' }}>✖</button>
+                        </div>
+                        <p style={{ color: '#9ca3af', fontSize: '15px', marginBottom: '35px', fontWeight: '500' }}>Upgrade your Snevio experience. Enjoy zero ads, limitless downloads, and exclusive perks.</p>
+
+                        {/* Cards Container (Grid / Flex Wrap) */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+                            
+                            {/* 1️⃣ FREE BASIC PLAN */}
+                            <div style={{ flex: '1 1 280px', maxWidth: '320px', background: 'linear-gradient(180deg, #1f2937, #111827)', border: '1px solid #374151', borderRadius: '20px', padding: '25px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ position: 'absolute', top: 0, right: 0, background: '#4b5563', color: '#fff', fontSize: '10px', fontWeight: '900', padding: '6px 12px', borderBottomLeftRadius: '15px', letterSpacing: '1px' }}>CURRENT PLAN</div>
+                                <h3 style={{ margin: '0 0 10px 0', color: '#9ca3af', fontSize: '20px', fontWeight: '800' }}>Basic Access</h3>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', marginBottom: '25px' }}>
+                                    <span style={{ color: '#f3f4f6', fontSize: '40px', fontWeight: '900' }}>Free</span>
+                                </div>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 25px 0', color: '#9ca3af', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                                    <li style={{display: 'flex', gap:'8px'}}>❌ <span>Watch Ads to Earn Coins</span></li>
+                                    <li style={{display: 'flex', gap:'8px'}}>❌ <span>Media locks after 24 Hours</span></li>
+                                    <li style={{display: 'flex', gap:'8px'}}>❌ <span>Costs {activeFolder?.imageCost || 5} Coins per Photo</span></li>
+                                    <li style={{display: 'flex', gap:'8px'}}>❌ <span>Needs 50 Coins for Emergency</span></li>
+                                    <li style={{display: 'flex', gap:'8px'}}>❌ <span>10 Coins / Family Invite</span></li>
+                                </ul>
+                                {!activeSubscription ? (
+                                    <button disabled style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #374151', background: 'transparent', color: '#9ca3af', fontWeight: 'bold', fontSize: '15px', cursor: 'not-allowed', textTransform: 'uppercase', letterSpacing: '1px' }}>Currently Active</button>
+                                ) : (
+                                    <button disabled style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px dashed #374151', background: 'transparent', color: '#6b7280', fontSize: '15px', cursor: 'not-allowed' }}>Downgraded Plan</button>
+                                )}
+                            </div>
+
+                            {/* 2️⃣ DYNAMIC PREMIUM & VIP PLANS */}
+                            {userSubPlans.length > 0 ? userSubPlans.map((plan, idx) => {
+                                const isVIP = plan.type === 'VIP';
+                                const bgStyle = isVIP ? 'linear-gradient(180deg, #37210b, #111827)' : 'linear-gradient(180deg, #0b2237, #111827)';
+                                const borderColor = isVIP ? '#f59e0b' : '#3b82f6';
+                                const titleColor = isVIP ? '#fbbf24' : '#60a5fa';
+                                const btnBg = isVIP ? 'linear-gradient(90deg, #f59e0b, #ea580c)' : 'linear-gradient(90deg, #3b82f6, #2563eb)';
+                                const btnHoverShadow = isVIP ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)';
+                                const featureIcon = isVIP ? '✨' : '✅';
+                                const isCurrent = activeSubscription?.id === plan.id;
+                                
+                                return (
+                                    <div key={idx} style={{ flex: '1 1 280px', maxWidth: '320px', background: bgStyle, border: `2px solid ${borderColor}`, borderRadius: '20px', padding: '25px', position: 'relative', display: 'flex', flexDirection: 'column', boxShadow: isVIP ? '0 10px 40px rgba(245, 158, 11, 0.15)' : '0 10px 40px rgba(59, 130, 246, 0.1)', transform: isVIP ? 'scale(1.02)' : 'none', zIndex: isVIP ? 10 : 1 }}>
+                                        {isVIP && <div style={{ position: 'absolute', top: '-15px', right: '-15px', fontSize: '100px', opacity: 0.05, transform: 'rotate(15deg)' }}>👑</div>}
+                                        
+                                        {plan.offerText && (
+                                            <div style={{ position: 'absolute', top: 0, right: 0, background: isVIP ? '#f59e0b' : '#ef4444', color: isVIP ? '#000' : '#fff', fontSize: '10px', fontWeight: '900', padding: '6px 12px', borderBottomLeftRadius: '15px', letterSpacing: '1px', textTransform: 'uppercase', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                                                {plan.offerText}
+                                            </div>
+                                        )}
+                                        
+                                        <h3 style={{ margin: '0 0 10px 0', color: titleColor, fontSize: '22px', fontWeight: '800' }}>{plan.planName}</h3>
+                                        
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', marginBottom: '25px' }}>
+                                            <span style={{ color: '#fff', fontSize: '40px', fontWeight: '900' }}>₹{plan.monthlyPrice}</span>
+                                            <span style={{ color: '#9ca3af', fontSize: '14px' }}>/month</span>
+                                        </div>
+                                        
+                                        {/* Features List */}
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 25px 0', color: '#d1d5db', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                                            {plan.features && plan.features.map((feature, fIdx) => (
+                                                <li key={fIdx} style={{display: 'flex', gap:'8px', alignItems:'flex-start'}}>
+                                                    <span style={{fontSize:'14px', marginTop:'1px'}}>{featureIcon}</span> 
+                                                    <span style={{lineHeight: '1.4'}} dangerouslySetInnerHTML={{ __html: feature.replace(/\*\*(.*?)\*\*/g, `<strong style="color:${titleColor}">$1</strong>`) }} />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        
+                                        <button 
+                                            onClick={() => handleBuySubscription(plan)} 
+                                            disabled={isCurrent || loading}
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: 'none', background: isCurrent ? '#374151' : btnBg, color: isCurrent ? '#9ca3af' : '#fff', fontWeight: '800', fontSize: '15px', cursor: isCurrent ? 'not-allowed' : 'pointer', boxShadow: (!isCurrent) ? btnHoverShadow : 'none', transition: '0.3s', textTransform: 'uppercase', letterSpacing: '1px' }}
+                                        >
+                                            {isCurrent ? 'Current Plan ✓' : (loading ? 'Processing...' : `Upgrade to ${plan.type}`)}
+                                        </button>
+                                    </div>
+                                );
+                            }) : (
+                                <div style={{flex: '1 1 100%', textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '20px', border: '1px dashed #374151', maxWidth: '320px'}}>
+                                    <span style={{fontSize: '40px', opacity: 0.5}}>🚀</span>
+                                    <p style={{color: '#9ca3af', marginTop: '10px', fontSize:'14px'}}>Premium plans are currently being configured by the admin.</p>
+                                </div>
+                            )}
+
+                        </div>
+                        <p style={{ textAlign: 'center', fontSize: '13px', color: '#6b7280', marginTop: '35px', fontWeight: '500' }}>🔒 Secure payments via Instamojo. Subscriptions can be canceled anytime from settings.</p>
                     </div>
                 </div>
             )}
