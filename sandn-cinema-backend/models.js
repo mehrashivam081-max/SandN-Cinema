@@ -40,10 +40,15 @@ const userSchema = new mongoose.Schema({
         claimedEvents: [{ type: String }]
     },
     
+    // ✅ NAYA: CLEAN & STRUCTURED SUBSCRIPTION LOGIC
+    activePlan: {
+        id: String,
+        planName: String,
+        type: { type: String, enum: ['PREMIUM', 'VIP'], default: 'PREMIUM' },
+        validUntil: Date
+    },
+    
     // Security
-    isVip: { type: Boolean, default: false },
-    isPremium: { type: Boolean, default: false }, // ✅ नया प्रीमियम फ्लैग
-    vipExpiry: Date,
     otp: String,
     otpExpires: Date,
     lastLogin: Date,
@@ -83,21 +88,27 @@ const studioSchema = new mongoose.Schema({
         current: { type: Number, default: 0 },
         total: { type: Number, default: 0 },
         history: [{ amount: Number, date: Date, status: String }]
-    },
-    
-    // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
-    storagePlan: { type: String, default: 'FREE' },
-    allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
-    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
-    planExpiryDate: { type: Date, default: null },    // When the current plan expires
-    autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
+    },
+    
+    // ✅ NAYA: CLEAN & STRUCTURED SUBSCRIPTION LOGIC
+    activePlan: {
+        id: String,
+        planName: String,
+        type: { type: String, enum: ['PREMIUM', 'VIP'], default: 'PREMIUM' },
+        validUntil: Date
+    },
 
-    otp: String,
+    // ☁️ NEW: STORAGE LIMITS & PLANS FOR STUDIOS
+    storagePlan: { type: String, default: 'FREE' },
+    allocatedStorageGB: { type: Number, default: 5 }, // Default Free plan limit
+    usedStorageGB: { type: Number, default: 0 },      // Actual data consumed by studio
+    planExpiryDate: { type: Date, default: null },    // When the current plan expires
+    autoDowngradeToFree: { type: Boolean, default: true }, // If true, CRON job will reset plan on expiry
+
+    otp: String,
     otpExpires: Date,
-    isPremium: { type: Boolean, default: false }, // ✅ नया प्रीमियम फ्लैग
     joinedDate: { type: Date, default: Date.now }
 });
-
 // --- 3. ADMIN SCHEMA ---
 const adminSchema = new mongoose.Schema({
     name: String,
