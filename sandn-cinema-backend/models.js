@@ -247,6 +247,9 @@ const platformSettingSchema = new mongoose.Schema({
         link: String
     }],
     
+    // 👑 NAYA: User App Subscriptions (VIP/Premium)
+    userSubPlans: { type: Array, default: [] },
+    
     lastUpdated: { type: Date, default: Date.now }
 });
 

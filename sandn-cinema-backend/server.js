@@ -2260,22 +2260,29 @@ app.post('/api/auth/add-coins', async (req, res) => {
 
 app.post('/api/auth/update-global-charges', async (req, res) => {
     try {
-        const { imageCost, videoCost, coinPackages, miniEvents, tutorials } = req.body; // 👈 Tutorials added
+        // 🔥 THE FIX: Added userSubPlans to be extracted from req.body
+        const { imageCost, videoCost, coinPackages, miniEvents, tutorials, userSubPlans } = req.body; 
+        
+        // Dynamic Update Object banayenge taaki jo data aaye sirf wahi update ho
+        let updateFields = {
+            lastUpdated: Date.now()
+        };
+        
+        if (imageCost !== undefined) updateFields["defaultPricing.imageCost"] = imageCost;
+        if (videoCost !== undefined) updateFields["defaultPricing.videoCost"] = videoCost;
+        if (coinPackages) updateFields.coinPackages = coinPackages;
+        if (miniEvents) updateFields.miniEvents = miniEvents;
+        if (tutorials) updateFields.tutorials = tutorials;
+        
+        // 👑 THE FIX: Store User Plans in DB
+        if (userSubPlans) updateFields.userSubPlans = userSubPlans;
+
         await PlatformSetting.updateOne(
             { settingId: 'GLOBAL' }, 
-            { 
-                $set: { 
-                    "defaultPricing.imageCost": imageCost, 
-                    "defaultPricing.videoCost": videoCost,
-                    coinPackages: coinPackages,
-                    miniEvents: miniEvents,
-                    tutorials: tutorials, // 👈 Save tutorials to DB
-                    lastUpdated: Date.now() 
-                } 
-            }, 
+            { $set: updateFields }, 
             { upsert: true }
         );
-        res.json({ success: true, message: "Global Configs & Tutorials Updated!" });
+        res.json({ success: true, message: "Global Configs, Tutorials & Subscriptions Updated!" });
     } catch (e) {
         console.error(e);
         res.status(500).json({ success: false, message: "Failed to save global charges." });
