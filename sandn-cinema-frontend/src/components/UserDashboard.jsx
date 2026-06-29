@@ -613,11 +613,12 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         } catch (e) { alert("Error revoking access."); }
     };
 
-    // ✅ CHECK IF FILE IS UNLOCKED (SMART VALIDITY CHECK)
-    const isFileUnlocked = (filePath) => {
+    // ✅ CHECK IF FILE IS UNLOCKED (SMART OBJECT-SAFE CHECK)
+    const isFileUnlocked = (fileInput) => {
         if (!wallet.unlockedFiles) return false;
+        // Extracted exact string URL seamlessly
+        const filePath = typeof fileInput === 'object' ? (fileInput.url || fileInput.fileUrl) : fileInput;
         
-        // 🔥 THE FIX: Check if there is AT LEAST ONE valid/unexpired entry for this file
         return wallet.unlockedFiles.some(f => {
             if (f.fileUrl !== filePath) return false;
             if (f.expiry === 'Permanent') return true;
@@ -625,34 +626,39 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         });
     };
 
-    // 🔥 TIME CALCULATOR FOR FOMO UI (LIVE COUNTDOWN - FIXED)
-    const getUnlockTimerText = (filePath) => {
+    // 🔥 TIME CALCULATOR FOR FOMO UI (OBJECT-SAFE FIXED)
+    const getUnlockTimerText = (fileInput) => {
         if (!wallet.unlockedFiles) return null;
+        const filePath = typeof fileInput === 'object' ? (fileInput.url || fileInput.fileUrl) : fileInput;
         
-        // 🔥 THE FIX: Get ONLY the valid entries for this file
         const validEntries = wallet.unlockedFiles.filter(f => f.fileUrl === filePath && (f.expiry === 'Permanent' || new Date(f.expiry) > new Date()));
         
-        if (validEntries.length === 0) return null; // No valid unlock found
-        
-        // If any of the valid entries is 'Permanent', no timer is needed
+        if (validEntries.length === 0) return null; 
         if (validEntries.some(f => f.expiry === 'Permanent')) return null;
 
-        // Find the latest expiry date among valid entries
         const latestExpiryEntry = validEntries.reduce((latest, current) => {
             return new Date(current.expiry) > new Date(latest.expiry) ? current : latest;
         });
 
         const timeDiff = new Date(latestExpiryEntry.expiry) - new Date();
-        if (timeDiff <= 0) return null; // Time is up
+        if (timeDiff <= 0) return null;
 
         const hours = Math.floor(timeDiff / (1000 * 60 * 60));
         const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
         
-        // Make it look professional (09h 05m)
         const hDisp = hours < 10 ? `0${hours}` : hours;
         const mDisp = minutes < 10 ? `0${minutes}` : minutes;
         
         return `⏳ Locks in ${hDisp}h ${mDisp}m`;
+    };
+
+    // 🎥 VIDEO DETECTOR (OBJECT-SAFE FIXED)
+    const isVideo = (fileInput) => {
+        const filePath = typeof fileInput === 'object' ? (fileInput.url || fileInput.fileUrl) : fileInput;
+        if (!filePath || typeof filePath !== 'string') return false;
+        if (isCinematic(filePath)) return true;
+        if (filePath.includes('/video/upload/')) return true; 
+        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
 
     // --- PROFILE HANDLERS ---
@@ -2928,15 +2934,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     )}
 
                     <div className="ud-grid-vip mt-20">
-                        {displayedMedia.length > 0 ? displayedMedia.map((filePath, idx) => {
-                            const isUnlocked = isFileUnlocked(filePath);
-                            const isSelected = selectedMediaFiles.includes(filePath);
+                        {displayedMedia.length > 0 ? displayedMedia.map((mediaItem, idx) => {
+                            // Smart Extraction: Extracts string URL immediately at block start
+                            const mediaUrl = typeof mediaItem === 'object' ? (mediaItem.url || mediaItem.fileUrl) : mediaItem;
+                            
+                            const isUnlocked = isFileUnlocked(mediaUrl) || activeSubscription?.type === 'VIP';
+                            const isSelected = selectedMediaFiles.includes(mediaUrl);
                             
                             return (
                                 <div key={idx} className="gallery-item-vip" style={{ display: 'flex', flexDirection: 'column', background: '#1a1a2e', borderRadius: '12px', overflow: 'hidden', border: isSelected ? '3px solid #3498db' : (isUnlocked ? '1px solid #2ecc71' : '1px solid #333') }}>
                                     
                                     {/* 1. MEDIA CLICK AREA */}
-                                    <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => isSelectionMode ? toggleSelection(filePath) : openMediaInterface(filePath)}>
+                                    <div style={{ position: 'relative', height: '180px', cursor: 'pointer', overflow: 'hidden', background: '#000' }} onClick={() => isSelectionMode ? toggleSelection(mediaUrl) : openMediaInterface(mediaUrl)}>
                                         
                                         {/* CHECKBOX FOR SELECTION */}
                                         {isSelectionMode && (
