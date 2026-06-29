@@ -552,12 +552,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // --- HELPERS ---
     const isCinematic = (url) => typeof url === 'string' && url.startsWith('CINEMATIC::');
 
-    const isVideo = (filePath) => {
-        if (!filePath || typeof filePath !== 'string') return false;
-        if (isCinematic(filePath)) return true; // Treat Cinematic as a video type
-        if (filePath.includes('/video/upload/')) return true; 
-        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
-    };
+    
 
     // ✅ 100% SAFE & SUPER-FAST IMAGE URL GENERATOR (Auto Object/String Handler)
     const getCleanUrl = (fileData, isThumbnail = false) => {
