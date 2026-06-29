@@ -2517,8 +2517,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 )}
 
                                 {service.imageUrl && (
-                                    <div style={{ height: '140px', width: '100%', overflow: 'hidden' }}>
-                                        <img src={service.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={service.title} />
+                                    <div style={{ height: '140px', width: '100%', overflow: 'hidden', background: '#2c3e50' }}>
+                                        {/* 🚀 SMART FIX: getCleanUrl compression + lazy loading added */}
+                                        <img src={getCleanUrl(service.imageUrl, true)} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={service.title} />
                                     </div>
                                 )}
                                 <div style={{ padding: '15px' }}>
@@ -2949,19 +2950,20 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                             </div>
                                         )}
 
-                                        {isCinematic(filePath) ? (
+                                        {/* 🔥 BUG FIX: filePath ki jagah mediaUrl kar diya */}
+                                        {isCinematic(mediaUrl) ? (
                                             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #2c3e50, #1a1a2e)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#f1c40f', filter: isUnlocked ? 'none' : 'blur(2px)' }}>
                                                 <span style={{ fontSize: '40px', marginBottom: '5px' }}>🎬</span>
                                                 <span style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '1px' }}>CINEMATIC</span>
                                             </div>
-                                        ) : isVideo(filePath) ? (
+                                        ) : isVideo(mediaUrl) ? (
                                             <>
-                                                <video src={getCleanUrl(filePath)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                <video src={getCleanUrl(mediaUrl)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#fff', fontSize: '16px'}}>▶️</div>
                                             </>
                                         ) : (
-                                            /* 🚀 SMART THUMBNAIL LOGIC: Original file will be compressed on-the-fly for ultra-fast loading */
-                                            <img src={getCleanUrl(filePath, true)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
+                                            /* 🚀 SMART THUMBNAIL LOGIC */
+                                            <img src={getCleanUrl(mediaUrl, true)} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isUnlocked ? 'none' : 'blur(2px)' }} />
                                         )}
 
                                         {!isUnlocked && !isSelectionMode && (
@@ -2971,7 +2973,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         )}
 
                                         {/* Download Progress Overlay */}
-                                        {downloadingFile === filePath && (
+                                        {downloadingFile === mediaUrl && (
                                             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', background: 'rgba(0,0,0,0.85)', padding: '10px', textAlign: 'center', zIndex: 10 }}>
                                                 <div style={{color: '#3498db', fontWeight: 'bold', fontSize: '12px', marginBottom: '5px'}}>{downloadProgress}% - {downloadSpeed}</div>
                                                 <div style={{ width: '100%', background: '#eee', height: '4px', borderRadius: '5px', overflow: 'hidden' }}>
@@ -2984,7 +2986,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                     {/* 2. UPLOADER & PRICE STRIP */}
                                     <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a' }}>
                                         {(() => {
-                                            // 🔥 NAYA: Naya uploaderName check karega, nahi toh purana uploadedBy use karega
                                             const displayName = activeFolder.uploaderName || activeFolder.uploadedBy || 'Snevio Partner';
                                             const displayRole = activeFolder.uploaderRole || 'Premium Studio';
                                             
@@ -3004,7 +3005,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                         <span style={{ fontSize: '9px', color: '#888', lineHeight: '1.2' }}>Uploaded by</span>
                                                         <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', lineHeight: '1.2', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                             {displayName}
-                                                            {/* 🔥 Verified Badges Based on Role */}
                                                             {displayRole === 'Super Admin' && <span style={{fontSize: '10px'}} title="Verified Admin">👑</span>}
                                                             {displayRole === 'Studio Partner' && <span style={{fontSize: '10px'}} title="Verified Studio">✨</span>}
                                                         </span>
@@ -3014,28 +3014,28 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         })()}
 
                                         {/* Badge Area */}
-                                        <div style={{ textAlign: 'right' }}>
-                                            {isUnlocked ? (
+                                        <div style={{ textAlign: 'right' }}>
+                                            {isUnlocked ? (
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                                                    <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                        ✅ Unlocked
-                                                    </span>
-                                                    {/* 🔥 THE FIX: Live Countdown Badge */}
-                                                    {getUnlockTimerText(filePath) && (
+                                                    <span style={{ fontSize: '11px', color: '#2ecc71', fontWeight: 'bold', background: 'rgba(46,204,113,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        ✅ Unlocked
+                                                    </span>
+                                                    {/* 🔥 BUG FIX: filePath ki jagah mediaUrl kar diya */}
+                                                    {getUnlockTimerText(mediaUrl) && (
                                                         <span style={{ fontSize: '10px', color: '#e74c3c', fontWeight: 'bold', background: 'rgba(231,76,60,0.1)', padding: '2px 6px', borderRadius: '4px', animation: 'pulse 2s infinite' }}>
-                                                            {getUnlockTimerText(filePath)}
+                                                            {getUnlockTimerText(mediaUrl)}
                                                         </span>
                                                     )}
                                                 </div>
-                                            ) : (
-                                                <>
-                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
-                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                                                        🪙 {getCostLabel(filePath)}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
+                                            ) : (
+                                                <>
+                                                    <span style={{ display: 'block', fontSize: '9px', color: '#aaa' }}>To Unlock</span>
+                                                    <span style={{ fontSize: '11px', color: '#f1c40f', fontWeight: 'bold', background: 'rgba(241,196,15,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                                                        🪙 {getCostLabel(mediaUrl)}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             )
