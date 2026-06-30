@@ -2472,16 +2472,20 @@ app.post('/api/auth/payment-webhook', async (req, res) => {
             // 👑 SCENARIO D: User App Subscription (VIP/Premium)
             else if (itemType === 'SUBSCRIPTION' && itemValue) {
                 const planId = itemValue;
-                const planType = req.query.planType || 'PREMIUM';
+                
+                // ✅ DATABASE SE PLAN DETAILS FETCH KAREIN
+                const planDetails = await SubscriptionPlan.findById(planId);
+                const planName = planDetails ? planDetails.planName : "Snevio Premium";
+                const planType = planDetails ? planDetails.type : (req.query.planType || 'PREMIUM');
                 
                 const account = await findAccount(buyerPhone);
                 if (account) {
-                    // Plan Valid for 30 Days (1 Month)
                     const validUntil = new Date();
-                    validUntil.setDate(validUntil.getDate() + 30); 
+                    validUntil.setDate(validUntil.getDate() + 30); // 30 Days validity
 
                     const activePlan = {
                         id: planId,
+                        planName: planName, 
                         type: planType.toUpperCase(),
                         purchasedAt: new Date(),
                         validUntil: validUntil
@@ -2489,16 +2493,18 @@ app.post('/api/auth/payment-webhook', async (req, res) => {
 
                     let wallet = account.data.wallet || { coins: 0, history: [] };
                     wallet.history.unshift({
-                        action: `Upgraded to ${planType}`,
+                        action: `Subscribed to ${planName}`,
                         amount: `-₹${amount}`,
                         date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
                         type: "debit"
                     });
 
-                    if (account.type === 'STUDIO') await Studio.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
-                    else await User.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
+                    if (account.type === 'STUDIO') 
+                        await Studio.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
+                    else 
+                        await User.updateOne({ mobile: buyerPhone }, { $set: { activePlan: activePlan, wallet: wallet } }, { strict: false });
                     
-                    console.log(`👑 User ${buyerPhone} Subscribed to ${planType}!`);
+                    console.log(`👑 User ${buyerPhone} Subscribed to ${planName}!`);
                 }
             }
             // 🪙 SCENARIO B: Normal Coin Purchase
@@ -2708,21 +2714,27 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
         const account = await findAccount(mobile);
         if (!account) return res.json({ success: false, message: "Account not found" });
 
+        // 👑 VIP Check for Backend
+        const activePlan = account.data.activePlan;
+        const isVIP = activePlan && activePlan.type === 'VIP' && new Date(activePlan.validUntil) > new Date();
+        const emergencyCost = isVIP ? 0 : 50;
+
         let wallet = account.data.wallet || { coins: 0, history: [] };
         
-        if (wallet.coins < 50) {
+        if (wallet.coins < emergencyCost) {
             return res.json({ success: false, message: "Not enough coins for emergency booking." });
         }
 
-        wallet.coins -= 50;
-
-        const historyEntry = {
-            action: "Emergency Booking Call",
-            amount: "-50 Coins",
-            date: new Date().toLocaleDateString(),
-            type: "debit"
-        };
-        wallet.history = [historyEntry, ...(wallet.history || [])];
+        if (emergencyCost > 0) {
+            wallet.coins -= emergencyCost;
+            const historyEntry = {
+                action: "Emergency Booking Call",
+                amount: `-${emergencyCost} Coins`,
+                date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                type: "debit"
+            };
+            wallet.history = [historyEntry, ...(wallet.history || [])];
+        }
 
         if (account.type === 'STUDIO') {
             await Studio.updateOne({ mobile }, { $set: { wallet } }, { strict: false });
@@ -3800,25 +3812,27 @@ app.post('/api/auth/invite-family-selection', authenticateToken, async (req, res
         if (wallet.coins < finalCost) return res.json({ success: false, message: "Not enough coins!" });
 
         const selection = await AlbumSelection.findById(projectId);
-        if (!selection) return res.json({ success: false, message: "Selection project not found." });
+        if (!selection) return res.json({ success: false, message: "Selection project not found." });
 
-        // ✅ NEW: Smart Duplicate Check (Prevents coin deduction for same folder)
-        const alreadyInvited = (selection.familyMembers || []).find(f => f.mobile === getCleanMobile(familyMobile));
-        if (alreadyInvited) {
+        // ✅ NEW: Smart Duplicate Check (Prevents coin deduction for same folder)
+        const alreadyInvited = (selection.familyMembers || []).find(f => f.mobile === getCleanMobile(familyMobile));
+        if (alreadyInvited) {
             return res.json({ 
                 success: false, 
                 message: `⚠️ Already Shared! You have already invited ${alreadyInvited.nickname || familyMobile} to the "${selection.folderName}" folder.` 
             });
         }
 
-        // Cut Coins
-        wallet.coins -= cost;
-        wallet.history.unshift({
-            action: `Family Invite Sent to ${nickname || familyMobile}`,
-            amount: `-${cost} Coins`,
-            date: new Date().toLocaleDateString(),
-            type: "debit"
-        });
+        // Cut Coins (FIXED: Deduct finalCost instead of cost, and only if > 0)
+        if (finalCost > 0) {
+            wallet.coins -= finalCost;
+            wallet.history.unshift({
+                action: `Family Invite Sent to ${nickname || familyMobile}`,
+                amount: `-${finalCost} Coins`,
+                date: new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}),
+                type: "debit"
+            });
+        }
 
         if (account.type === 'STUDIO') await Studio.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
         else await User.updateOne({ mobile: senderMobile }, { $set: { wallet } }, { strict: false });
