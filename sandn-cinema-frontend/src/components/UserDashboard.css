@@ -387,3 +387,7 @@
         transform: translateY(-4px) !important; /* Slightly pop up active icon */
     }
 }
+@keyframes slideUp {
+    from { bottom: 0; opacity: 0; }
+    to { bottom: 80px; opacity: 1; }
+}

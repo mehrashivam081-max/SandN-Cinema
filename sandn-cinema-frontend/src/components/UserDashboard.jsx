@@ -97,8 +97,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // --- UI STATES ---
-    const [currentTab, setCurrentTab] = useState('HOME');
+    // 🔄 FIXED: Refresh hone par same page par rahega
+    const [currentTab, setCurrentTab] = useState(() => localStorage.getItem('currentDashboardTab') || 'HOME');
     const [loading, setLoading] = useState(true); 
+
+    // ✅ FIXED: Missing handleTabChange Function Add Kiya
+    const handleTabChange = (tabName) => {
+        localStorage.setItem('currentDashboardTab', tabName);
+        setCurrentTab(tabName);
+    }; 
     const [showInstallBanner, setShowInstallBanner] = useState(false);
     const [showExitPopup, setShowExitPopup] = useState(false);
     const [timeTicker, setTimeTicker] = useState(Date.now()); // 🔥 For live countdown ticking
@@ -242,6 +249,22 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ NEW: ACCEPT PROPOSAL MODAL
     const [viewProposalBooking, setViewProposalBooking] = useState(null);
 
+    // ✅ TOAST NOTIFICATION STATE
+    const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+    // ✅ TOAST TRIGGER FUNCTION
+    const showToast = (message, type = 'success') => {
+        setToast({ show: true, message, type });
+        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+    };
+
+    // 🔄 FIXED: Refresh hone par same page par rahega
+    useEffect(() => {
+        if (currentTab) {
+            localStorage.setItem('currentDashboardTab', currentTab);
+        }
+    }, [currentTab]);
+
     const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: '24 Hours' };
 
     // 🌐 NETWORK MONITOR (Auto-Logout Removed)
@@ -259,62 +282,94 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         localStorage.setItem('userCart', JSON.stringify(cart));
     }, [cart]);
 
-    // ✅ SMART BACK BUTTON FOR USER DASHBOARD
-    useBackButton(() => {
-        if (showFamilyShareModal) {
-            setShowFamilyShareModal(false);
-        } else if (showMissedImages) {
-            setShowMissedImages(false);
-        } else if (showSelectionReview) {
-            setShowSelectionReview(false);
-        } else if (showMergeModal) {
-            setShowMergeModal(false);
-        } else if (activeSelectionProject) {
-            const isFamilyMember = activeSelectionProject.clientMobile !== syncUser?.mobile;
-            if (viewingSplitAlbum) {
-                setViewingSplitAlbum(null); // 👈 Go back to split album folders
-            } else if (showSelectedPreview) {
-                setShowSelectedPreview(false); // 🔥 NAYA: Go back to summary card
-            } else if (!isFamilyMember && selectionSubView !== 'OVERVIEW' && !['Completed', 'Confirmed', 'Submitted'].includes(activeSelectionProject.status)) {
-                setSelectionSubView('OVERVIEW');
-                setViewingMember(null);
-            } else {
-                setActiveSelectionProject(null);
-                setSelectionDraft([]);
-                setCurrentTab('HOME');
-                setSelectionSubView('OVERVIEW');
-            }
-        } else if (viewProposalBooking) {
-            setViewProposalBooking(null);
-        } else if (showEmergencyModal) {
-            setShowEmergencyModal(false);
-        } else if (showCartModal) {
-            setShowCartModal(false);
-        } else if (selectedServiceModal) {
-            setSelectedServiceModal(null);
-        } else if (selectedMedia) {
-            setSelectedMedia(null);
-        } else if (purchaseModal?.show) {
-            setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
-        } else if (showWalletModal) {
-            setShowWalletModal(false);
-        } else if (showCollabModal) {
-            setShowCollabModal(false);
-        } else if (activeSubFolder) {
-            setActiveSubFolder(null);
-            setIsSelectionMode(false);
-            setSelectedMediaFiles([]);
-        } else if (activeFolder) {
-            setActiveFolder(null);
-            setMediaFilter('ALL');
-            setIsSelectionMode(false);
-            setSelectedMediaFiles([]);
-        } else if (currentTab !== 'HOME') {
-            setCurrentTab('HOME');
-        } else {
-            setShowExitPopup(true); // Sab close hone ke baad exit popup aayega
-        }
+    // ✅ NATIVE BROWSER HISTORY & HARDWARE BACK BUTTON LOGIC (PWA/PRO APP STYLE)
+    // 1. Ek ref banayenge jo humari current state ko yaad rakhega bina re-render ke error diye
+    const uiStateRef = useRef({});
+    
+    useEffect(() => {
+        uiStateRef.current = {
+            showFamilyShareModal, showMissedImages, showSelectionReview, showMergeModal,
+            activeSelectionProject, viewingSplitAlbum, showSelectedPreview, selectionSubView,
+            viewProposalBooking, showEmergencyModal, showCartModal, selectedServiceModal,
+            selectedMedia, purchaseModal, showWalletModal, showCollabModal, activeSubFolder,
+            activeFolder, currentTab, syncUser
+        };
     });
+
+    useEffect(() => {
+        // App khulte hi ek dummy history state push karo (Taki hardware back button trap ho jaye)
+        window.history.pushState({ page: 'snevio_dashboard' }, '', window.location.pathname);
+
+        const handlePopState = (event) => {
+            const s = uiStateRef.current; // Current UI states ko fetch karo
+            let actionTaken = true;
+
+            // Systematically ek-ek karke UI elements band karo (LIFO order)
+            if (s.showFamilyShareModal) {
+                setShowFamilyShareModal(false);
+            } else if (s.showMissedImages) {
+                setShowMissedImages(false);
+            } else if (s.showSelectionReview) {
+                setShowSelectionReview(false);
+            } else if (s.showMergeModal) {
+                setShowMergeModal(false);
+            } else if (s.activeSelectionProject) {
+                const isFamilyMember = s.activeSelectionProject.clientMobile !== s.syncUser?.mobile;
+                if (s.viewingSplitAlbum) {
+                    setViewingSplitAlbum(null);
+                } else if (s.showSelectedPreview) {
+                    setShowSelectedPreview(false);
+                } else if (!isFamilyMember && s.selectionSubView !== 'OVERVIEW' && !['Completed', 'Confirmed', 'Submitted'].includes(s.activeSelectionProject.status)) {
+                    setSelectionSubView('OVERVIEW');
+                    setViewingMember(null);
+                } else {
+                    setActiveSelectionProject(null);
+                    setSelectionDraft([]);
+                    handleTabChange('HOME');
+                    setSelectionSubView('OVERVIEW');
+                }
+            } else if (s.viewProposalBooking) {
+                setViewProposalBooking(null);
+            } else if (s.showEmergencyModal) {
+                setShowEmergencyModal(false);
+            } else if (s.showCartModal) {
+                setShowCartModal(false);
+            } else if (s.selectedServiceModal) {
+                setSelectedServiceModal(null);
+            } else if (s.selectedMedia) {
+                setSelectedMedia(null);
+            } else if (s.purchaseModal?.show) {
+                setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
+            } else if (s.showWalletModal) {
+                setShowWalletModal(false);
+            } else if (s.showCollabModal) {
+                setShowCollabModal(false);
+            } else if (s.activeSubFolder) {
+                setActiveSubFolder(null);
+                setIsSelectionMode(false);
+                setSelectedMediaFiles([]);
+            } else if (s.activeFolder) {
+                setActiveFolder(null);
+                setMediaFilter('ALL');
+                setIsSelectionMode(false);
+                setSelectedMediaFiles([]);
+            } else if (s.currentTab !== 'HOME') {
+                handleTabChange('HOME');
+            } else {
+                actionTaken = false;
+                setShowExitPopup(true); // Agar sab kuch band hai, tab ja kar Exit Popup dikhao
+            }
+
+            // 🔥 USER TRAP: Vapas state push karo taki user galti se app ke bahar na nikal jaye
+            window.history.pushState({ page: 'snevio_dashboard' }, '', window.location.pathname);
+        };
+
+        // Event Listener lagao
+        window.addEventListener('popstate', handlePopState);
+        
+        // Clean up on unmount
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
 
     // 🟢 FETCH LOGIC & 🔥 GLOBAL AUTO-REFRESH
     useEffect(() => {
@@ -1141,8 +1196,13 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     // ✅ EMERGENCY BOOKING LOGIC WITH GPS LIVE LOCATION
     const processEmergencyBooking = async (e) => {
         e.preventDefault();
-        if (wallet.coins < 50) {
-            alert("You need at least 50 coins for Emergency Booking. Please recharge your wallet.");
+        
+        // 👑 VIP Check
+        const isVipUser = activeSubscription?.type === 'VIP';
+        const emergencyCost = isVipUser ? 0 : 50;
+
+        if (wallet.coins < emergencyCost) {
+            alert(`You need at least ${emergencyCost} coins for Emergency Booking. Please recharge your wallet.`);
             setShowEmergencyModal(false);
             setShowWalletModal(true);
             return;
@@ -3186,12 +3246,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                     <h2 style={{ color: '#f39c12', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🤝 Invite Family</h2>
                                                     <button onClick={() => setShowFamilyShareModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#333', cursor: 'pointer' }}>✖</button>
                                                 </div>
-                                                <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Share this album selection folder with a family member so they can also select their favorite photos. <strong>Cost: 10 Coins per invite.</strong></p>
+                                                <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>
+                                                    Share this album selection folder with a family member so they can also select their favorite photos. 
+                                                    <strong>Cost: {activeSubscription?.type === 'VIP' ? 'FREE (VIP)' : '10 Coins per invite'}.</strong>
+                                                </p>
                                                 
                                                 <form onSubmit={async (e) => {
                                                     e.preventDefault();
-                                                    if(wallet.coins < 10) {
-                                                        alert("Not enough coins! You need 10 coins to invite family.");
+                                                    const isVipUser = activeSubscription?.type === 'VIP';
+                                                    const inviteCost = isVipUser ? 0 : 10;
+
+                                                    if(wallet.coins < inviteCost) {
+                                                        alert(`Not enough coins! You need ${inviteCost} coins to invite family.`);
                                                         setShowFamilyShareModal(false);
                                                         setShowWalletModal(true);
                                                         return;
@@ -3207,7 +3273,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                             senderMobile: syncUser.mobile,
                                                             familyMobile: familyShareForm.mobile,
                                                             nickname: familyShareForm.nickname,
-                                                            cost: 10
+                                                            cost: inviteCost
                                                         }, { headers: { 'Authorization': `Bearer ${token}` } });
 
                                                         if (res.data.success) {
@@ -3238,8 +3304,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                                     <div style={{ background: '#fcf3cf', padding: '10px', borderRadius: '8px', fontSize: '12px', color: '#d4ac0d', fontWeight: 'bold' }}>
                                                         Wallet Balance: 🪙 {wallet.coins} Coins
                                                     </div>
-                                                    <button type="submit" disabled={loading} style={{ background: wallet.coins >= 10 ? '#f39c12' : '#ccc', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: wallet.coins >= 10 && !loading ? 'pointer' : 'not-allowed' }}>
-                                                        {loading ? 'Processing...' : 'Pay 10 Coins & Invite'}
+                                                    <button type="submit" disabled={loading} style={{ background: (activeSubscription?.type === 'VIP' || wallet.coins >= 10) ? '#f39c12' : '#ccc', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: (activeSubscription?.type === 'VIP' || wallet.coins >= 10) && !loading ? 'pointer' : 'not-allowed' }}>
+                                                        {loading ? 'Processing...' : (activeSubscription?.type === 'VIP' ? 'Invite For Free (VIP) 🤝' : 'Pay 10 Coins & Invite')}
                                                     </button>
                                                 </form>
                                             </div>
@@ -3672,7 +3738,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             <h2 style={{ color: '#e74c3c', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>🚨 Emergency Booking</h2>
                             <button onClick={() => setShowEmergencyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', color: '#333', cursor: 'pointer' }}>✖</button>
                         </div>
-                        <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Instantly connect with our customer care for urgent booking requests. Cost: <strong>50 Coins</strong>.</p>
+                        <p style={{ color: '#555', fontSize: '13px', marginBottom: '20px' }}>Instantly connect with our customer care for urgent booking requests. Cost: <strong>{activeSubscription?.type === 'VIP' ? 'FREE (VIP)' : '50 Coins'}</strong>.</p>
                         
                         <form onSubmit={processEmergencyBooking} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                             <input 
@@ -3692,7 +3758,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             </div>
 
                             <button type="submit" disabled={loading} style={{ background: '#e74c3c', color: '#fff', border: 'none', padding: '15px', borderRadius: '10px', fontSize: '15px', fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                {loading ? 'Fetching GPS & Connecting...' : 'Pay 50 Coins & Call Now 📞'}
+                                {loading ? 'Fetching GPS & Connecting...' : (activeSubscription?.type === 'VIP' ? 'Call Now (FREE) 📞' : 'Pay 50 Coins & Call Now 📞')}
                             </button>
                         </form>
                     </div>
@@ -3887,16 +3953,24 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                         </button>
                                     </div>
                                     
-                                    {/* Default AD Watch Card */}
-                                    <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>
-                                            <div style={{ color: '#2ecc71', fontSize: '12px', fontWeight: 'bold' }}>Reward: +1 Coin</div>
+                                    {/* Default AD Watch Card (HIDDEN FOR VIP) */}
+                                    {activeSubscription?.type !== 'VIP' ? (
+                                        <div style={{ background: '#0f172a', border: '1px solid #2ecc71', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>🎬 Watch Short Ad</div>
+                                                <div style={{ color: '#2ecc71', fontSize: '12px', fontWeight: 'bold' }}>Reward: +1 Coin</div>
+                                            </div>
+                                            <button onClick={startWatchAdFlow} disabled={adLoading || loading} style={{ background: 'transparent', border: '2px solid #2ecc71', color: '#2ecc71', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                                {adLoading ? '🍿 Loading...' : 'Watch Now'}
+                                            </button>
                                         </div>
-                                        <button onClick={startWatchAdFlow} disabled={adLoading || loading} style={{ background: 'transparent', border: '2px solid #2ecc71', color: '#2ecc71', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                            {adLoading ? '🍿 Loading...' : 'Watch Now'}
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <div style={{ background: '#1a1a2e', border: '1px dashed #f1c40f', borderRadius: '15px', padding: '15px', textAlign: 'center' }}>
+                                            <span style={{ fontSize: '24px' }}>🛡️</span>
+                                            <div style={{ color: '#f1c40f', fontSize: '14px', fontWeight: 'bold', marginTop: '5px' }}>Ad-Free Experience Active</div>
+                                            <div style={{ color: '#aaa', fontSize: '11px', marginTop: '5px' }}>As a VIP, you enjoy the app without any ads!</div>
+                                        </div>
+                                    )}
 
                                     {/* Admin Mini Events */}
                                     {miniEvents.map((ev, idx) => {
@@ -4399,31 +4473,43 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             {/* 🔥 NATIVE BOTTOM NAV: Flex Item at bottom */}
             {!activeSelectionProject && (
             <nav className="bottom-nav-bar" style={{ 
-                flexShrink: 0, /* 🔥 FIX: बॉटम बार कभी नहीं छुपेगा */
-                display: 'flex', justifyContent: 'space-around', padding: '10px 5px',
-                width: '100%', 
-                background: 'rgba(15, 23, 42, 0.98)', 
-                borderTop: '1px solid rgba(255, 255, 255, 0.05)', zIndex: 50, boxSizing: 'border-box'
-            }}>
-                <button className={`nav-item ${currentTab === 'HOME' || currentTab === 'SELECTIONS' ? 'active' : ''}`} onClick={() => { setCurrentTab('HOME'); setActiveFolder(null); setActiveSubFolder(null); setMediaFilter('ALL'); setIsSelectionMode(false); setSelectedMediaFiles([]); }}>
-                    🏠<span>Home</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => setCurrentTab('SHARED')}>
-                    🔐<span>Shared</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => setCurrentTab('SERVICES')}>
-                    📸<span>Services</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => setCurrentTab('BOOKINGS')}>
-                    📅<span>Bookings</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setCurrentTab('HISTORY')}>
-                    📜<span>History</span>
-                </button>
-                <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => setCurrentTab('PROFILE')}>
-                    👤<span>{(editName || 'User').split(' ')[0]}</span>
-                </button>
-            </nav>
+                    flexShrink: 0, 
+                    display: 'flex', justifyContent: 'space-around', padding: '10px 5px',
+                    width: '100%', 
+                    background: 'rgba(15, 23, 42, 0.98)', 
+                    borderTop: '1px solid rgba(255, 255, 255, 0.05)', zIndex: 50, boxSizing: 'border-box'
+                }}>
+                    <button className={`nav-item ${currentTab === 'HOME' ? 'active' : ''}`} onClick={() => handleTabChange('HOME')}>
+                        🏠<span>Home</span>
+                    </button>
+                    <button className={`nav-item ${currentTab === 'SHARED' ? 'active' : ''}`} onClick={() => handleTabChange('SHARED')}>
+                        🔐<span>Shared</span>
+                    </button>
+                    <button className={`nav-item ${currentTab === 'SERVICES' ? 'active' : ''}`} onClick={() => handleTabChange('SERVICES')}>
+                        📸<span>Services</span>
+                    </button>
+                    <button className={`nav-item ${currentTab === 'BOOKINGS' ? 'active' : ''}`} onClick={() => handleTabChange('BOOKINGS')}>
+                        📅<span>Bookings</span>
+                    </button>
+                    <button className={`nav-item ${currentTab === 'HISTORY' ? 'active' : ''}`} onClick={() => handleTabChange('HISTORY')}>
+                        📜<span>History</span>
+                    </button>
+                    <button className={`nav-item ${currentTab === 'PROFILE' ? 'active' : ''}`} onClick={() => handleTabChange('PROFILE')}>
+                        👤<span>{(editName || 'User').split(' ')[0]}</span>
+                    </button>
+                </nav>
+            )}
+            {/* 🍞 TOAST NOTIFICATION UI */}
+            {toast.show && (
+                <div style={{
+                    position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+                    background: toast.type === 'success' ? '#2ecc71' : '#e74c3c',
+                    color: '#fff', padding: '12px 25px', borderRadius: '30px',
+                    zIndex: 9999999, fontWeight: 'bold', fontSize: '14px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.3)', animation: 'slideUp 0.3s ease-out'
+                }}>
+                    {toast.message}
+                </div>
             )}
         </div>
     );
