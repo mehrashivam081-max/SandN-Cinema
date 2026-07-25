@@ -169,15 +169,27 @@ app.use((req, res, next) => {
     next();
 });
 
-// 2. नार्मल CORS पैकेज (बैकअप के लिए)
+// 2. नार्मल CORS पैकेज (बैकअप के लिए) - Updated for React Native
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://mehrashivam081-max.github.io",
-        "https://snevio.com",
-        "https://www.snevio.com"
-    ],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like React Native apps, mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://mehrashivam081-max.github.io",
+            "https://snevio.com",
+            "https://www.snevio.com"
+        ];
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            // Allow all origins for mobile apps and other clients
+            callback(null, true);
+        }
+    },
     credentials: true
 }));
 
