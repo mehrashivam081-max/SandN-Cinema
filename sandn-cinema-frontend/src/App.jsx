@@ -15,12 +15,13 @@ import Refund from './pages/legal/Refund';
 import Shipping from './pages/legal/Shipping';
 import ContactUs from './pages/legal/ContactUs';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from './config';
+import { getValidToken } from './utils/auth';
 
 // 🔒 SMART GLOBAL AXIOS INTERCEPTOR (CORS & Cloudinary Safe)
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = getValidToken();
     
     // 🔥 THE FIX: Sirf tabhi Token bhejo jab request hamare Snevio Backend par jaa rahi ho
     if (token && config.url && config.url.includes('sandn-cinema-backend.onrender.com')) {
@@ -36,7 +37,7 @@ function App() {
   // ✅ CLEANED UP: SINGLE & SAFE SESSION MANAGER
   useEffect(() => {
     const verifyDigitalLock = async () => {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+      const token = getValidToken();
       
       // Agar token nahi hai to chup chap return ho jao, forcefully clear mat karo
       if (!token) return; 

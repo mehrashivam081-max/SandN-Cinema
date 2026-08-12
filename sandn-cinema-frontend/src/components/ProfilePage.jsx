@@ -5,7 +5,7 @@ import './ProfilePage.css';
 import profileImg from '../assets/snevio-logo.png'; 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
 
 const ProfilePage = ({ isOpen, onClose, onOpenService, onOpenAuth, onOpenRecovery }) => {
     const navigate = useNavigate(); // ✅ ADDED NAVIGATION SUPPORT

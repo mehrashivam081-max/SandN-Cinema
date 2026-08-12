@@ -6,14 +6,9 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import.
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-const SERVER_URL = import.meta.env.VITE_SERVER_URL;
-
-// ✅ SUPER TOKEN GRABBER (Security ke liye)
-const getValidToken = () => {
-    // 🛠️ FIX: Naye 'authToken' ko pehle uthayega, purane 'token' ke kachre ko ignore karega
-    return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-};
+import { API_BASE, SERVER_URL } from '../config';
+import { getValidToken } from '../utils/auth';
+import { isVideo, getCleanUrl } from '../utils/media';
 
 const OwnerDashboard = ({ user, onLogout }) => {
     // --- UI STATES ---
@@ -1142,37 +1137,6 @@ const handleEditFileUpload = async (e, isFolder = false) => {
     // ==========================================
     // 🚀 HELPERS
     // ==========================================
-    const isVideo = (filePath) => {
-        if (!filePath || typeof filePath !== 'string') return false;
-        if (filePath.includes('/video/upload/')) return true; 
-        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
-    };
-
-    // ✅ 100% SAFE & FAST IMAGE URL GENERATOR FOR ADMIN
-    const getCleanUrl = (fileData, isThumbnail = false) => {
-        try {
-            if (!fileData) return '';
-            let filePath = typeof fileData === 'object' ? (fileData.previewUrl || fileData.url || fileData.fileUrl) : fileData;
-            if (typeof filePath !== 'string' || filePath.trim() === '') return '';
-            if (filePath.startsWith('CINEMATIC::')) return filePath; 
-
-            // 🚀 Cloudinary Ultra-Compression
-            if (filePath.includes('cloudinary.com') && !filePath.includes('/video/upload')) {
-                const uploadIndex = filePath.indexOf('/upload/');
-                if (uploadIndex !== -1 && isThumbnail) {
-                    const baseUrl = filePath.slice(0, uploadIndex + 8);
-                    const imagePath = filePath.slice(uploadIndex + 8);
-                    return `${baseUrl}c_scale,w_400,q_auto,f_auto/${imagePath}`;
-                }
-                return filePath; 
-            }
-            if (filePath.startsWith('http')) return filePath; 
-            return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
-        } catch (error) {
-            return typeof fileData === 'string' && fileData.startsWith('http') ? fileData : '';
-        }
-    };
-
     const handleDpChange = (e) => {
         const file = e.target.files[0];
         if (file) {

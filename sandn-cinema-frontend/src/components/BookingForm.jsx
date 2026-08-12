@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './BookingForm.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
 
 const BookingForm = ({ onClose }) => {
     // --- FORM STATES ---

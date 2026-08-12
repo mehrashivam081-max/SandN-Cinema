@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './SignupPage.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
 
 const SignupPage = ({ onLoginClick, onSuccessLogin, onBack }) => {
     const navigate = useNavigate(); 
