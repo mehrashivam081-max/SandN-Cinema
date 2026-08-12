@@ -4,7 +4,7 @@ import './ForgotPassword.css'; // ✅ Apni nayi CSS file import ki
 
 
 // ✅ Live Backend URL
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
 
 const ForgotPassword = ({ onLoginClick, onBack }) => {
     const [step, setStep] = useState(1); // 1: Mobile, 2: OTP, 3: New Password

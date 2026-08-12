@@ -2,7 +2,8 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import '../styles/components.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
+import { getCleanUrl } from '../utils/media';
 
 const TrendingFeed = ({ type, onClose }) => {
     const title = type === 'trending' ? '🔥 Trending Now' : '🚀 Viral Content';
@@ -144,7 +145,6 @@ const TrendingFeed = ({ type, onClose }) => {
 
     // --- UTILS & INTERACTIONS ---
     const isVideo = (filename) => filename.match(/\.(mp4|mov|avi|wmv|webm)$/i);
-    const getCleanUrl = (filePath) => filePath.startsWith('http') ? filePath : `https://sandn-cinema.onrender.com/${filePath}`;
 
     const handleLike = (index) => {
         const newData = [...feedData];

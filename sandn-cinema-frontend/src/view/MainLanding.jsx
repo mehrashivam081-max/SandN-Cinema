@@ -6,7 +6,8 @@ import MobileView from './mobileview/MobileView';
 import axios from 'axios';
 
 const MOBILE_BREAKPOINT = 768;
-const API_BASE = import.meta.env.VITE_API_BASE; // ✅ Update if backend URL changes
+import { API_BASE } from '../config';
+import { getValidToken } from '../utils/auth';
 
 const MainLanding = () => {
   const width = useViewport();
@@ -55,7 +56,7 @@ const MainLanding = () => {
 
     const pollInterval = setInterval(async () => {
       try {
-        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        const token = getValidToken();
         if (!token) return;
 
         const res = await axios.get(`${API_BASE}/get-user-status`, {

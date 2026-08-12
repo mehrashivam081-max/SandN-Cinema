@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './UserDashboard.css'; // Purani styling use kar lenge
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-const SERVER_URL = import.meta.env.VITE_SERVER_URL;
+import { API_BASE } from '../config';
+import { getCleanUrl } from '../utils/media';
 
 const StudioPage = () => {
     const { studioName } = useParams();
@@ -35,12 +35,6 @@ const StudioPage = () => {
         };
         fetchStudioProfile();
     }, [studioName, navigate]);
-
-    const getCleanUrl = (filePath) => {
-        if (!filePath) return '';
-        if (filePath.startsWith('http')) return filePath; 
-        return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
-    };
 
     if (loading) return <div className="loading-state-vip" style={{height: '100vh', display:'flex', alignItems:'center', justifyContent:'center'}}>Loading Studio Profile...</div>;
     if (!studioData) return <div className="loading-state-vip">Studio Not Found</div>;

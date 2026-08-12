@@ -8,13 +8,9 @@ import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-const SERVER_URL = import.meta.env.VITE_SERVER_URL;
-
-// ✅ SUPER TOKEN GRABBER: Ye token ko securely fetch karega
-const getValidToken = () => {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
-};
+import { API_BASE, SERVER_URL } from '../config';
+import { getValidToken } from '../utils/auth';
+import { isCinematic, isVideo, getCleanUrl as getCleanMediaUrl } from '../utils/media';
 
 // 🌟 PREMIUM REUSABLE BACK BUTTON COMPONENT
 const BackButton = ({ onClick, label = "Back", color = "#fff", border = "rgba(255,255,255,0.3)" }) => (
@@ -568,7 +564,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const fetchSharedMedia = async (userMobile, isSilent = false) => {
         if (!isSilent) setFetchingShared(true); // 👈 Agar silent mode hai, toh loader nahi chalega
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+            const token = getValidToken();
             const res = await axios.post(`${API_BASE}/get-shared-media`, { mobile: userMobile }, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.data.success) {
                 setSharedWithMe(res.data.data.sharedWithMe || []);
@@ -605,56 +601,11 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     };
 
     // --- HELPERS ---
-    const isCinematic = (url) => typeof url === 'string' && url.startsWith('CINEMATIC::');
-
-    
-
-    // ✅ 100% SAFE & SUPER-FAST IMAGE URL GENERATOR (Auto Object/String Handler)
-    const getCleanUrl = (fileData, isThumbnail = false) => {
-        try {
-            if (!fileData) return '';
-            
-            // 1. SMART FIX: Agar Data Object hai (Selection Data), toh usme se URL nikal lo
-            let filePath = typeof fileData === 'object' ? (fileData.previewUrl || fileData.url || fileData.fileUrl) : fileData;
-            
-            // Agar fir bhi string nahi hai, toh blank return karo (Crash se bachane ke liye)
-            if (typeof filePath !== 'string' || filePath.trim() === '') return '';
-            
-            // 2. Cinematic Video (Skip)
-            if (filePath.startsWith('CINEMATIC::')) return filePath; 
-
-            // 3. 🚀 HIGH-SPEED CLOUDINARY COMPRESSION (50x Faster Loading)
-            if (filePath.includes('cloudinary.com') && !filePath.includes('/video/upload')) {
-                const uploadIndex = filePath.indexOf('/upload/');
-                // Agar list view/grid view me hai (thumbnail), tabhi compressed version mangao
-                if (uploadIndex !== -1 && isThumbnail) {
-                    const baseUrl = filePath.slice(0, uploadIndex + 8); // Up to '.../upload/'
-                    const imagePath = filePath.slice(uploadIndex + 8); // Rest of the path
-                    
-                    // w_500 = Width 500px karega
-                    // q_auto = Quality auto-adjust karega (data bachega)
-                    // f_auto = Browser ke hisab se WebP/AVIF fast format me bhejega
-                    return `${baseUrl}c_scale,w_500,q_auto,f_auto/${imagePath}`;
-                }
-                return filePath; // Original quality agar thumbnail nahi chahiye (Jaise full screen preview me)
-            }
-            
-            // 4. Absolute URL (ImgBB, AWS, Mega - already includes http)
-            if (filePath.startsWith('http')) return filePath; 
-
-            // 5. Relative URL (Local server storage)
-            return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
-
-        } catch (error) {
-            console.error("getCleanUrl error:", error, fileData);
-            // Fallback: Agar code fate toh jo mila wahi chipka do
-            return typeof fileData === 'string' && fileData.startsWith('http') ? fileData : '';
-        }
-    };
+    const getCleanUrl = (fileData, isThumbnail = false) => getCleanMediaUrl(fileData, isThumbnail, 500);
     const handleRevokeAccess = async (id) => {
         if (!window.confirm("Are you sure you want to revoke access? The user will no longer see this media.")) return;
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+            const token = getValidToken();
             const res = await axios.post(`${API_BASE}/revoke-media-access`, { id, mobile: syncUser.mobile }, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.data.success) {
                 alert("Access Revoked Successfully!");
@@ -700,15 +651,6 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         const mDisp = minutes < 10 ? `0${minutes}` : minutes;
         
         return `⏳ Locks in ${hDisp}h ${mDisp}m`;
-    };
-
-    // 🎥 VIDEO DETECTOR (OBJECT-SAFE FIXED)
-    const isVideo = (fileInput) => {
-        const filePath = typeof fileInput === 'object' ? (fileInput.url || fileInput.fileUrl) : fileInput;
-        if (!filePath || typeof filePath !== 'string') return false;
-        if (isCinematic(filePath)) return true;
-        if (filePath.includes('/video/upload/')) return true; 
-        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
     };
 
     // --- PROFILE HANDLERS ---
@@ -4155,7 +4097,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                             if (accessForm.receiverMobile.length !== 10) return alert("Enter valid 10-digit number!");
                             setLoading(true);
                             try {
-                                const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+                                const token = getValidToken();
                                 const res = await axios.post(`${API_BASE}/grant-media-access`, {
                                     senderMobile: syncUser.mobile,
                                     receiverMobile: accessForm.receiverMobile,

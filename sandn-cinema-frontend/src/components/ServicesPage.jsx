@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios'; // API call ke liye
 import './ServicesPage.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../config';
 
 const ServicesPage = ({ onBack }) => {
     // State to track which section is open

@@ -9,13 +9,9 @@ import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
 
-const API_BASE = import.meta.env.VITE_API_BASE;
-const SERVER_URL = import.meta.env.VITE_SERVER_URL;
-
-// ✅ SUPER TOKEN GRABBER: Ye 'token' aur 'authToken' dono ko check karega, kabhi Khali (null) nahi bhejega!
-const getValidToken = () => {
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
-};
+import { API_BASE, SERVER_URL } from '../config';
+import { getValidToken } from '../utils/auth';
+import { isVideo, getCleanUrl } from '../utils/media';
 
 const StudioDashboard = ({ user, onLogout }) => {
     // --- UI TABS STATES ---
@@ -1368,48 +1364,6 @@ const StudioDashboard = ({ user, onLogout }) => {
                     alert("⚠️ Your download has been paused for a while. Please resume to finish.");
                 }
             }, 600000); // 10 minutes warning
-        }
-    };
-
-    const isVideo = (filePath) => {
-        if (!filePath || typeof filePath !== 'string') return false;
-        // 👇 YE NAYI LINE ADD KARNI HAI 👇
-        if (filePath.startsWith('CINEMATIC::')) return true; 
-        
-        if (filePath.includes('/video/upload/')) return true; 
-        return filePath.match(/\.(mp4|webm|ogg|mov)$/i);
-    };
-
-    // ✅ 100% SAFE & FAST IMAGE URL GENERATOR
-    const getCleanUrl = (filePath, isThumbnail = false) => {
-        try {
-            if (!filePath || typeof filePath !== 'string') return '';
-            
-            // 1. Cinematic Video (Skip)
-            if (filePath.startsWith('CINEMATIC::')) return filePath; 
-
-            // 2. Cloudinary Auto-Compression (Magic Trick 🎩) - Safer Logic
-            if (filePath.includes('cloudinary.com') && !filePath.includes('/video/upload')) {
-                const uploadIndex = filePath.indexOf('/upload/');
-                // Agar URL mein '/upload/' hai aur thumb mangaya hai, tabhi transform karo
-                if (uploadIndex !== -1 && isThumbnail) {
-                    const baseUrl = filePath.slice(0, uploadIndex + 8); // Up to '.../upload/'
-                    const imagePath = filePath.slice(uploadIndex + 8); // Rest of the path
-                    return `${baseUrl}c_scale,w_400,q_auto,f_auto/${imagePath}`;
-                }
-                return filePath; // Full quality agar thumbnail nahi chahiye
-            }
-            
-            // 3. Absolute URL (already includes http)
-            if (filePath.startsWith('http')) return filePath; 
-
-            // 4. Relative URL (Local server storage)
-            return `${SERVER_URL}${filePath.replace(/\\/g, '/')}`; 
-
-        } catch (error) {
-            // Agar code fate, toh original URL return karo takki screen black na ho
-            console.error("getCleanUrl error:", error, filePath);
-            return typeof filePath === 'string' && filePath.startsWith('http') ? filePath : '';
         }
     };
 

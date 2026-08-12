@@ -18,7 +18,7 @@ import UserDashboard from '../../components/UserDashboard';
 import StudioDashboard from '../../StudioPanel/StudioDashboard';
 import OwnerDashboard from '../../AdminPanel/OwnerDashboard';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+import { API_BASE } from '../../config';
 
 const MobileView = ({
     viewState, setViewState, searchStep, setSearchStep,
