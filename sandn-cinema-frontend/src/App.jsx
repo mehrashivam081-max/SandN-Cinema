@@ -23,7 +23,7 @@ axios.interceptors.request.use(
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
     
     // 🔥 THE FIX: Sirf tabhi Token bhejo jab request hamare Snevio Backend par jaa rahi ho
-    if (token && config.url && config.url.includes('sandn-cinema-backend.onrender.com')) {
+    if (token && config.url && config.url.includes('/api/auth')) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
@@ -40,8 +40,6 @@ function App() {
       
       // Agar token nahi hai to chup chap return ho jao, forcefully clear mat karo
       if (!token) return; 
-
-      if (token === 'super_admin_bypass_token_999') return; 
 
       try {
         // 🔥 Sirf ek baar API call hogi, app crash nahi hoga
