@@ -708,7 +708,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
             try {
                 const res = await axios.get(`${API_BASE}/admin-get-all-selections`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
                 if (res.data.success) setAllSelections(res.data.data);
-            } catch(e) { console.log("Failed to load God View Selections"); }
+            } catch(e) { console.error("Failed to load God View Selections:", e); }
         };
         fetchAllSelections();
 
@@ -821,14 +821,14 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.get(`${API_BASE}/get-bookings`);
             if (res.data.success) setBookings(res.data.data);
-        } catch(e) { console.log("Failed to fetch bookings"); }
+        } catch(e) { console.error("Failed to fetch bookings:", e); }
     };
 
     const fetchCollabs = async () => {
         try {
             const res = await axios.get(`${API_BASE}/get-collabs`);
             if (res.data.success) setCollabRequests(res.data.data);
-        } catch(e) { console.log("Failed to fetch collabs"); }
+        } catch(e) { console.error("Failed to fetch collabs:", e); }
     };
 
     // ✅ FETCH PAYOUT REQUESTS
@@ -837,7 +837,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.get(`${API_BASE}/get-withdrawals`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if (res.data.success) setPayoutRequests(res.data.data);
-        } catch(e) { console.log("Failed to fetch payouts"); }
+        } catch(e) { console.error("Failed to fetch payouts:", e); }
         setFetchingPayouts(false);
     };
 
@@ -856,7 +856,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
     };
 
     const fetchServices = async () => { 
-        try { const res = await axios.get(`${API_BASE}/get-available-services`); if (res.data.success) setAvailableServices(res.data.data || []); } catch(e) {} 
+        try { const res = await axios.get(`${API_BASE}/get-available-services`); if (res.data.success) setAvailableServices(res.data.data || []); } catch(e) { console.error("Failed to fetch available services:", e); } 
     };
 
     const fetchAds = async () => {
@@ -864,7 +864,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.post(`${API_BASE}/get-targeted-ads`, { userLocation: '', userInterest: '' });
             if (res.data.success) setAdList(res.data.data || []);
-        } catch(e) { console.error("Failed to fetch ads"); }
+        } catch(e) { console.error("Failed to fetch ads:", e); }
         setFetchingAds(false);
     };
 
@@ -874,7 +874,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.get(`${API_BASE}/get-vacancies`);
             if (res.data.success) setVacancies(res.data.data);
-        } catch(e) { console.log("Failed to fetch jobs"); }
+        } catch(e) { console.error("Failed to fetch jobs:", e); }
     };
 
     // ☁️ STORAGE MANAGEMENT API CALLS
@@ -882,7 +882,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.get(`${API_BASE}/list-storage`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if (res.data.success) setStorageAccounts(res.data.data);
-        } catch(e) { console.log("Failed to fetch storage accounts"); }
+        } catch(e) { console.error("Failed to fetch storage accounts:", e); }
     };
 
     const handleAddStorage = async (e) => {
@@ -978,7 +978,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
         try {
             const res = await axios.get(`${API_BASE}/admin-get-subscription-plans`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if(res.data.success) setSubPlans(res.data.data);
-        } catch(e) { console.log("Failed to fetch sub plans"); }
+        } catch(e) { console.error("Failed to fetch sub plans:", e); }
     };
 
     // 👑 SUBSCRIPTION PLANS API CALLS (USERS)
@@ -989,7 +989,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
             if (res.data.success && res.data.data && res.data.data.userSubPlans) {
                 setUserSubPlans(res.data.data.userSubPlans);
             }
-        } catch(e) { console.log("Failed to fetch user sub plans"); }
+        } catch(e) { console.error("Failed to fetch user sub plans:", e); }
     };
 
     const handleSaveUserSubPlan = async (e) => {
@@ -2641,7 +2641,7 @@ const handleEditFileUpload = async (e, isFolder = false) => {
                                 try {
                                     const res = await axios.get(`${API_BASE}/admin-get-all-selections`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
                                     if (res.data.success) setAllSelections(res.data.data);
-                                } catch(e) { console.log("Failed to refresh"); }
+                                } catch(e) { console.error("Failed to refresh:", e); }
                             }} style={{background:'#8e44ad', color:'white', border:'none', padding:'8px 15px', borderRadius:'5px', cursor:'pointer'}}>🔄 Refresh Status</button>
                         </div>
                         <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>Monitor all active client selection projects running across your studio network.</p>
