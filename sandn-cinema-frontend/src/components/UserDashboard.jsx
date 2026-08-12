@@ -508,7 +508,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     
                     setTimeout(() => setRewardPopup({ show: false }), 4000);
                 }
-            } catch(e) { console.log("Daily reward check silently failed."); }
+            } catch(e) { console.error("Daily reward check failed:", e); }
         };
 
         checkDailyReward();
@@ -537,14 +537,14 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         try {
             const res = await axios.post(`${API_BASE}/get-notifications`, { mobile: userMobile });
             if (res.data.success) setNotifications(res.data.data);
-        } catch (e) { console.error("Notif Error"); }
+        } catch (e) { console.error("Notif Error:", e); }
     };
 
     const handleMarkNotificationsRead = async () => {
         try {
             await axios.post(`${API_BASE}/mark-notifications-read`, { mobile: syncUser.mobile });
             setNotifications(notifications.map(n => ({ ...n, isRead: true })));
-        } catch (e) {}
+        } catch (e) { console.error("Failed to mark notifications read:", e); }
     };
 
     const handleRedeemGiftCard = async (e) => {

@@ -202,7 +202,10 @@ app.use('/uploads', express.static('uploads'));
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
-    .catch(err => console.error("❌ DB Error:", err));
+    .catch(err => {
+        console.error("❌ DB Connection Failed:", err);
+        process.exit(1);
+    });
 
 // ==========================================
 // 🚀 1. EMAIL API FUNCTION (Brevo)
@@ -285,7 +288,7 @@ const sendUploadNotification = async (mobile, email, name) => {
             );
             console.log(`✅ Email Notification Sent to ${email}`);
         } catch (emailErr) {
-            console.log(`❌ Email Notification Failed for ${email}. It's okay, app won't crash.`);
+            console.error(`❌ Email Notification Failed for ${email}:`, emailErr.message);
         }
     }
 
@@ -310,7 +313,7 @@ const sendUploadNotification = async (mobile, email, name) => {
                 throw new Error("SMS API response was not successful.");
             }
         } catch (e2) {
-            console.log(`❌ SMS also failed. App continues safely.`);
+            console.error(`❌ SMS also failed for ${mobile}:`, e2.message);
         }
     }
 };
@@ -374,7 +377,12 @@ const findAccount = async (identifier, roleFilter = null) => {
         acc = await Admin.findOne(query).lean();
         if (acc) return { type: 'ADMIN', data: acc };
     } catch(e) {
-        console.error("DB Cast Error Prevented: ", e.message);
+        if (e.name === 'CastError') {
+            console.error("DB Cast Error Prevented: ", e.message);
+            return null;
+        }
+        console.error("findAccount DB Error:", e);
+        throw e;
     }
     
     return null;
@@ -456,7 +464,8 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 } else {
                     return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
-            } catch (wsErr) { 
+            } catch (wsErr) {
+                console.error("/api/auth/check-send-otp error:", wsErr);
                 return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
@@ -468,7 +477,8 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
                 } else {
                     return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
-            } catch (smsErr) { 
+            } catch (smsErr) {
+                console.error("/api/auth/check-send-otp error:", smsErr);
                 return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
@@ -502,7 +512,8 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                     </div>`
                 );
                 return res.json({ success: true, message: "OTP Sent to your Email." });
-            } catch (emailErr) { 
+            } catch (emailErr) {
+                console.error("/api/auth/send-signup-otp error:", emailErr);
                 return res.json({ success: false, message: "Email Error. Try SMS." });
             }
         } 
@@ -514,7 +525,8 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 } else {
                     return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
                 }
-            } catch (wsErr) { 
+            } catch (wsErr) {
+                console.error("/api/auth/send-signup-otp error:", wsErr);
                 return res.json({ success: false, message: "WhatsApp service is currently unavailable. Please try using Email ✉️." });
             }
         } 
@@ -526,11 +538,12 @@ app.post('/api/auth/send-signup-otp', async (req, res) => {
                 } else {
                     return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
                 }
-            } catch (smsErr) { 
+            } catch (smsErr) {
+                console.error("/api/auth/send-signup-otp error:", smsErr);
                 return res.json({ success: false, message: "SMS service is currently unavailable. Please try using Email ✉️." });
             }
         }
-    } catch (e) { res.status(500).json({ error: "Failed to send Signup OTP" }); }
+    } catch (e) { console.error("/api/auth/send-signup-otp error:", e); res.status(500).json({ error: "Failed to send Signup OTP" }); }
 });
 
 // 3. Signup with OTP Verification 
@@ -621,6 +634,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
         res.json({ success: true, message: appliedReferrer ? "Signup successful with Bonus!" : "Signup successful!" });
     } catch (e) {
+        console.error("/api/auth/signup error:", e);
         res.status(500).json({ success: false, message: e.message });
     }
 });
@@ -734,7 +748,7 @@ app.post('/api/auth/create-password', async (req, res) => {
         } else {
             res.json({ success: false, message: "Account not found in this section" });
         }
-    } catch (e) { res.status(500).json({ success: false, message: "Update Failed" }); }
+    } catch (e) { console.error("/api/auth/create-password error:", e); res.status(500).json({ success: false, message: "Update Failed" }); }
 });
 
 // ==========================================
@@ -838,7 +852,7 @@ app.post('/api/auth/login', async (req, res) => {
         } else {
             res.json({ success: false, message: "Invalid Password or Role" });
         }
-    } catch (e) { res.status(500).json({ success: false, message: "Login Error" }); }
+    } catch (e) { console.error("/api/auth/login error:", e); res.status(500).json({ success: false, message: "Login Error" }); }
 });
 
 // 🔒 NEW: Verify Session (Anti-Hack Route)
@@ -1031,7 +1045,8 @@ app.post('/api/auth/update-cloud-routing', authenticateToken, async (req, res) =
             { upsert: true, strict: false } 
         );
         res.json({ success: true, message: "✅ Smart Cloud Routing Rules Saved Permanently!" });
-    } catch (e) { 
+    } catch (e) {
+        console.error("/api/auth/update-cloud-routing error:", e);
         res.status(500).json({ success: false, message: e.message }); 
     }
 });
@@ -1568,7 +1583,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
                         </div>
                     </div>
                 `;
-                sendBrevoEmail(uploader.email, `📊 Upload Report: ${req.body.folderName || 'Project'}`, uploaderHtml).catch(()=>{});
+                sendBrevoEmail(uploader.email, `📊 Upload Report: ${req.body.folderName || 'Project'}`, uploaderHtml).catch(err => console.error("Notification email failed:", err.message));
             }
         }
 
@@ -1585,7 +1600,7 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
             const dateStr = new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' ' + new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata', hour: '2-digit', minute:'2-digit'});
             const uploader = await Studio.findOneAndUpdate({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Failed Upload to ${req.body.mobile}`, amount: `❌ Error`, date: dateStr, type: "upload" }], $position: 0 } }});
             if (uploader && uploader.email && !uploader.email.includes('dummy_')) {
-                sendBrevoEmail(uploader.email, `❌ Upload Failed: ${finalFolderName || 'Data'}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #e74c3c; border-radius: 8px;"><h2 style="color: #e74c3c;">Upload Failed!</h2><p>Failed to send data to ${req.body.mobile}. Error: ${e.message}</p></div>`).catch(()=>{});
+                sendBrevoEmail(uploader.email, `❌ Upload Failed: ${finalFolderName || 'Data'}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #e74c3c; border-radius: 8px;"><h2 style="color: #e74c3c;">Upload Failed!</h2><p>Failed to send data to ${req.body.mobile}. Error: ${e.message}</p></div>`).catch(err => console.error("Notification email failed:", err.message));
             }
         }
 
@@ -1610,6 +1625,7 @@ app.post('/api/auth/list-accounts', async (req, res) => {
             res.json({ success: false, message: "Unauthorized access" });
         }
     } catch (error) {
+        console.error("/api/auth/list-accounts error:", error);
         res.status(500).json({ success: false, message: "Failed to fetch list" });
     }
 });
@@ -1628,6 +1644,7 @@ app.post('/api/auth/delete-account', authenticateToken, async (req, res) => {
         }
         res.json({ success: true, message: "Account deleted successfully!" });
     } catch (error) {
+        console.error("/api/auth/delete-account error:", error);
         res.status(500).json({ success: false, message: "Failed to delete account" });
     }
 });
@@ -1673,6 +1690,7 @@ app.post('/api/auth/search-account', async (req, res) => {
             res.json({ success: false, message: "Account not found" });
         }
     } catch (e) {
+        console.error("/api/auth/search-account error:", e);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
@@ -1713,7 +1731,7 @@ app.post('/api/auth/approve-studio-account', authenticateToken, async (req, res)
                     <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Welcome to the Snevio Network!</p>
                 </div>
             `;
-            sendBrevoEmail(studio.email, "Your Studio Account is Approved! - Snevio", htmlContent).catch(()=>console.log("Welcome Email Failed"));
+            sendBrevoEmail(studio.email, "Your Studio Account is Approved! - Snevio", htmlContent).catch(err => console.error("Welcome Email Failed:", err.message));
         }
 
         res.json({ success: true, message: isApproved ? "Studio Account Approved! Email Sent." : "Studio Account Access Revoked." });
@@ -1737,7 +1755,8 @@ app.post('/api/auth/update-studio-approval', async (req, res) => {
         } else {
             res.json({ success: false, message: "Studio not found" });
         }
-    } catch (e) { 
+    } catch (e) {
+        console.error("/api/auth/update-studio-approval error:", e);
         res.status(500).json({ success: false, message: "Server error updating approval." }); 
     }
 });
@@ -1777,7 +1796,8 @@ app.post('/api/auth/add-subadmin', async (req, res) => {
         
         await Admin.create({ name, mobile: cleanMobile, email, password, role: 'ADMIN' });
         res.json({ success: true, message: "Sub-Admin created successfully." });
-    } catch (e) { 
+    } catch (e) {
+        console.error("/api/auth/add-subadmin error:", e);
         res.status(500).json({ success: false, message: e.message }); 
     }
 });
@@ -1797,7 +1817,8 @@ app.post('/api/auth/update-studio-profile', async (req, res) => {
         } else {
             res.json({ success: false, message: "Studio not found" });
         }
-    } catch (e) { 
+    } catch (e) {
+        console.error("/api/auth/update-studio-profile error:", e);
         res.status(500).json({ success: false, message: "Server error updating profile." }); 
     }
 });
@@ -1831,6 +1852,7 @@ app.get('/api/auth/get-platform-settings', async (req, res) => {
             res.json({ success: true, data: null }); 
         }
     } catch (e) {
+        console.error("/api/auth/get-platform-settings error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch settings." });
     }
 });
@@ -1896,6 +1918,7 @@ app.get('/api/auth/get-services', async (req, res) => {
         ];
         res.json({ success: true, services: defaultServices });
     } catch (e) {
+        console.error("/api/auth/get-services error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch services." });
     }
 });
@@ -1936,6 +1959,7 @@ app.get('/api/auth/get-bookings', async (req, res) => {
         const bookings = await Booking.find().sort({ createdAt: -1 }); 
         res.json({ success: true, data: bookings });
     } catch (e) {
+        console.error("/api/auth/get-bookings error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch bookings." });
     }
 });
@@ -1954,6 +1978,7 @@ app.post('/api/auth/update-booking-status', async (req, res) => {
         await Booking.findByIdAndUpdate(bookingId, updateData);
         res.json({ success: true, message: `Booking marked as ${status}!` });
     } catch (e) {
+        console.error("/api/auth/update-booking-status error:", e);
         res.status(500).json({ success: false, message: "Failed to update booking." });
     }
 });
@@ -1969,6 +1994,7 @@ app.post('/api/auth/create-collab', async (req, res) => {
         const newCollab = await CollabRequest.create({ name, brand, email });
         res.json({ success: true, message: "Request sent successfully!", data: newCollab });
     } catch (e) {
+        console.error("/api/auth/create-collab error:", e);
         res.status(500).json({ success: false, message: "Failed to submit request." });
     }
 });
@@ -1978,6 +2004,7 @@ app.get('/api/auth/get-collabs', async (req, res) => {
         const collabs = await CollabRequest.find().sort({ createdAt: -1 }); 
         res.json({ success: true, data: collabs });
     } catch (e) {
+        console.error("/api/auth/get-collabs error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch collabs." });
     }
 });
@@ -2002,11 +2029,12 @@ app.post('/api/auth/update-collab-status', async (req, res) => {
                         </div>
                     </div>`
                 );
-            } catch(err) { console.log("Email failed for collab, but DB updated."); }
+            } catch(err) { console.error("Email failed for collab, but DB updated:", err.message); }
         }
 
         res.json({ success: true, message: `Collab marked as ${status}!` });
     } catch (e) {
+        console.error("/api/auth/update-collab-status error:", e);
         res.status(500).json({ success: false, message: "Failed to update collab." });
     }
 });
@@ -2194,7 +2222,7 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
                     );
                 }
             } catch (err) { 
-                console.log("Failed to credit studio coins"); 
+                console.error("Failed to credit studio coins:", err);
             }
         }
 
@@ -2220,11 +2248,12 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
                     <p style="font-size: 11px; color: #999; text-align: center;">Thank you for choosing Snevio.</p>
                 </div>
             `;
-            sendBrevoEmail(targetEmail, subject, htmlContent).catch(e => console.log("Email failed, but unlock success"));
+            sendBrevoEmail(targetEmail, subject, htmlContent).catch(err => console.error("Email failed, but unlock success:", err.message));
         }
 
         res.json({ success: true, wallet });
     } catch (e) {
+        console.error("/api/auth/deduct-coins-batch error:", e);
         res.status(500).json({ success: false, message: "Server error during purchase" });
     }
 });
@@ -2621,6 +2650,7 @@ app.get('/api/auth/get-available-services', async (req, res) => {
         const services = await Service.find().sort({ createdAt: -1 });
         res.json({ success: true, data: services });
     } catch (e) {
+        console.error("/api/auth/get-available-services error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch services." });
     }
 });
@@ -2630,6 +2660,7 @@ app.post('/api/auth/delete-service', async (req, res) => {
         await Service.findByIdAndDelete(req.body.id);
         res.json({ success: true, message: "Service removed from App successfully!" });
     } catch (e) {
+        console.error("/api/auth/delete-service error:", e);
         res.status(500).json({ success: false, message: "Failed to delete service." });
     }
 });
@@ -2683,6 +2714,7 @@ app.post('/api/auth/get-user-services', async (req, res) => {
         const userBookings = await Booking.find({ mobile: mobile }).sort({ createdAt: -1 });
         res.json({ success: true, data: userBookings });
     } catch (e) {
+        console.error("/api/auth/get-user-services error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch user bookings." });
     }
 });
@@ -2772,7 +2804,7 @@ app.post('/api/auth/emergency-booking', async (req, res) => {
             process.env.ADMIN_EMAIL || process.env.EMAIL_USER, 
             "🚨 EMERGENCY BOOKING RECEIVED", 
             `<h2 style="color:red;">Emergency Request!</h2><p>Client: ${emergencyBooking.name} (${mobile})</p><p>Location: ${location}</p><p>Reason: ${reason}</p>`
-        ).catch(() => console.log("Admin Emergency Email failed"));
+        ).catch(err => console.error("Admin Emergency Email failed:", err.message));
 
         // ⚡ SOCKET FIRE: Admin ko EMERGENCY alert bhejo!
         const io = req.app.get('io');
@@ -2830,7 +2862,7 @@ app.post('/api/auth/send-proposal', async (req, res) => {
                     <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px;">Thank you for choosing Snevio.</p>
                 </div>
             `;
-            sendBrevoEmail(booking.email, "Action Required: Your Custom Booking Proposal", htmlContent).catch(()=>console.log("Proposal Email Failed"));
+            sendBrevoEmail(booking.email, "Action Required: Your Custom Booking Proposal", htmlContent).catch(err => console.error("Proposal Email Failed:", err.message));
         }
 
         res.json({ success: true, message: "Proposal sent successfully to user!", data: booking });
@@ -2906,7 +2938,7 @@ app.post('/api/auth/accept-proposal', async (req, res) => {
                     </div>
                 </div>
             `;
-            sendBrevoEmail(booking.email, "Booking Confirmed - Snevio", htmlContent).catch(()=>console.log("Confirmation Email Failed"));
+            sendBrevoEmail(booking.email, "Booking Confirmed - Snevio", htmlContent).catch(err => console.error("Confirmation Email Failed:", err.message));
         }
 
         res.json({ success: true, message: "Advance Paid! Booking Officially Confirmed.", data: booking });
@@ -2980,7 +3012,7 @@ app.post('/api/auth/upload-feed-post', authenticateToken, async (req, res) => {
                         </div>
                     </div>
                 `;
-                emails.forEach(email => sendBrevoEmail(email, subject, htmlContent).catch(()=>{}));
+                emails.forEach(email => sendBrevoEmail(email, subject, htmlContent).catch(err => console.error("Notification email failed:", err.message)));
             }
         });
 
@@ -3004,6 +3036,7 @@ app.get('/api/auth/get-public-feed', async (req, res) => {
         const posts = await FeedPost.find(query).sort({ createdAt: -1 });
         res.json({ success: true, data: posts });
     } catch (err) {
+        console.error("/api/auth/get-public-feed error:", err);
         res.status(500).json({ success: false, message: "Failed to fetch feed." });
     }
 });
@@ -3015,7 +3048,8 @@ app.post('/api/auth/view-feed-post', async (req, res) => {
         await FeedPost.findByIdAndUpdate(postId, { $inc: { views: 1 } });
         res.json({ success: true });
     } catch (e) {
-        res.json({ success: false });
+        console.error("/api/auth/view-feed-post error:", e);
+        res.status(500).json({ success: false });
     }
 });
 
@@ -3110,6 +3144,7 @@ app.post('/api/auth/get-targeted-ads', async (req, res) => {
 
         res.json({ success: true, data: targetedAds.length > 0 ? targetedAds : activeAds });
     } catch (err) {
+        console.error("/api/auth/get-targeted-ads error:", err);
         res.status(500).json({ success: false, message: "Failed to fetch ads." });
     }
 });
@@ -3127,7 +3162,8 @@ app.post('/api/auth/track-ad-view', async (req, res) => {
         }
         res.json({ success: true });
     } catch (e) {
-        res.json({ success: false });
+        console.error("/api/auth/track-ad-view error:", e);
+        res.status(500).json({ success: false });
     }
 });
 
@@ -3137,6 +3173,7 @@ app.post('/api/auth/delete-ad', async (req, res) => {
         await Advertisement.findByIdAndDelete(req.body.adId);
         res.json({ success: true, message: "Ad Permanently Deleted from Cloud DB." });
     } catch (e) {
+        console.error("/api/auth/delete-ad error:", e);
         res.status(500).json({ success: false, message: "Failed to delete ad." });
     }
 });
@@ -3285,7 +3322,7 @@ app.post('/api/auth/grant-media-access', authenticateToken, async (req, res) => 
                     <a href="${WEBSITE_URL}" style="background: #3498db; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Login to View</a>
                 </div>
             `;
-            sendBrevoEmail(receiverAcc.data.email, subject, html).catch(()=>console.log("Email failed"));
+            sendBrevoEmail(receiverAcc.data.email, subject, html).catch(err => console.error("Shared media email failed:", err.message));
         }
 
         res.json({ success: true, message: `Access granted securely for ${hours} hours! Notification sent.` });
@@ -3308,6 +3345,7 @@ app.post('/api/auth/get-shared-media', authenticateToken, async (req, res) => {
         
         res.json({ success: true, data: { sharedWithMe, sharedByMe } });
     } catch (e) {
+        console.error("/api/auth/get-shared-media error:", e);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
@@ -3320,6 +3358,7 @@ app.post('/api/auth/revoke-media-access', authenticateToken, async (req, res) =>
         await SharedMedia.findOneAndDelete({ _id: id, senderMobile: mobile });
         res.json({ success: true, message: "Access revoked successfully!" });
     } catch (e) {
+        console.error("/api/auth/revoke-media-access error:", e);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 });
@@ -3334,6 +3373,7 @@ app.post('/api/auth/add-vacancy', async (req, res) => {
         const newJob = await Vacancy.create(req.body);
         res.json({ success: true, message: "Job Vacancy posted successfully!", data: newJob });
     } catch (e) {
+        console.error("/api/auth/add-vacancy error:", e);
         res.status(500).json({ success: false, message: "Failed to post job." });
     }
 });
@@ -3345,6 +3385,7 @@ app.get('/api/auth/get-vacancies', async (req, res) => {
         const jobs = await Vacancy.find({ isActive: true }).sort({ createdAt: -1 });
         res.json({ success: true, data: jobs });
     } catch (e) {
+        console.error("/api/auth/get-vacancies error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch vacancies." });
     }
 });
@@ -3355,6 +3396,7 @@ app.post('/api/auth/delete-vacancy', async (req, res) => {
         await Vacancy.findByIdAndDelete(req.body.id);
         res.json({ success: true, message: "Job Vacancy removed!" });
     } catch (e) {
+        console.error("/api/auth/delete-vacancy error:", e);
         res.status(500).json({ success: false, message: "Failed to delete vacancy." });
     }
 });
@@ -3379,6 +3421,7 @@ app.post('/api/auth/add-storage', authenticateToken, async (req, res) => {
 
         res.json({ success: true, message: 'Storage Account Added Successfully!', data: newStorage });
     } catch (error) {
+        console.error("/api/auth/add-storage error:", error);
         res.status(500).json({ success: false, message: "Failed to add storage account." });
     }
 });
@@ -3399,6 +3442,7 @@ app.post('/api/auth/update-storage', authenticateToken, async (req, res) => {
 
         res.json({ success: true, message: 'Storage Updated Successfully!' });
     } catch (error) {
+        console.error("/api/auth/update-storage error:", error);
         res.status(500).json({ success: false, message: "Update failed." });
     }
 });
@@ -3409,6 +3453,7 @@ app.get('/api/auth/list-storage', authenticateToken, async (req, res) => {
         const accounts = await StorageConfig.find().sort({ isActive: -1, createdAt: -1 });
         res.json({ success: true, data: accounts });
     } catch (error) {
+        console.error("/api/auth/list-storage error:", error);
         res.status(500).json({ success: false, message: "Failed to fetch storage configs." });
     }
 });
@@ -3423,6 +3468,7 @@ app.post('/api/auth/set-active-storage', authenticateToken, async (req, res) => 
         
         res.json({ success: true, message: 'Active Storage Updated!' });
     } catch (error) {
+        console.error("/api/auth/set-active-storage error:", error);
         res.status(500).json({ success: false, message: "Failed to update active storage." });
     }
 });
@@ -3440,6 +3486,7 @@ app.post('/api/auth/delete-storage', authenticateToken, async (req, res) => {
         await StorageConfig.findByIdAndDelete(accountId);
         res.json({ success: true, message: 'Storage Configuration Removed!' });
     } catch (error) {
+        console.error("/api/auth/delete-storage error:", error);
         res.status(500).json({ success: false, message: "Failed to delete storage." });
     }
 });
@@ -3485,6 +3532,7 @@ app.get('/api/auth/get-subscription-plans', async (req, res) => {
         const plans = await SubscriptionPlan.find({ isActive: true }).sort({ storageLimitGB: 1 });
         res.json({ success: true, data: plans });
     } catch (e) {
+        console.error("/api/auth/get-subscription-plans error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch plans." });
     }
 });
@@ -3496,6 +3544,7 @@ app.get('/api/auth/admin-get-subscription-plans', authenticateToken, async (req,
         const plans = await SubscriptionPlan.find().sort({ storageLimitGB: 1 });
         res.json({ success: true, data: plans });
     } catch (e) {
+        console.error("/api/auth/admin-get-subscription-plans error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch plans." });
     }
 });
@@ -3507,6 +3556,7 @@ app.post('/api/auth/delete-subscription-plan', authenticateToken, async (req, re
         await SubscriptionPlan.findByIdAndDelete(req.body.id);
         res.json({ success: true, message: "Plan deleted permanently." });
     } catch (e) {
+        console.error("/api/auth/delete-subscription-plan error:", e);
         res.status(500).json({ success: false, message: "Failed to delete plan." });
     }
 });
@@ -3645,7 +3695,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
                     <p style="font-size: 11px; color: #999; text-align: center; margin-top: 30px; border-top: 1px solid #eee; padding-top: 15px;">Powered by Snevio Cloud</p>
                 </div>
             `;
-            sendBrevoEmail(clientEmail, `Album Selection Request: ${folderName}`, htmlContent).catch(e => console.log("Selection email failed"));
+            sendBrevoEmail(clientEmail, `Album Selection Request: ${folderName}`, htmlContent).catch(err => console.error("Selection email failed:", err.message));
         }
 
         // ✅ RECORD SELECTION CREATION HISTORY (SMART ROUTING)
@@ -3669,7 +3719,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
         if (req.user && req.user.role === 'STUDIO') {
             const uploader = await Studio.findOne({ mobile: req.user.mobile });
             if (uploader && uploader.email && !uploader.email.includes('dummy_')) {
-                sendBrevoEmail(uploader.email, `✅ Selection Upload Successful: ${folderName}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #2ecc71; border-radius: 8px;"><h2 style="color: #2ecc71;">Smart Album Uploaded!</h2><p>Selection link sent successfully to ${clientMobile}.</p></div>`).catch(()=>{});
+                sendBrevoEmail(uploader.email, `✅ Selection Upload Successful: ${folderName}`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #2ecc71; border-radius: 8px;"><h2 style="color: #2ecc71;">Smart Album Uploaded!</h2><p>Selection link sent successfully to ${clientMobile}.</p></div>`).catch(err => console.error("Notification email failed:", err.message));
             }
         }
 
@@ -3681,7 +3731,7 @@ app.post('/api/auth/create-album-selection', authenticateToken, async (req, res)
             const dateStr = new Date().toLocaleDateString('en-IN', {timeZone: 'Asia/Kolkata'}) + ' ' + new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata', hour: '2-digit', minute:'2-digit'});
             const uploader = await Studio.findOneAndUpdate({ mobile: req.user.mobile }, { $push: { "wallet.history": { $each: [{ action: `Failed Selection Upload for ${req.body.clientMobile}`, amount: `❌ Error`, date: dateStr, type: "upload" }], $position: 0 } }});
             if (uploader && uploader.email && !uploader.email.includes('dummy_')) {
-                sendBrevoEmail(uploader.email, `❌ Selection Upload Failed`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #e74c3c; border-radius: 8px;"><h2 style="color: #e74c3c;">Upload Failed!</h2><p>Failed to send selection album to ${req.body.clientMobile}. Error: ${e.message}</p></div>`).catch(()=>{});
+                sendBrevoEmail(uploader.email, `❌ Selection Upload Failed`, `<div style="font-family: Arial; padding: 20px; border: 1px solid #e74c3c; border-radius: 8px;"><h2 style="color: #e74c3c;">Upload Failed!</h2><p>Failed to send selection album to ${req.body.clientMobile}. Error: ${e.message}</p></div>`).catch(err => console.error("Notification email failed:", err.message));
             }
         }
         res.status(500).json({ success: false, message: "Server error creating selection." });
@@ -3741,6 +3791,7 @@ app.post('/api/auth/move-image-album', authenticateToken, async (req, res) => {
 
         res.json({ success: true, message: `Moved to ${targetAlbum}` });
     } catch (e) {
+        console.error("/api/auth/move-image-album error:", e);
         res.status(500).json({ success: false, message: e.message });
     }
 });
@@ -3771,6 +3822,7 @@ app.post('/api/auth/get-user-selections', authenticateToken, async (req, res) =>
 
         res.json({ success: true, data: lightweightSelections });
     } catch (e) {
+        console.error("/api/auth/get-user-selections error:", e);
         res.status(500).json({ success: false, message: "Failed to fetch user selections." });
     }
 });
@@ -3788,6 +3840,7 @@ app.post('/api/auth/get-selection-folder-data', authenticateToken, async (req, r
             res.json({ success: false, message: "Project not found" });
         }
     } catch (e) {
+        console.error("/api/auth/get-selection-folder-data error:", e);
         res.status(500).json({ success: false, message: "Server error fetching full folder." });
     }
 });
@@ -3803,6 +3856,7 @@ app.post('/api/auth/save-merged-selection', authenticateToken, async (req, res) 
         );
         res.json({ success: true });
     } catch (e) {
+        console.error("/api/auth/save-merged-selection error:", e);
         res.status(500).json({ success: false });
     }
 });
@@ -3989,7 +4043,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                             <a href="${WEBSITE_URL}" style="background-color: #2ecc71; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details in Dashboard</a>
                         </div>
                     </div>`;
-                sendBrevoEmail(studioAcc.email, `Client Finalized Selection: ${selection.folderName}`, studioHtml).catch(() => {});
+                sendBrevoEmail(studioAcc.email, `Client Finalized Selection: ${selection.folderName}`, studioHtml).catch(err => console.error("Notification email failed:", err.message));
             }
             
             // Email to Client
@@ -4002,7 +4056,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                         ${extraAmountToPay > 0 ? `<p style="color: #e74c3c;">You have an estimated extra charge of <strong>₹${extraAmountToPay}</strong> for additional sheets. The studio will contact you regarding this.</p>` : ''}
                         <p style="color: #666; font-size: 13px; margin-top: 20px;">The studio has been notified and will begin processing your album.</p>
                     </div>`;
-                sendBrevoEmail(selection.clientEmail, `Your Selection is Confirmed - ${selection.folderName}`, clientHtml).catch(() => {});
+                sendBrevoEmail(selection.clientEmail, `Your Selection is Confirmed - ${selection.folderName}`, clientHtml).catch(err => console.error("Notification email failed:", err.message));
             }
         } else {
             // Email to Client for Phase progression (Phase 1 -> 2, etc.)
@@ -4017,7 +4071,7 @@ app.post('/api/auth/update-album-selection', authenticateToken, async (req, res)
                             <a href="${WEBSITE_URL}" style="background-color: #3498db; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">Continue Selection</a>
                         </div>
                     </div>`;
-                sendBrevoEmail(selection.clientEmail, `Phase ${selection.currentPhase} Saved - ${selection.folderName}`, phaseHtml).catch(() => {});
+                sendBrevoEmail(selection.clientEmail, `Phase ${selection.currentPhase} Saved - ${selection.folderName}`, phaseHtml).catch(err => console.error("Notification email failed:", err.message));
             }
         }
 
@@ -4053,7 +4107,7 @@ app.post('/api/auth/freeze-selection', authenticateToken, async (req, res) => {
                     <p>Good news! Your client <strong>${project.clientMobile}</strong> has manually confirmed and locked their selection for <strong>${project.folderName}</strong>.</p>
                     <p>You don't need to wait for 72 hours. You can start the album production right now!</p>
                 </div>`;
-            sendBrevoEmail(studioAcc.email, `🚀 Client Locked Selection: ${project.folderName}`, studioHtml).catch(() => {});
+            sendBrevoEmail(studioAcc.email, `🚀 Client Locked Selection: ${project.folderName}`, studioHtml).catch(err => console.error("Notification email failed:", err.message));
         }
 
         res.json({ success: true, message: 'Album Frozen Successfully!' });
@@ -4082,7 +4136,7 @@ app.post('/api/auth/projects/:id/final-submit', authenticateToken, async (req, r
         
         await project.save();
         res.json({ success: true, message: 'Data submitted successfully. Split option available for 72h.', project });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) { console.error("/api/auth/projects/:id/final-submit error:", err); res.status(500).json({ success: false, message: err.message }); }
 });
 
 // 2. User requests to enter Split Mode
@@ -4105,7 +4159,7 @@ app.post('/api/auth/projects/:id/request-split', authenticateToken, async (req, 
         
         await project.save();
         res.json({ success: true, message: 'Project is now in Split Mode.', project });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) { console.error("/api/auth/projects/:id/request-split error:", err); res.status(500).json({ success: false, message: err.message }); }
 });
 
 // 3. User finishes splitting and confirms finally
@@ -4127,7 +4181,7 @@ app.post('/api/auth/projects/:id/confirm-split', authenticateToken, async (req, 
         
         await project.save();
         res.json({ success: true, message: 'Thank you! Studio will start production.', project });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) { console.error("/api/auth/projects/:id/confirm-split error:", err); res.status(500).json({ success: false, message: err.message }); }
 });
 
 // ==========================================
@@ -4155,6 +4209,7 @@ app.post('/api/auth/update-album-delivery-date', authenticateToken, async (req, 
 
         res.json({ success: true, message: `Delivery date updated to ${newDaysToAdd} days from today.` });
     } catch (e) {
+        console.error("/api/auth/update-album-delivery-date error:", e);
         res.status(500).json({ success: false, message: "Server error." });
     }
 });
@@ -4195,7 +4250,7 @@ const checkAndSendReminders = async () => {
                             <p>The album <strong>${project.folderName}</strong> is expected to be delivered in exactly <strong>${reminderToSend} days</strong>.</p>
                             <p>Please ensure printing and binding are on track to meet the deadline.</p>
                         </div>`;
-                    sendBrevoEmail(studioAcc.email, `⏳ ${reminderToSend} Days Left: ${project.folderName}`, studioHtml).catch(()=>{});
+                    sendBrevoEmail(studioAcc.email, `⏳ ${reminderToSend} Days Left: ${project.folderName}`, studioHtml).catch(err => console.error("Notification email failed:", err.message));
                 }
 
                 // 2. Email to Client
@@ -4208,7 +4263,7 @@ const checkAndSendReminders = async () => {
                             <p>Expected delivery is in just <strong>${reminderToSend} days</strong>.</p>
                             <p>We can't wait for you to see the final result!</p>
                         </div>`;
-                    sendBrevoEmail(project.clientEmail, `Your Album is Almost Ready! (${reminderToSend} Days Left)`, clientHtml).catch(()=>{});
+                    sendBrevoEmail(project.clientEmail, `Your Album is Almost Ready! (${reminderToSend} Days Left)`, clientHtml).catch(err => console.error("Notification email failed:", err.message));
                 }
 
                 // 3. Mark as sent in DB
@@ -4220,7 +4275,7 @@ const checkAndSendReminders = async () => {
             }
         }
     } catch (e) {
-        console.log("Cron Error:", e.message);
+        console.error("Cron Error:", e);
     }
 };
 
@@ -4497,6 +4552,7 @@ app.post('/api/auth/request-withdrawal', authenticateToken, async (req, res) => 
 
         res.json({ success: true, message: "Withdrawal request submitted successfully!", wallet });
     } catch(e) {
+        console.error("/api/auth/request-withdrawal error:", e);
         res.status(500).json({ success: false, message: "Server error" });
     }
 });
@@ -4509,6 +4565,7 @@ app.get('/api/auth/get-withdrawals', authenticateToken, async (req, res) => {
         const requests = await WithdrawalRequest.find().sort({ requestedAt: -1 });
         res.json({ success: true, data: requests });
     } catch(e) {
+        console.error("/api/auth/get-withdrawals error:", e);
         res.status(500).json({ success: false, message: "Server error" });
     }
 });
@@ -4546,6 +4603,7 @@ app.post('/api/auth/process-withdrawal', authenticateToken, async (req, res) => 
 
         res.json({ success: true, message: `Payout marked as ${action}!` });
     } catch(e) {
+        console.error("/api/auth/process-withdrawal error:", e);
         res.status(500).json({ success: false, message: "Server error" });
     }
 });
@@ -4558,6 +4616,7 @@ app.get('/api/auth/my-payouts', authenticateToken, async (req, res) => {
         const myRequests = await WithdrawalRequest.find({ studioMobile: req.user.mobile }).sort({ requestedAt: -1 });
         res.json({ success: true, data: myRequests });
     } catch(e) {
+        console.error("/api/auth/my-payouts error:", e);
         res.status(500).json({ success: false, message: "Server error" });
     }
 });
@@ -4815,14 +4874,14 @@ app.post('/api/auth/get-notifications', async (req, res) => {
     try {
         const notifications = await Notification.find({ mobile: req.body.mobile }).sort({ createdAt: -1 }).limit(20);
         res.json({ success: true, data: notifications });
-    } catch (e) { res.status(500).json({ success: false, message: "Error fetching notifications" }); }
+    } catch (e) { console.error("/api/auth/get-notifications error:", e); res.status(500).json({ success: false, message: "Error fetching notifications" }); }
 });
 
 app.post('/api/auth/mark-notifications-read', async (req, res) => {
     try {
         await Notification.updateMany({ mobile: req.body.mobile, isRead: false }, { $set: { isRead: true } });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
+    } catch (e) { console.error("/api/auth/mark-notifications-read error:", e); res.status(500).json({ success: false }); }
 });
 
 // ==========================================

@@ -193,7 +193,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         try {
             const res = await axios.get(`${API_BASE}/my-payouts`, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if (res.data.success) setMyPayouts(res.data.data);
-        } catch(e) { console.error("Failed to fetch payouts"); }
+        } catch(e) { console.error("Failed to fetch payouts:", e); }
         setFetchingPayouts(false);
     };
 
@@ -271,7 +271,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                     if (res.data.success && res.data.data?.cloudRouting) {
                         setMaxBatchLimitGB(parseFloat(res.data.data.cloudRouting.maxBatchSizeGB) || 1.5);
                     }
-                } catch(e) { console.log("Failed to fetch limits"); }
+                } catch(e) { console.error("Failed to fetch limits:", e); }
             };
             fetchSettings();
 
@@ -376,7 +376,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                 });
                 sessionStorage.setItem('user', JSON.stringify(res.data.data)); 
             }
-        } catch (e) {}
+        } catch (e) { console.error("Failed to fetch studio profile:", e); }
     };
 
     const fetchClients = async () => {
@@ -430,7 +430,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         try {
             const res = await axios.get(`${API_BASE}/get-subscription-plans`);
             if(res.data.success) setSubPlans(res.data.data);
-        } catch(e) { console.error("Failed to fetch plans"); }
+        } catch(e) { console.error("Failed to fetch plans:", e); }
     };
 
     const fetchStudioSelections = async () => {
@@ -438,7 +438,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         try {
             const res = await axios.post(`${API_BASE}/get-studio-selections`, {}, { headers: { 'Authorization': `Bearer ${getValidToken()}` } });
             if(res.data.success) setMySelections(res.data.data);
-        } catch(e) { console.error("Failed to fetch selections"); }
+        } catch(e) { console.error("Failed to fetch selections:", e); }
         setFetchingSelections(false);
     };
 
