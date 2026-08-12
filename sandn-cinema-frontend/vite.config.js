@@ -5,4 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: '/', // 👈 YEH EKDUM AISA HONA CHAHIYE (Purana SandN-Cinema hata do)
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+  },
 })
