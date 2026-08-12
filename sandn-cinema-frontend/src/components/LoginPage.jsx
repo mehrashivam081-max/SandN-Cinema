@@ -121,9 +121,7 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
                     roleFilter: activeTab.toUpperCase() 
                 });
                 const userData = searchRes.data.data;
-                const dbPass = userData.password ? String(userData.password).trim() : "";
-                
-                if (!dbPass || dbPass === "temp123") {
+                if (userData.needsPasswordSetup) {
                     isNewUser = true;
                 }
             } else {
@@ -151,27 +149,6 @@ const LoginPage = ({ onBack, onSignupClick, onLoginSuccess }) => {
         if (!password) return setError("Please enter password");
         setLoading(true); setError('');
         const cleanPassword = password.trim();
-
-        if (activeTab === 'code') {
-            if (cleanPassword === "shivam@9111") {
-                const adminData = { name: "Owner", role: "ADMIN", status: "VIP" };
-                
-                // 🔒 ADMIN PERSISTENCE LOGIC
-                const storage = rememberMe ? localStorage : sessionStorage;
-                (rememberMe ? sessionStorage : localStorage).clear();
-                
-                storage.setItem('user', JSON.stringify(adminData));
-                storage.setItem('authToken', 'super_admin_bypass_token_999'); 
-                
-                if (onLoginSuccess) onLoginSuccess(adminData);
-                else navigate('/'); 
-                return;
-            } else { 
-                setError("Invalid Admin Password"); 
-                setLoading(false); 
-                return; 
-            }
-        }
 
         try {
             const res = await axios.post(`${API_BASE}/login`, { 

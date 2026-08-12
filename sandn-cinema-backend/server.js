@@ -13,7 +13,21 @@ sharp.cache(false); // 🛑 RAM PROTECTOR: Sharp ko RAM hold karne se rokega (No
 sharp.concurrency(1); // 🛑 RAM PROTECTOR: Server ko overload hone se bachayega
 const { Storage } = require('megajs'); // ✅ NEW: Mega Cloud Import
 const cron = require('node-cron'); // ✅ NEW: 72-Hour Timer Logic
-const JWT_SECRET = process.env.JWT_SECRET || 'snevio_super_secret_key_2024';
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+    console.warn('⚠️ JWT_SECRET is not set. Using a random secret; all sessions will be invalidated on restart. Set JWT_SECRET in your environment.');
+    return crypto.randomBytes(48).toString('hex');
+})();
+
+const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]\$/.test(value);
+const hashPassword = (plain) => bcrypt.hash(plain, 10);
+const verifyPassword = async (plain, stored) => {
+    if (!plain || !stored) return false;
+    if (isBcryptHash(stored)) return bcrypt.compare(plain, stored);
+    return plain === stored;
+};
 
 // ✅ Added New Models Here
 const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan, AlbumSelection, UserSubscription } = require('./models');
@@ -107,12 +121,20 @@ const uploadStream = multer({ storage: streamStorage, limits: { fileSize: 500 * 
 const app = express();
 const server = http.createServer(app); // 👈 NAYA: Wrap express app in HTTP Server
 
+const ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://mehrashivam081-max.github.io",
+    "https://snevio.com",
+    "https://www.snevio.com"
+];
+
 // 🚀 NAYA: Initialize Socket.io
 const io = new Server(server, {
-    cors: {
-        origin: "*", // ✅ Allow frontend to connect
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    }
+    cors: {
+        origin: ALLOWED_ORIGINS,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    }
 });
 
 // ⚡ Socket Connection Logic
@@ -143,19 +165,9 @@ const WEBSITE_URL = "https://snevio.com/"; // Google search wali link hata do
 
 // 1. कस्टम गेटकीपर: यह किसी भी Preflight (OPTIONS) रिक्वेस्ट को 404 नहीं होने देगा, सीधा 200 OK भेजेगा!
 app.use((req, res, next) => {
-    const allowedOrigins = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://mehrashivam081-max.github.io",
-        "https://snevio.com",
-        "https://www.snevio.com"
-    ];
-    
     const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*'); 
     }
     
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -174,21 +186,7 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like React Native apps, mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
-        
-        const allowedOrigins = [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://mehrashivam081-max.github.io",
-            "https://snevio.com",
-            "https://www.snevio.com"
-        ];
-        
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            // Allow all origins for mobile apps and other clients
-            callback(null, true);
-        }
+        callback(null, ALLOWED_ORIGINS.indexOf(origin) !== -1);
     },
     credentials: true
 }));
@@ -341,7 +339,10 @@ const findAccount = async (identifier, roleFilter = null) => {
     if (identifier === "0000000000CODEIS*@OWNER*") {
         let acc = await Admin.findOne().lean(); 
         if (acc) return { type: 'ADMIN', data: acc };
-        return { type: 'ADMIN', data: { name: "Super Admin", mobile: identifier, role: "ADMIN", password: "shivam@9111" } };
+        if (process.env.ADMIN_MASTER_PASSWORD) {
+            return { type: 'ADMIN', data: { name: "Super Admin", mobile: identifier, role: "ADMIN", password: process.env.ADMIN_MASTER_PASSWORD } };
+        }
+        return null;
     }
 
     const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
@@ -421,8 +422,7 @@ app.post('/api/auth/check-send-otp', async (req, res) => {
         // 🔥 Gatekeeper Ends
 
         const randomOTP = Math.floor(100000 + Math.random() * 900000).toString();
-        otpStore[identifier] = randomOTP; 
-        console.log(`🔐 Generated OTP for ${identifier}: ${randomOTP}`);
+        otpStore[identifier] = randomOTP;
 
         if (sendVia === 'email') {
             if (!targetEmail || targetEmail.includes('dummy_')) {
@@ -592,9 +592,11 @@ app.post('/api/auth/signup', async (req, res) => {
         }
         // 🚀 REFERRAL LOGIC ENDS HERE
 
-        if (type === 'studio') {
-            await Studio.create({
-                mobile, password, email, role: 'STUDIO', ownerName: name, studioName,
+        const storedPassword = password ? await hashPassword(password) : password;
+
+        if (type === 'studio') {
+            await Studio.create({
+                mobile, password: storedPassword, email, role: 'STUDIO', ownerName: name, studioName,
                 isAdhaarVerified: false, 
                 isAccountApproved: false, 
                 location, 
@@ -604,8 +606,8 @@ app.post('/api/auth/signup', async (req, res) => {
                 ...otherData
             });
         } else {
-            await User.create({
-                mobile, password, email, role: 'USER', name: name, location, 
+            await User.create({
+                mobile, password: storedPassword, email, role: 'USER', name: name, location, 
                 referralCode: myReferralCode, // 👈 Saved to DB
                 referredBy: appliedReferrer,  // 👈 Saved to DB
                 wallet: initialWallet,        // 👈 Saved to DB
@@ -662,9 +664,9 @@ app.post('/api/auth/create-password', async (req, res) => {
         const query = identifier.includes('@') ? { email: identifier } : { mobile: identifier };
         let account = await findAccount(identifier, roleFilter);
 
-        if (account && account.data) {
-            const updateFields = { password };
-            if (email) updateFields.email = email;
+        if (account && account.data) {
+            const updateFields = { password: password ? await hashPassword(password) : password };
+            if (email) updateFields.email = email;
 
             // 🚀 REFERRAL & WALLET LOGIC FOR FIRST TIME SETUP
             let myWallet = account.data.wallet || { coins: 0, history: [], currentStreak: 0 };
@@ -726,11 +728,14 @@ app.post('/api/auth/create-password', async (req, res) => {
             const userObj = { name: freshAccount.data.name || freshAccount.data.ownerName, mobile: freshAccount.data.mobile, role: freshAccount.type };
             const token = generateToken(userObj);
             
-            res.json({ 
-                success: true, 
+            const safeUser = { ...freshAccount.data };
+            delete safeUser.password;
+
+            res.json({ 
+                success: true, 
                 token: token, // 👈 Send token back
-                user: freshAccount.data
-            });
+                user: safeUser
+            });
         } else {
             res.json({ success: false, message: "Account not found in this section" });
         }
@@ -763,12 +768,6 @@ const authenticateToken = (req, res, next) => {
         return res.json({ success: false, message: "Access Denied: 🛑 No Security Token Found!" });
     }
 
-    // ✅ FIX: Let the Admin Bypass Token pass through the security guard
-    if (token === 'super_admin_bypass_token_999') {
-        req.user = { mobile: "0000000000CODEIS*@OWNER*", role: "ADMIN" };
-        return next();
-    }
-
     // 3. Verify the regular token is real and not tampered with
     jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
         if (err) {
@@ -779,6 +778,12 @@ const authenticateToken = (req, res, next) => {
         req.user = decodedUser; 
         next(); // Go to the actual route
     });
+};
+
+// 🔒 Admin-only gate (must run after authenticateToken)
+const requireAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'OWNER')) return next();
+    return res.status(403).json({ success: false, message: "Access Denied: Admin privileges required." });
 };
 
 // 6. Login via OTP
@@ -819,7 +824,14 @@ app.post('/api/auth/login', async (req, res) => {
     const { password, roleFilter } = req.body;
     try {
         const account = await findAccount(identifier, roleFilter); 
-        if (account && account.data.password === password) {
+        if (account && await verifyPassword(password, account.data.password)) {
+
+            // Upgrade legacy plaintext passwords to bcrypt hashes on successful login
+            if (!isBcryptHash(account.data.password) && account.data._id) {
+                const newHash = await hashPassword(password);
+                const Model = account.type === 'STUDIO' ? Studio : (account.type === 'ADMIN' ? Admin : User);
+                Model.updateOne({ _id: account.data._id }, { $set: { password: newHash } }, { strict: false }).catch(() => {});
+            }
             
             // 🛑 THE BOUNCER: Check if Studio is approved
             if (account.type === 'STUDIO' && account.data.isAccountApproved === false) {
@@ -867,6 +879,7 @@ app.get('/api/auth/get-user-status', authenticateToken, async (req, res) => {
         if (account && account.data) {
             // 🔥 THE NUCLEAR FIX: Always force inject the role so the frontend never gets confused!
             account.data.role = account.type; 
+            delete account.data.password;
             
             res.json({ success: true, user: account.data });
         } else {
@@ -881,7 +894,7 @@ app.get('/api/auth/get-user-status', authenticateToken, async (req, res) => {
 // ==============================================================
 // ✅ 8. UPLOAD LOGIC (MULTER - LOCAL) WITH SUBFOLDERS
 // ==============================================================
-app.post('/api/auth/admin-add-user', upload.array('mediaFiles', 500), async (req, res) => {
+app.post('/api/auth/admin-add-user', authenticateToken, upload.array('mediaFiles', 500), async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile); 
     let { type, name, location, addedBy, folderName, subFolderName, expiryDays, downloadLimit, email, imageCost, videoCost, unlockValidity } = req.body; 
     const files = req.files; 
@@ -1595,17 +1608,18 @@ app.post('/api/auth/admin-add-user-cloud', authenticateToken, async (req, res) =
 
 
 // 9. Get List of Accounts
-app.post('/api/auth/list-accounts', async (req, res) => {
-    const { requesterRole, requesterMobile } = req.body;
+app.post('/api/auth/list-accounts', authenticateToken, async (req, res) => {
+    const requesterRole = req.user.role;
+    const stripPasswords = (docs) => docs.map(({ password, ...rest }) => rest);
     try {
         if (requesterRole === 'ADMIN' || requesterRole === 'OWNER') {
             const users = await User.find({}).lean();
             const studios = await Studio.find({}).lean();
-            res.json({ success: true, data: [...users, ...studios] });
+            res.json({ success: true, data: stripPasswords([...users, ...studios]) });
         } else if (requesterRole === 'STUDIO') {
-            const cleanMobile = getCleanMobile(requesterMobile);
+            const cleanMobile = getCleanMobile(req.user.mobile);
             const users = await User.find({ addedBy: cleanMobile }).lean();
-            res.json({ success: true, data: users });
+            res.json({ success: true, data: stripPasswords(users) });
         } else {
             res.json({ success: false, message: "Unauthorized access" });
         }
@@ -1619,11 +1633,21 @@ app.post('/api/auth/delete-account', authenticateToken, async (req, res) => {
     const targetMobile = getCleanMobile(req.body.targetMobile); 
     const { targetRole } = req.body; 
     try {
+        const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'OWNER';
         if (targetRole === 'STUDIO') {
+            if (!isAdmin) return res.status(403).json({ success: false, message: "Access Denied" });
             await Studio.findOneAndDelete({ mobile: targetMobile });
         } else if (targetRole === 'ADMIN') {
+            if (!isAdmin) return res.status(403).json({ success: false, message: "Access Denied" });
             await Admin.findOneAndDelete({ mobile: targetMobile });
         } else {
+            if (!isAdmin) {
+                if (req.user.role !== 'STUDIO') return res.status(403).json({ success: false, message: "Access Denied" });
+                const target = await User.findOne({ mobile: targetMobile }).lean();
+                if (!target || target.addedBy !== getCleanMobile(req.user.mobile)) {
+                    return res.status(403).json({ success: false, message: "Access Denied: You can only delete clients you added." });
+                }
+            }
             await User.findOneAndDelete({ mobile: targetMobile });
         }
         res.json({ success: true, message: "Account deleted successfully!" });
@@ -1643,6 +1667,9 @@ app.post('/api/auth/search-account', async (req, res) => {
         if (account && account.data) {
             // 🔥 NAYA LOGIC: Heavy data ko halka karo
             let lightweightData = { ...account.data };
+            const storedPass = lightweightData.password ? String(lightweightData.password).trim() : "";
+            lightweightData.needsPasswordSetup = !storedPass || storedPass === "temp123";
+            delete lightweightData.password;
             
             // Agar uploadedData hai, toh uske andar se files array hata do (Sirf length bhejo)
             if (lightweightData.uploadedData && Array.isArray(lightweightData.uploadedData)) {
@@ -1723,7 +1750,7 @@ app.post('/api/auth/approve-studio-account', authenticateToken, async (req, res)
     }
 });
 
-app.post('/api/auth/update-studio-approval', async (req, res) => {
+app.post('/api/auth/update-studio-approval', authenticateToken, requireAdmin, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
         const result = await Studio.updateOne(
@@ -1742,7 +1769,7 @@ app.post('/api/auth/update-studio-approval', async (req, res) => {
     }
 });
 
-app.post('/api/auth/update-admin', async (req, res) => {
+app.post('/api/auth/update-admin', authenticateToken, requireAdmin, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     try {
         let admin;
@@ -1756,7 +1783,7 @@ app.post('/api/auth/update-admin', async (req, res) => {
         if (admin) {
             if(req.body.name) admin.name = req.body.name;
             if(req.body.email) admin.email = req.body.email;
-            if(req.body.password) admin.password = req.body.password;
+            if(req.body.password) admin.password = await hashPassword(req.body.password);
             await admin.save();
             res.json({ success: true, message: "Profile Updated Successfully" });
         } else {
@@ -1768,29 +1795,33 @@ app.post('/api/auth/update-admin', async (req, res) => {
     }
 });
 
-app.post('/api/auth/add-subadmin', async (req, res) => {
+app.post('/api/auth/add-subadmin', authenticateToken, requireAdmin, async (req, res) => {
     const { name, mobile, email, password } = req.body;
     try {
         const cleanMobile = getCleanMobile(mobile);
         const exists = await findAccount(cleanMobile);
         if (exists) return res.json({ success: false, message: "Mobile already registered!" });
         
-        await Admin.create({ name, mobile: cleanMobile, email, password, role: 'ADMIN' });
+        await Admin.create({ name, mobile: cleanMobile, email, password: password ? await hashPassword(password) : password, role: 'ADMIN' });
         res.json({ success: true, message: "Sub-Admin created successfully." });
     } catch (e) { 
         res.status(500).json({ success: false, message: e.message }); 
     }
 });
 
-app.post('/api/auth/update-studio-profile', async (req, res) => {
+app.post('/api/auth/update-studio-profile', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'OWNER';
+    if (!isAdmin && getCleanMobile(req.user.mobile) !== mobile) {
+        return res.status(403).json({ success: false, message: "Access Denied: You can only update your own profile." });
+    }
     try {
         const studio = await Studio.findOne({ mobile });
         if (studio) {
             if(req.body.studioName) studio.studioName = req.body.studioName;
             if(req.body.ownerName) studio.ownerName = req.body.ownerName;
             if(req.body.email) studio.email = req.body.email;
-            if(req.body.password) studio.password = req.body.password;
+            if(req.body.password) studio.password = await hashPassword(req.body.password);
             if(req.body.location) studio.location = req.body.location;
             await studio.save();
             res.json({ success: true, message: "Studio Profile Updated Successfully!" });
@@ -1807,7 +1838,7 @@ app.post('/api/auth/update-studio-profile', async (req, res) => {
 // ✅ 16. SOCIAL LINKS LOGIC 
 // ==========================================
 
-app.post('/api/auth/update-social-links', async (req, res) => {
+app.post('/api/auth/update-social-links', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { links } = req.body;
         await PlatformSetting.updateOne(
@@ -1840,7 +1871,7 @@ app.get('/api/auth/get-platform-settings', async (req, res) => {
 // ✅ 17. POLICIES LOGIC 
 // ==========================================
 
-app.post('/api/auth/update-policies', async (req, res) => {
+app.post('/api/auth/update-policies', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { policies } = req.body;
         // Policies mein ab hum terms, privacy, shipping aur contact charo bhejenge
@@ -1865,7 +1896,7 @@ app.post('/api/auth/update-policies', async (req, res) => {
     }
 });
 
-app.post('/api/auth/update-default-pricing', async (req, res) => {
+app.post('/api/auth/update-default-pricing', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { imageCost, videoCost } = req.body;
         await PlatformSetting.updateOne(
@@ -2230,9 +2261,13 @@ app.post('/api/auth/deduct-coins-batch', async (req, res) => {
 });
 
 // Add Coins when user watches an Ad
-app.post('/api/auth/add-coins', async (req, res) => {
+app.post('/api/auth/add-coins', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { amount, reason } = req.body;
+
+    if (getCleanMobile(req.user.mobile) !== mobile) {
+        return res.status(403).json({ success: false, message: "Access Denied: You can only credit your own wallet." });
+    }
 
     try {
         const account = await findAccount(mobile);
@@ -2270,7 +2305,7 @@ app.post('/api/auth/add-coins', async (req, res) => {
 // 💰 ADVANCED MONETIZATION (REAL MONEY & EVENTS)
 // ==========================================
 
-app.post('/api/auth/update-global-charges', async (req, res) => {
+app.post('/api/auth/update-global-charges', authenticateToken, requireAdmin, async (req, res) => {
     try {
         // 🔥 THE FIX: Added userSubPlans to be extracted from req.body
         const { imageCost, videoCost, coinPackages, miniEvents, tutorials, userSubPlans } = req.body; 
@@ -2550,9 +2585,14 @@ app.post('/api/auth/payment-webhook', async (req, res) => {
 // ==========================================
 // 🗑️ ADVANCED DELETE LOGIC (Folder, Sub-Folder, or Specific File)
 // ==========================================
-app.post('/api/auth/delete-specific-data', async (req, res) => {
+app.post('/api/auth/delete-specific-data', authenticateToken, async (req, res) => {
     const mobile = getCleanMobile(req.body.mobile);
     const { folderName, subFolderName, fileUrl } = req.body;
+
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'OWNER';
+    if (!isAdmin && req.user.role !== 'STUDIO' && getCleanMobile(req.user.mobile) !== mobile) {
+        return res.status(403).json({ success: false, message: "Access Denied" });
+    }
 
     try {
         const account = await findAccount(mobile);
@@ -2600,7 +2640,7 @@ app.post('/api/auth/delete-specific-data', async (req, res) => {
 // ==========================================
 // ✅ 21. MANAGE SERVICES LOGIC (NEW APP FEATURES)
 // ==========================================
-app.post('/api/auth/add-service', async (req, res) => {
+app.post('/api/auth/add-service', authenticateToken, requireAdmin, async (req, res) => {
     try {
         let serviceData = { ...req.body };
         if (serviceData.startingPrice) {
@@ -2625,7 +2665,7 @@ app.get('/api/auth/get-available-services', async (req, res) => {
     }
 });
 
-app.post('/api/auth/delete-service', async (req, res) => {
+app.post('/api/auth/delete-service', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await Service.findByIdAndDelete(req.body.id);
         res.json({ success: true, message: "Service removed from App successfully!" });
@@ -2634,7 +2674,7 @@ app.post('/api/auth/delete-service', async (req, res) => {
     }
 });
 
-app.post('/api/auth/update-service', async (req, res) => {
+app.post('/api/auth/update-service', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id, ...updateData } = req.body;
         
@@ -2658,7 +2698,7 @@ app.post('/api/auth/update-service', async (req, res) => {
     }
 });
 
-app.post('/api/auth/apply-service-discount', async (req, res) => {
+app.post('/api/auth/apply-service-discount', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { serviceId, discountPercentage, offerText } = req.body;
         const service = await Service.findById(serviceId);
@@ -3078,7 +3118,7 @@ const adSchema = new mongoose.Schema({
 const Advertisement = mongoose.models.Advertisement || mongoose.model('Advertisement', adSchema);
 
 // 📤 Upload New Ad (From Admin Dashboard)
-app.post('/api/auth/upload-ad', async (req, res) => {
+app.post('/api/auth/upload-ad', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const newAd = await Advertisement.create(req.body);
         res.json({ success: true, message: "Smart Ad Created & Live! 🚀", data: newAd });
@@ -3132,7 +3172,7 @@ app.post('/api/auth/track-ad-view', async (req, res) => {
 });
 
 // 🗑️ Delete Ad
-app.post('/api/auth/delete-ad', async (req, res) => {
+app.post('/api/auth/delete-ad', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await Advertisement.findByIdAndDelete(req.body.adId);
         res.json({ success: true, message: "Ad Permanently Deleted from Cloud DB." });
@@ -3150,9 +3190,9 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 // 🔒 SECURE CLOUDINARY CONFIG
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dq1wfpqhs', 
-    api_key: process.env.CLOUDINARY_API_KEY || '938949614288297',       
-    api_secret: process.env.CLOUDINARY_API_SECRET || 'Y0fHlu5CJbLwNPBjW-3PpPGSem0'  
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+    api_key: process.env.CLOUDINARY_API_KEY,       
+    api_secret: process.env.CLOUDINARY_API_SECRET  
 });
 
 // 🔥 SMART ROUTE: Handles both Video (Extract) and Audio (Direct Upload)
@@ -3329,7 +3369,7 @@ app.post('/api/auth/revoke-media-access', authenticateToken, async (req, res) =>
 // ==========================================
 
 // 1. Post Nayi Job (Admin)
-app.post('/api/auth/add-vacancy', async (req, res) => {
+app.post('/api/auth/add-vacancy', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const newJob = await Vacancy.create(req.body);
         res.json({ success: true, message: "Job Vacancy posted successfully!", data: newJob });
@@ -3350,7 +3390,7 @@ app.get('/api/auth/get-vacancies', async (req, res) => {
 });
 
 // 3. Job Delete karna (Admin)
-app.post('/api/auth/delete-vacancy', async (req, res) => {
+app.post('/api/auth/delete-vacancy', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await Vacancy.findByIdAndDelete(req.body.id);
         res.json({ success: true, message: "Job Vacancy removed!" });
@@ -4394,14 +4434,13 @@ app.post('/api/auth/claim-daily-login', async (req, res) => {
 });
 
 // 🔥 DANGER ZONE: Specific Cloud Data Wipe (ID Based)
-app.delete('/api/auth/wipe-cloud/:id', authenticateToken, async (req, res) => {
+app.delete('/api/auth/wipe-cloud/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { adminPassword } = req.body;
 
-    // 1. सुरक्षा जाँच: अपना मास्टर पासवर्ड यहाँ सेट करें
-    const MASTER_PASSWORD = "shivam@9111"; // ⚠️ इसे अपनी पसंद के पासवर्ड से बदलें
+    const MASTER_PASSWORD = process.env.ADMIN_MASTER_PASSWORD;
 
-    if (adminPassword !== MASTER_PASSWORD) {
+    if (!MASTER_PASSWORD || adminPassword !== MASTER_PASSWORD) {
         return res.status(403).json({ success: false, message: "🚨 ग़लत पासवर्ड! डेटा सुरक्षित है।" });
     }
 
