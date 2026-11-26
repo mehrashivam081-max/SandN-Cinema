@@ -377,6 +377,62 @@ const userSubscriptionSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// --- 14. FACE DESCRIPTOR SCHEMA (For Face Recognition Caching) ---
+const faceDescriptorSchema = new mongoose.Schema({
+    imageUrl: { type: String, required: true, unique: true }, // URL of the photo
+    faceDescriptor: { type: [Number], required: true }, // 128-dimensional face descriptor
+    folderName: { type: String, default: '' }, // Associated folder name
+    subFolderName: { type: String, default: '' }, // Associated subfolder name
+    clientMobile: { type: String, default: '' }, // Associated user mobile
+    createdAt: { type: Date, default: Date.now },
+    lastMatchedAt: { type: Date, default: null } // Track when this was last matched
+});
+
+// --- 15. QR SESSION SCHEMA (For Pre-Upload Event Photography) ---
+const qrSessionSchema = new mongoose.Schema({
+    sessionId: { type: String, required: true, unique: true }, // Unique token for QR link
+    studioId: { type: String, required: true }, // Studio/Admin mobile who created it
+    studioName: { type: String, default: '' }, // Studio name for display
+    title: { type: String, required: true }, // Event title (e.g., "Wedding Reception")
+    expiresAt: { type: Date, required: true }, // Session expiry date/time
+    maxDownloads: { type: Number, default: 10 }, // Max downloads per user
+    isActive: { type: Boolean, default: true }, // Session active status
+    // 📍 Live Event location/timing/visibility (all optional)
+    venueName: { type: String, default: '' },
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null },
+    startTime: { type: Date, default: null },
+    endTime: { type: Date, default: null },
+    isPublic: { type: Boolean, default: false },
+    registeredUsers: [{
+        userId: String, // User's _id
+        mobile: String, // User's mobile
+        email: String, // User's email
+        name: String, // User's name
+        faceAngles: {
+            center: String, // Base64 center face
+            left: String, // Base64 left face
+            right: String // Base64 right face
+        },
+        registeredAt: { type: Date, default: Date.now },
+        // 📸 Event Photos notification tracking (Step 1: QR & AI Face workflow)
+        hasViewed: { type: Boolean, default: false },
+        lastNotifiedAt: { type: Date, default: null },
+        reminderCount: { type: Number, default: 0 }
+    }],
+    uploadedPhotos: [{
+        url: String, // Photo URL
+        uploadedAt: { type: Date, default: Date.now }
+    }],
+    createdAt: { type: Date, default: Date.now }
+});
+
+const pushSubscriptionSchema = new mongoose.Schema({
+    mobile: { type: String, required: true, unique: true, index: true },
+    subscription: { type: Object, required: true },
+    updatedAt: { type: Date, default: Date.now }
+});
+
 module.exports = {
     User: mongoose.model('User', userSchema),
     Studio: mongoose.model('Studio', studioSchema),
@@ -390,5 +446,8 @@ module.exports = {
     Vacancy: mongoose.model('Vacancy', vacancySchema),
     SubscriptionPlan: mongoose.model('SubscriptionPlan', subscriptionPlanSchema),
     AlbumSelection: mongoose.model('AlbumSelection', albumSelectionSchema),
-    UserSubscription: mongoose.model('UserSubscription', userSubscriptionSchema)
+    UserSubscription: mongoose.model('UserSubscription', userSubscriptionSchema),
+    FaceDescriptor: mongoose.model('FaceDescriptor', faceDescriptorSchema),
+    QrSession: mongoose.model('QrSession', qrSessionSchema),
+    PushSubscription: mongoose.model('PushSubscription', pushSubscriptionSchema)
 };

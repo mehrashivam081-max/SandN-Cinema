@@ -13,10 +13,16 @@ sharp.cache(false); // 🛑 RAM PROTECTOR: Sharp ko RAM hold karne se rokega (No
 sharp.concurrency(1); // 🛑 RAM PROTECTOR: Server ko overload hone se bachayega
 const { Storage } = require('megajs'); // ✅ NEW: Mega Cloud Import
 const cron = require('node-cron'); // ✅ NEW: 72-Hour Timer Logic
+const webpush = require('web-push'); // ✅ Web Push Notifications
 const JWT_SECRET = process.env.JWT_SECRET || 'snevio_super_secret_key_2024';
 
 // ✅ Added New Models Here
-const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan, AlbumSelection, UserSubscription } = require('./models');
+const { User, Studio, Admin, Booking, CollabRequest, PlatformSetting, Vacancy, SubscriptionPlan, AlbumSelection, UserSubscription, FaceDescriptor, QrSession, PushSubscription } = require('./models');
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails('mailto:support@snevio.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    console.log('🔔 Web Push VAPID configured');
+}
 
 // ✅ NEW: Service Model for App Services
 const serviceSchema = new mongoose.Schema({
@@ -139,6 +145,27 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/SandNCinem
 // ✅ URL wahi purana rakhenge taaki links na tootein
 const WEBSITE_URL = "https://snevio.com/"; // Google search wali link hata do
 
+// 🔥 URL REWRITE MIDDLEWARE: Support both /api/... and /api/auth/... prefixes
+app.use((req, res, next) => {
+    // Skip rewrite for these specific endpoints (they exist at /api/ level)
+    const skipRewrite = [
+        '/api/face-scan',
+        '/api/qr-session',
+        '/api/push'
+    ];
+    
+    const shouldSkip = skipRewrite.some(path => req.path.startsWith(path));
+    
+    if (!shouldSkip && req.path.startsWith('/api/') && !req.path.startsWith('/api/auth/')) {
+        // Rewrite /api/endpoint to /api/auth/endpoint
+        const newPath = req.path.replace('/api/', '/api/auth/');
+        console.log(`🔄 URL Rewrite: ${req.path} → ${newPath}`);
+        req.url = newPath;
+    }
+    
+    next();
+});
+
 // 🔥 THE NUCLEAR CORS FIX (For 404 Preflight Errors)
 
 // 1. कस्टम गेटकीपर: यह किसी भी Preflight (OPTIONS) रिक्वेस्ट को 404 नहीं होने देगा, सीधा 200 OK भेजेगा!
@@ -146,6 +173,9 @@ app.use((req, res, next) => {
     const allowedOrigins = [
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
         "https://mehrashivam081-max.github.io",
         "https://snevio.com",
         "https://www.snevio.com"
@@ -178,6 +208,9 @@ app.use(cors({
         const allowedOrigins = [
             "http://localhost:5173",
             "http://localhost:3000",
+            "http://localhost:5174",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:5174",
             "https://mehrashivam081-max.github.io",
             "https://snevio.com",
             "https://www.snevio.com"
@@ -225,6 +258,65 @@ const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
     };
 
     return axios.post('https://api.brevo.com/v3/smtp/email', data, { headers });
+};
+
+// ==========================================
+// 🎯 QR SESSION NOTIFY HELPER (In-App + Socket + Email)
+// ==========================================
+const notifyQrSessionUser = async (session, user, title, message) => {
+    // 1. In-App Notification (MongoDB)
+    try {
+        await Notification.create({
+            mobile: user.mobile,
+            title,
+            message,
+            type: 'SUCCESS'
+        });
+    } catch (notifErr) {
+        console.log(`❌ QR In-App Notification failed for ${user.mobile}:`, notifErr.message);
+    }
+
+    // 2. Socket.io real-time update to user's mobile room
+    try {
+        if (io) io.to(String(user.mobile)).emit('data_updated', { message: `${title} - ${session.title}` });
+    } catch (socketErr) {
+        console.log('❌ QR Socket emit failed:', socketErr.message);
+    }
+
+    // 3. Brevo Email (skip dummy accounts)
+    if (user.email && !user.email.includes('dummy_')) {
+        try {
+            await sendBrevoEmail(
+                user.email,
+                title,
+                `<div style="font-family: Arial, sans-serif; padding: 20px; background: #f9f9f9; border-radius: 10px;">
+                    <h2 style="color: #2b5876;">Hello ${user.name || 'Guest'},</h2>
+                    <p style="color: #444; font-size: 15px;">${message}</p>
+                    <p style="color: #444; font-size: 15px;">Open Snevio, scan your face, and view &amp; download your event photos.</p>
+                    <p style="color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px;">Best Regards,<br/>Team Snevio</p>
+                </div>`
+            );
+        } catch (emailErr) {
+            console.log(`❌ QR Email failed for ${user.email}. It's okay, app won't crash.`);
+        }
+    }
+
+    // 4. Web Push (if guest has subscribed)
+    try {
+        const pushSub = await PushSubscription.findOne({ mobile: user.mobile });
+        if (pushSub && pushSub.subscription) {
+            await webpush.sendNotification(pushSub.subscription, JSON.stringify({
+                title,
+                body: message,
+                url: `/?qrSession=${session.sessionId}`
+            }));
+        }
+    } catch (pushErr) {
+        console.log(`❌ QR Web Push failed for ${user.mobile}:`, pushErr.message);
+        if (pushErr.statusCode === 404 || pushErr.statusCode === 410) {
+            try { await PushSubscription.deleteOne({ mobile: user.mobile }); } catch (e) {}
+        }
+    }
 };
 
 // ==========================================
@@ -1111,6 +1203,30 @@ const getOrUpdateActiveStorage = async (fileSizeGB = 0.05, userMobile = null, us
 const AWS = require('aws-sdk');
 const cloudinary = require('cloudinary').v2;
 const { Readable } = require('stream');
+
+// 🎭 AWS REKOGNITION CONFIGURATION
+const rekognition = new AWS.Rekognition({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION || 'us-east-1'
+});
+
+// Helper: Convert base64 to buffer
+const base64ToBuffer = (base64String) => {
+    const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+    return Buffer.from(base64Data, 'base64');
+};
+
+// Helper: Download image from URL to buffer
+const downloadImageFromUrl = async (url) => {
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+        return Buffer.from(response.data, 'binary');
+    } catch (error) {
+        console.error(`❌ Failed to download image from ${url}:`, error.message);
+        return null;
+    }
+};
 
 // 🚀 NEW API: GENERATE DIRECT UPLOAD SIGNATURE (For 12GB+ Files on Cloudinary/AWS)
 app.post('/api/auth/generate-upload-signature', authenticateToken, async (req, res) => {
@@ -4635,6 +4751,66 @@ cron.schedule('0 0 * * *', async () => { // यह हर रात 12 बजे
 });
 
 // ==========================================
+// ⏰ QR SESSION FOLLOW-UP REMINDERS (Every 6 Hours)
+// ==========================================
+cron.schedule('0 */6 * * *', async () => {
+    console.log('🤖 Running QR Session Reminder Check...');
+    const now = new Date();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    try {
+        const activeSessions = await QrSession.find({
+            isActive: true,
+            expiresAt: { $gt: now },
+            'uploadedPhotos.0': { $exists: true }
+        });
+
+        for (const session of activeSessions) {
+            let changed = false;
+            const hoursToExpiry = (new Date(session.expiresAt) - now) / oneDayMs;
+
+            for (const user of session.registeredUsers) {
+                if (user.hasViewed === true) continue;
+
+                const reminderCount = user.reminderCount || 0;
+                const hoursSinceNotify = user.lastNotifiedAt
+                    ? (now - new Date(user.lastNotifiedAt)) / oneDayMs
+                    : Infinity;
+
+                if (reminderCount === 1 && hoursSinceNotify >= 1) {
+                    // 24-hour follow-up reminder
+                    await notifyQrSessionUser(
+                        session,
+                        user,
+                        '⏰ Reminder: Your Event Photos Are Waiting!',
+                        `Your photos for ${session.title} are still waiting! Scan your face in Snevio to view & download them.`
+                    );
+                    user.reminderCount = 2;
+                    user.lastNotifiedAt = now;
+                    changed = true;
+                } else if (reminderCount < 3 && hoursToExpiry <= 1) {
+                    // Final "expiring soon" reminder
+                    await notifyQrSessionUser(
+                        session,
+                        user,
+                        '🚨 Expiring Soon: Event Photos Access Ends Within 24 Hours!',
+                        `Hurry! Access to your photos for ${session.title} expires within 24 hours. Scan your face now to view & download them.`
+                    );
+                    user.reminderCount = 3;
+                    user.lastNotifiedAt = now;
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                await session.save();
+                console.log(`📸 QR reminders sent for session ${session.sessionId}`);
+            }
+        }
+    } catch (err) { console.error('QR Reminder Cron Error:', err.message); }
+});
+
+// ==========================================
 // 🗑️ DELETE SPECIFIC IMAGE FROM SMART ALBUM
 // ==========================================
 app.post('/api/auth/delete-selection-image', authenticateToken, async (req, res) => {
@@ -4865,6 +5041,702 @@ app.post('/api/auth/redeem-gift-card', async (req, res) => {
     } catch (e) {
         console.error(e);
         res.status(500).json({ success: false, message: "Server Error redeeming gift card." });
+    }
+});
+
+// ==========================================
+// 🎭 FACE SCAN API (AWS REKOGNITION - Real Face Matching with QR Session Support)
+// ==========================================
+app.post('/api/face-scan', async (req, res) => {
+    try {
+        const { selfieImage, sessionId, mobile } = req.body;
+
+        // Validate input
+        if (!selfieImage) {
+            return res.json({ success: false, message: 'No selfie image provided' });
+        }
+
+        console.log('🎭 Face scan request received - initiating AWS Rekognition');
+
+        // Check if AWS credentials are configured
+        if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+            console.error('❌ AWS credentials not configured in .env file');
+            return res.json({
+                success: false,
+                message: 'AWS credentials not configured. Please add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to .env file.'
+            });
+        }
+
+        // Convert base64 selfie to buffer
+        const selfieBuffer = base64ToBuffer(selfieImage);
+        console.log('✅ Selfie converted to buffer, size:', selfieBuffer.length, 'bytes');
+
+        // Step 1: Detect face in selfie using AWS Rekognition
+        let selfieFaceDetails;
+        try {
+            const detectParams = {
+                Image: { Bytes: selfieBuffer },
+                Attributes: ['ALL']
+            };
+
+            console.log('🔍 Detecting face in selfie...');
+            const detectResult = await rekognition.detectFaces(detectParams).promise();
+
+            if (!detectResult.FaceDetails || detectResult.FaceDetails.length === 0) {
+                console.log('❌ No face detected in selfie');
+                return res.json({ success: false, message: 'No face detected in the uploaded image' });
+            }
+
+            selfieFaceDetails = detectResult.FaceDetails[0];
+            console.log('✅ Face detected in selfie, confidence:', selfieFaceDetails.Confidence);
+        } catch (awsError) {
+            console.error('❌ AWS Rekognition detectFaces error:', awsError);
+            return res.json({
+                success: false,
+                message: 'AWS Rekognition error during face detection: ' + awsError.message
+            });
+        }
+
+        // Step 2: Determine photo scope (QR Session or Regular)
+        let allPhotoUrls = [];
+        let useQrSession = false;
+
+        if (sessionId) {
+            // QR Session Mode: Only scan photos from this specific session
+            console.log(`🎯 QR Session Mode: Scanning session ${sessionId}`);
+            const session = await QrSession.findOne({ sessionId });
+            
+            if (!session) {
+                return res.json({ success: false, message: 'Invalid session ID' });
+            }
+
+            if (new Date() > session.expiresAt) {
+                return res.json({ success: false, message: 'This session has expired' });
+            }
+
+            if (!session.isActive) {
+                return res.json({ success: false, message: 'This session is not active' });
+            }
+
+            useQrSession = true;
+            allPhotoUrls = session.uploadedPhotos.map(photo => ({
+                url: photo.url,
+                folderName: session.title,
+                sessionTitle: session.title,
+                sessionId: session.sessionId
+            }));
+
+            console.log(`📸 Found ${allPhotoUrls.length} photos in QR session`);
+        } else if (mobile) {
+            // Auto-detect user's active QR sessions
+            console.log(`🔍 Auto-detecting QR sessions for user ${mobile}`);
+            const activeSessions = await QrSession.find({
+                'registeredUsers.mobile': mobile,
+                isActive: true,
+                expiresAt: { $gt: new Date() }
+            }).lean();
+
+            if (activeSessions.length > 0) {
+                useQrSession = true;
+                for (const session of activeSessions) {
+                    const sessionPhotos = session.uploadedPhotos.map(photo => ({
+                        url: photo.url,
+                        folderName: session.title,
+                        sessionTitle: session.title,
+                        sessionId: session.sessionId
+                    }));
+                    allPhotoUrls.push(...sessionPhotos);
+                }
+                console.log(`📸 Found ${allPhotoUrls.length} photos across ${activeSessions.length} active QR sessions`);
+            }
+        }
+
+        // Fallback: Regular mode - query User/Studio uploadedData
+        if (!useQrSession) {
+            console.log('📊 Regular Mode: Querying recent photos from database (last 3 months)...');
+
+            const users = await User.find({}).select('mobile uploadedData name').lean();
+            const studios = await Studio.find({}).select('mobile uploadedData ownerName').lean();
+
+            const allAccounts = [...users, ...studios];
+
+            // Extract photo URLs from uploadedData
+            for (const account of allAccounts) {
+                const uploadedData = account.uploadedData || [];
+                if (Array.isArray(uploadedData)) {
+                    for (const folder of uploadedData) {
+                        if (folder && folder.files && Array.isArray(folder.files)) {
+                            for (const fileUrl of folder.files) {
+                                allPhotoUrls.push({
+                                    url: fileUrl,
+                                    folderName: folder.folderName || 'Unknown',
+                                    clientMobile: account.mobile,
+                                    clientName: account.name || account.ownerName || 'Unknown'
+                                });
+                            }
+                        }
+                        // Also check subfolders
+                        if (folder && folder.subFolders && Array.isArray(folder.subFolders)) {
+                            for (const subFolder of folder.subFolders) {
+                                if (subFolder.files && Array.isArray(subFolder.files)) {
+                                    for (const fileUrl of subFolder.files) {
+                                        allPhotoUrls.push({
+                                            url: fileUrl,
+                                            folderName: folder.folderName || 'Unknown',
+                                            subFolderName: subFolder.name || '',
+                                            clientMobile: account.mobile,
+                                            clientName: account.name || account.ownerName || 'Unknown'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            console.log(`📸 Found ${allPhotoUrls.length} photos in database`);
+        }
+
+        // Check if any photos exist in database
+        if (allPhotoUrls.length === 0) {
+            console.log('⚠️  No photos found in database to compare against');
+            return res.json({
+                success: true,
+                message: 'No photos found in database to compare against. Please upload some photos first.',
+                matchedPhotos: [],
+                totalMatches: 0,
+                processedPhotos: 0,
+                hasPhotos: false
+            });
+        }
+
+        // Limit to 50 photos for MVP testing (most recent)
+        const photosToProcess = allPhotoUrls.slice(0, 50);
+        console.log(`🔍 Processing ${photosToProcess.length} photos for face comparison`);
+
+        const matchedPhotos = [];
+        let processedCount = 0;
+
+        // Set similarity threshold: 85% for QR sessions (privacy), 70% for regular mode
+        const similarityThreshold = useQrSession ? 85 : 70;
+        console.log(`🎯 Using similarity threshold: ${similarityThreshold}%`);
+
+        // Step 3: Compare selfie face with each photo
+        for (const photo of photosToProcess) {
+            try {
+                // Download image from URL
+                const photoBuffer = await downloadImageFromUrl(photo.url);
+
+                if (!photoBuffer) {
+                    console.log(`⏭️  Skipping failed download: ${photo.url}`);
+                    processedCount++;
+                    continue;
+                }
+
+                // Compare faces using AWS Rekognition
+                const compareParams = {
+                    SourceImage: { Bytes: selfieBuffer },
+                    TargetImage: { Bytes: photoBuffer },
+                    SimilarityThreshold: similarityThreshold
+                };
+
+                const compareResult = await rekognition.compareFaces(compareParams).promise();
+
+                if (compareResult.FaceMatches && compareResult.FaceMatches.length > 0) {
+                    const similarity = compareResult.FaceMatches[0].Similarity;
+                    console.log(`✅ Match found: ${photo.url} - Similarity: ${similarity}%`);
+
+                    matchedPhotos.push({
+                        url: photo.url,
+                        folderName: photo.folderName,
+                        subFolderName: photo.subFolderName || '',
+                        confidence: Math.round(similarity),
+                        sessionId: photo.sessionId || null,
+                        sessionTitle: photo.sessionTitle || null
+                    });
+                }
+
+                processedCount++;
+                if (processedCount % 10 === 0) {
+                    console.log(`🔄 Processed ${processedCount}/${photosToProcess.length} photos`);
+                }
+            } catch (error) {
+                console.error(`❌ Error processing photo ${photo.url}:`, error.message);
+                processedCount++;
+            }
+        }
+
+        // Sort by confidence (highest first)
+        matchedPhotos.sort((a, b) => b.confidence - a.confidence);
+
+        // Return top 20 matches
+        const topMatches = matchedPhotos.slice(0, 20);
+
+        console.log(`✅ Face scan completed - found ${topMatches.length} matches`);
+
+        res.json({
+            success: true,
+            message: 'Face scan completed successfully',
+            matchedPhotos: topMatches,
+            totalMatches: topMatches.length,
+            processedPhotos: processedCount,
+            useQrSession: useQrSession
+        });
+
+    } catch (error) {
+        console.error('Face scan error:', error);
+        res.status(500).json({ success: false, message: 'Error processing face scan: ' + error.message });
+    }
+});
+
+// ==========================================
+// 🎯 QR SESSION ROUTES (For Event Photography)
+// ==========================================
+
+// Helper: Generate unique session ID
+const generateSessionId = () => {
+    return 'QR-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+// 1. Create QR Session (Studio/Admin only)
+app.post('/api/qr-session/create', authenticateToken, async (req, res) => {
+    try {
+        // Only Studio and Admin can create sessions
+        if (req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only Studio/Admin can create QR sessions.' });
+        }
+
+        const { title, expiresAt, maxDownloads, venueName, latitude, longitude, startTime, endTime, isPublic } = req.body;
+
+        if (!title) {
+            return res.json({ success: false, message: 'Title is required' });
+        }
+
+        if (!expiresAt) {
+            return res.json({ success: false, message: 'Expiry date is required' });
+        }
+
+        const sessionId = generateSessionId();
+        const studioName = req.user.role === 'STUDIO' ? req.user.studioName : 'Admin';
+
+        const newSession = await QrSession.create({
+            sessionId,
+            studioId: req.user.mobile,
+            studioName,
+            title,
+            expiresAt: new Date(expiresAt),
+            maxDownloads: maxDownloads || 10,
+            isActive: true,
+            venueName: venueName || '',
+            latitude: latitude != null && latitude !== '' ? Number(latitude) : null,
+            longitude: longitude != null && longitude !== '' ? Number(longitude) : null,
+            startTime: startTime ? new Date(startTime) : null,
+            endTime: endTime ? new Date(endTime) : null,
+            isPublic: isPublic === true || isPublic === 'true'
+        });
+
+        console.log(`✅ QR Session created: ${sessionId} by ${req.user.mobile}`);
+
+        res.json({
+            success: true,
+            message: 'QR session created successfully',
+            session: newSession,
+            qrLink: `/?qrSession=${sessionId}`
+        });
+
+    } catch (error) {
+        console.error('QR Session creation error:', error);
+        res.status(500).json({ success: false, message: 'Error creating QR session: ' + error.message });
+    }
+});
+
+// 2. Register Face Angles to QR Session
+app.post('/api/qr-session/:sessionId/register-face', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { mobile, email, name, faceAngles } = req.body;
+
+        if (!mobile || !faceAngles || !faceAngles.center) {
+            return res.json({ success: false, message: 'Mobile and center face angle are required' });
+        }
+
+        // Find session
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Invalid session ID' });
+        }
+
+        // Check if session is expired
+        if (new Date() > session.expiresAt) {
+            return res.json({ success: false, message: 'This session has expired' });
+        }
+
+        // Check if user already registered
+        const existingUser = session.registeredUsers.find(u => u.mobile === mobile);
+        if (existingUser) {
+            // Update existing user's face angles
+            existingUser.faceAngles = faceAngles;
+            existingUser.name = name || existingUser.name;
+            existingUser.email = email || existingUser.email;
+            await session.save();
+            console.log(`✅ Updated face angles for ${mobile} in session ${sessionId}`);
+        } else {
+            // Register new user
+            session.registeredUsers.push({
+                userId: req.body.userId || null,
+                mobile,
+                email: email || '',
+                name: name || '',
+                faceAngles,
+                registeredAt: new Date()
+            });
+            await session.save();
+            console.log(`✅ Registered ${mobile} to session ${sessionId}`);
+        }
+
+        res.json({
+            success: true,
+            message: 'Face angles registered successfully',
+            sessionId: session.sessionId,
+            sessionTitle: session.title
+        });
+
+    } catch (error) {
+        console.error('QR Session face registration error:', error);
+        res.status(500).json({ success: false, message: 'Error registering face: ' + error.message });
+    }
+});
+
+// 3. Upload Photos to QR Session
+app.post('/api/qr-session/:sessionId/upload', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { photoUrls } = req.body;
+
+        if (!photoUrls || !Array.isArray(photoUrls) || photoUrls.length === 0) {
+            return res.json({ success: false, message: 'Photo URLs are required' });
+        }
+
+        // Find session
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Invalid session ID' });
+        }
+
+        // Verify studio/admin ownership
+        if (session.studioId !== req.user.mobile && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only session creator can upload photos.' });
+        }
+
+        // Add photos to session
+        const newPhotos = photoUrls.map(url => ({
+            url,
+            uploadedAt: new Date()
+        }));
+
+        session.uploadedPhotos.push(...newPhotos);
+        await session.save();
+
+        console.log(`✅ Uploaded ${photoUrls.length} photos to session ${sessionId}`);
+
+        res.json({
+            success: true,
+            message: 'Photos uploaded successfully',
+            totalPhotos: session.uploadedPhotos.length
+        });
+
+    } catch (error) {
+        console.error('QR Session photo upload error:', error);
+        res.status(500).json({ success: false, message: 'Error uploading photos: ' + error.message });
+    }
+});
+
+// 4. Get QR Session Details (for Studio/Admin)
+app.post('/api/qr-session/:sessionId/details', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Session not found' });
+        }
+
+        // Verify ownership
+        if (session.studioId !== req.user.mobile && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized' });
+        }
+
+        res.json({
+            success: true,
+            session
+        });
+
+    } catch (error) {
+        console.error('QR Session details error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching session details: ' + error.message });
+    }
+});
+
+// 5. List All QR Sessions (for Studio/Admin)
+app.post('/api/qr-session/list', authenticateToken, async (req, res) => {
+    try {
+        const sessions = await QrSession.find({ studioId: req.user.mobile })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({
+            success: true,
+            sessions
+        });
+
+    } catch (error) {
+        console.error('QR Session list error:', error);
+        res.status(500).json({ success: false, message: 'Error listing sessions: ' + error.message });
+    }
+});
+
+// 6. Notify Registered Users (Studio/Admin only)
+app.post('/api/qr-session/:sessionId/notify-users', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        // Only Studio and Admin can notify
+        if (req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only Studio/Admin can notify users.' });
+        }
+
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Session not found' });
+        }
+
+        // Verify ownership (Studio owner or Admin)
+        if (session.studioId !== req.user.mobile && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only session creator can notify users.' });
+        }
+
+        const registeredUsers = session.registeredUsers || [];
+
+        if (registeredUsers.length === 0) {
+            return res.json({ success: true, notifiedCount: 0, message: 'No guests have scanned this QR yet.' });
+        }
+
+        const unviewedUsers = registeredUsers.filter(u => u.hasViewed !== true);
+
+        if (unviewedUsers.length === 0) {
+            return res.json({ success: true, notifiedCount: 0, message: 'All guests have already viewed the photos.' });
+        }
+
+        const title = '📸 Event Photos Ready!';
+        const message = `Photos for ${session.title} are uploaded! Scan your face to view & download.`;
+
+        for (const user of unviewedUsers) {
+            await notifyQrSessionUser(session, user, title, message);
+            user.lastNotifiedAt = new Date();
+            user.reminderCount = (user.reminderCount || 0) + 1;
+        }
+
+        await session.save();
+
+        console.log(`✅ Notified ${unviewedUsers.length} users for session ${sessionId}`);
+
+        res.json({
+            success: true,
+            notifiedCount: unviewedUsers.length,
+            message: `Notifications sent to ${unviewedUsers.length} registered users.`
+        });
+
+    } catch (error) {
+        console.error('QR Session notify-users error:', error);
+        res.status(500).json({ success: false, message: 'Error notifying users: ' + error.message });
+    }
+});
+
+// 7. Mark User as Viewed (stops future reminders for that user)
+app.post('/api/qr-session/:sessionId/mark-viewed', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { mobile } = req.body;
+
+        if (!mobile) {
+            return res.json({ success: false, message: 'Mobile is required' });
+        }
+
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Session not found' });
+        }
+
+        const user = session.registeredUsers.find(u => u.mobile === mobile);
+        if (!user) {
+            return res.json({ success: false, message: 'User not registered in this session' });
+        }
+
+        user.hasViewed = true;
+        await session.save();
+
+        res.json({ success: true, message: 'Marked as viewed' });
+
+    } catch (error) {
+        console.error('QR Session mark-viewed error:', error);
+        res.status(500).json({ success: false, message: 'Error marking viewed: ' + error.message });
+    }
+});
+
+// 8. Delete QR Session (Studio owner or Admin only)
+app.delete('/api/qr-session/:sessionId', authenticateToken, async (req, res) => {
+    try {
+        // Only Studio and Admin can delete sessions
+        if (req.user.role !== 'STUDIO' && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only Studio/Admin can delete QR sessions.' });
+        }
+
+        const { sessionId } = req.params;
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) {
+            return res.json({ success: false, message: 'Session not found' });
+        }
+
+        // Verify ownership (Studio owner or Admin)
+        if (session.studioId !== req.user.mobile && req.user.role !== 'ADMIN' && req.user.role !== 'OWNER') {
+            return res.json({ success: false, message: 'Unauthorized. Only session creator can delete this session.' });
+        }
+
+        await QrSession.deleteOne({ sessionId });
+        console.log(`✅ QR Session deleted: ${sessionId}`);
+
+        res.json({ success: true, message: 'QR session deleted' });
+
+    } catch (error) {
+        console.error('QR Session delete error:', error);
+        res.status(500).json({ success: false, message: 'Error deleting session: ' + error.message });
+    }
+});
+
+// 9. Public Live Events (no auth — safe public fields only)
+app.get('/api/qr-session/live-events', async (req, res) => {
+    try {
+        const now = new Date();
+        const sessions = await QrSession.find({
+            isPublic: true,
+            $or: [
+                { endTime: { $gt: now } },
+                { expiresAt: { $gt: now } }
+            ]
+        })
+        .sort({ startTime: 1 })
+        .lean();
+
+        const events = sessions.map(s => ({
+            sessionId: s.sessionId,
+            title: s.title,
+            venueName: s.venueName || '',
+            latitude: s.latitude,
+            longitude: s.longitude,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            studioName: s.studioName || ''
+        }));
+
+        res.json({ success: true, events });
+    } catch (error) {
+        console.error('Live events fetch error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching live events' });
+    }
+});
+
+// 10. Web Push — VAPID public key + subscribe
+app.get('/api/push/vapid-public-key', (req, res) => {
+    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || '' });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+    try {
+        const { mobile, subscription } = req.body || {};
+        if (!mobile || !subscription) {
+            return res.json({ success: false, message: 'mobile and subscription are required' });
+        }
+        await PushSubscription.findOneAndUpdate(
+            { mobile },
+            { mobile, subscription, updatedAt: new Date() },
+            { upsert: true, new: true }
+        );
+        res.json({ success: true, message: 'Push subscription saved' });
+    } catch (error) {
+        console.error('❌ Push subscribe error:', error.message);
+        res.status(500).json({ success: false, message: 'Error saving push subscription' });
+    }
+});
+
+// 11. Save selected QR event photos into the user's folder (Public → Spotted by Snevio, Private → event folder)
+app.post('/api/qr-session/:sessionId/save-to-folder', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { photoUrls, mobile: bodyMobile } = req.body || {};
+        const mobile = bodyMobile || (req.user && req.user.mobile);
+        if (!mobile) return res.json({ success: false, message: 'Mobile required' });
+        if (!Array.isArray(photoUrls) || photoUrls.length === 0) return res.json({ success: false, message: 'No photos selected' });
+
+        const session = await QrSession.findOne({ sessionId });
+        if (!session) return res.json({ success: false, message: 'QR session not found' });
+
+        const regUser = (session.registeredUsers || []).find(u => u.mobile === mobile);
+        if (!regUser) return res.json({ success: false, message: 'You are not registered for this event' });
+
+        // Stop reminders for this user once photos are saved to their folder
+        if (regUser.hasViewed !== true) {
+            regUser.hasViewed = true;
+            await session.save();
+        }
+
+        const isPublic = session.isPublic === true;
+        const folderName = isPublic ? 'Spotted by Snevio' : ((session.title || 'Private Event').toString().slice(0, 60));
+
+        const account = await User.findOne({ mobile });
+        if (!account) return res.json({ success: false, message: 'User account not found' });
+
+        let data = account.uploadedData;
+        if (!Array.isArray(data)) data = (data && typeof data === 'object') ? Object.values(data) : [];
+        if (!Array.isArray(data)) data = [];
+
+        let folder = data.find(f => f && typeof f === 'object' && f.folderName === folderName);
+        if (!folder) {
+            folder = {
+                folderName,
+                files: [],
+                subFolders: [],
+                isDefault: false,
+                downloadLimit: 0,
+                downloadCount: 0,
+                imageCost: 5,
+                videoCost: 10,
+                unlockValidity: '24 Hours',
+                uploaderName: 'Snevio',
+                uploaderRole: isPublic ? 'Snevio Official' : 'Private Event',
+                isPrivateEvent: !isPublic,
+                eventSessionId: sessionId
+            };
+            data.push(folder);
+        }
+        if (!Array.isArray(folder.files)) folder.files = [];
+
+        const existing = new Set(folder.files.map(f => (typeof f === 'string' ? f : (f && f.url) || '')));
+        const savedUrls = [];
+        for (const url of photoUrls) {
+            if (!url || existing.has(url)) continue;
+            folder.files.push(url);
+            existing.add(url);
+            savedUrls.push(url);
+        }
+
+        account.uploadedData = data;
+        await account.save({ strict: false });
+
+        res.json({ success: true, folderName, savedCount: savedUrls.length, savedUrls });
+    } catch (error) {
+        console.error('❌ QR save-to-folder error:', error.message);
+        res.status(500).json({ success: false, message: 'Error saving photos to folder' });
     }
 });
 
