@@ -7,6 +7,9 @@ import { calculateDailyReward } from '../utils/coinLogic';
 import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
+import QRClaimModal from '../components/QRClaimModal';
+import QRSessionManager from '../components/QRSessionManager';
+import QRScannerModal from '../components/QRScannerModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
@@ -115,17 +118,283 @@ const UserDashboard = ({ user, userData, onLogout }) => {
     const [userSubPlans, setUserSubPlans] = useState([]); // Will fetch from global settings
     const [activeSubscription, setActiveSubscription] = useState(user?.activePlan || null);
 
+    // 🎭 FACE SEARCH FEATURE STATES
+    const [showFaceScanModal, setShowFaceScanModal] = useState(false);
+    const [videoStream, setVideoStream] = useState(null);
+    const [capturedImage, setCapturedImage] = useState(null);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [matchedPhotos, setMatchedPhotos] = useState([]);
+    const [faceSelected, setFaceSelected] = useState([]);
+    const [faceSaving, setFaceSaving] = useState(false);
+    const pendingQrSaveRef = useRef(null);
+    const extraSavedUrlsRef = useRef(new Set());
+    const [scanError, setScanError] = useState(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    // 🎯 QR SESSION FEATURE STATES
+    const [showQRClaimModal, setShowQRClaimModal] = useState(false);
+    const [activeSessionId, setActiveSessionId] = useState(null);
+    const [showQRSessionManager, setShowQRSessionManager] = useState(false);
+    const [showQRScannerModal, setShowQRScannerModal] = useState(false);
+
     // Live Timer Refresh Effect (Ticks every second)
     useEffect(() => {
         const timer = setInterval(() => setTimeTicker(Date.now()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    // 🎭 CAMERA CLEANUP EFFECT - Stop camera when modal closes
+    useEffect(() => {
+        return () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [videoStream]);
+
+    // 🎭 CLEAR ERROR STATE WHEN MODAL CLOSES
+    useEffect(() => {
+        if (!showFaceScanModal) {
+            setScanError(null);
+        }
+    }, [showFaceScanModal]);
+
+    // 🎭 START CAMERA FUNCTION
+    const startCamera = async () => {
+        console.log('🎥 Starting camera...');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            });
+
+            console.log('✅ Camera stream obtained successfully');
+            setVideoStream(stream);
+            setIsCameraActive(true);
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => {
+                    console.log('🎬 Video metadata loaded, starting playback');
+                    videoRef.current.play();
+                };
+            }
+        } catch (error) {
+            console.error('❌ Camera access error:', error);
+            showToast('Unable to access camera. Please check permissions.', 'error');
+        }
+    };
+
+    // 🎭 STOP CAMERA FUNCTION
+    const stopCamera = () => {
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            setVideoStream(null);
+            setIsCameraActive(false);
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    };
+
+    // 🎭 CAPTURE SELFIE FUNCTION
+    const captureSelfie = () => {
+        console.log('📸 Capture selfie button clicked');
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+
+            // Set canvas dimensions to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw video frame to canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert to base64 image
+            const imageData = canvas.toDataURL('image/jpeg', 0.95);
+            console.log('✅ Photo captured successfully, base64 size:', imageData.length);
+            setCapturedImage(imageData);
+
+            // Stop camera after capture
+            stopCamera();
+        } else {
+            console.log('❌ Cannot capture - video or canvas ref not available');
+        }
+    };
+
+    // 🎭 RETAKE PHOTO FUNCTION
+    const retakePhoto = () => {
+        console.log('🔄 Retake photo - clearing captured image and restarting camera');
+        setCapturedImage(null);
+        startCamera();
+    };
+
+    // 🎭 OPEN MODAL AND START CAMERA
+    const openFaceScanModal = () => {
+        console.log('🎭 Opening face scan modal');
+        setCapturedImage(null);
+        setShowFaceScanModal(true);
+        startCamera();
+    };
+
+    // 🎭 SEND SELFIE TO BACKEND FOR FACE SCANNING
+    const submitFaceScan = async () => {
+        if (!capturedImage) {
+            console.log('❌ No captured image to submit');
+            return;
+        }
+
+        console.log('🚀 Submitting face scan to backend...');
+        console.log('📸 Image size (base64):', capturedImage.length, 'characters');
+        console.log('📡 Using relative path:', '/api/face-scan');
+        console.log('📡 Will be proxied to:', 'http://localhost:5000/api/face-scan');
+
+        setIsScanning(true);
+        setScanError(null);
+
+        try {
+            const response = await axios.post('/api/face-scan', {
+                selfieImage: capturedImage
+            }, {
+                timeout: 10000, // 10 second timeout
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('✅ Backend response received:', response.data);
+            console.log('Response status:', response.status);
+
+            if (response.data.success) {
+                console.log('🎉 Face scan successful! Matched photos:', response.data.matchedPhotos);
+                const savedFaceUrls = getSavedFacePhotoUrls();
+                const freshMatches = (response.data.matchedPhotos || []).filter(p => p && p.url && !savedFaceUrls.has(p.url));
+                setMatchedPhotos(freshMatches);
+                setFaceSelected([]);
+                setShowFaceScanModal(false);
+                
+                showToast(`Found ${response.data.matchedPhotos.length} matching photos!`, 'success');
+            } else {
+                console.log('❌ Backend returned failure:', response.data.message);
+                setScanError(response.data.message || 'Face scan failed. Please try again.');
+                showToast('Face scan failed. Please try again.', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Face scan API error:', error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Response data:', error.response?.data);
+            console.error('Response status:', error.response?.status);
+            console.error('Response headers:', error.response?.headers);
+
+            let errorMessage = 'Error connecting to face scan service.';
+
+            if (error.code === 'ECONNREFUSED') {
+                errorMessage = 'Cannot connect to backend server. Please ensure the backend is running on port 5000.';
+            } else if (error.code === 'ERR_NETWORK') {
+                errorMessage = 'Network error. Please check your internet connection.';
+            } else if (error.response?.status === 404) {
+                errorMessage = 'Face scan endpoint not found. Check backend URL configuration.';
+            } else if (error.response?.status === 500) {
+                errorMessage = 'Server error occurred. Please try again later.';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            setScanError(errorMessage);
+            showToast(errorMessage, 'error');
+        } finally {
+            setIsScanning(false);
+        }
+    };
     
+    // 🎭 FACE FIND: duplicate filter + multi-select helpers
+    const getSavedFacePhotoUrls = () => {
+        const urls = new Set(extraSavedUrlsRef.current || []);
+        folders.forEach(f => {
+            (f.files || []).forEach(file => { const u = typeof file === 'string' ? file : (file && file.url); if (u) urls.add(u); });
+            (f.subFolders || []).forEach(sf => (sf.files || []).forEach(file => { const u = typeof file === 'string' ? file : (file && file.url); if (u) urls.add(u); }));
+        });
+        return urls;
+    };
+
+    const toggleFacePhoto = (url) => {
+        setFaceSelected(prev => prev.includes(url) ? prev.filter(u => u !== url) : [...prev, url]);
+    };
+
+    const toggleSelectAllFacePhotos = () => {
+        const all = matchedPhotos.map(p => p.url).filter(Boolean);
+        setFaceSelected(prev => (all.length > 0 && prev.length === all.length ? [] : all));
+    };
+
+    const removeFacePhotosFromView = (urls) => {
+        const removeSet = new Set(urls);
+        setMatchedPhotos(prev => prev.filter(p => !removeSet.has(p.url)));
+        setFaceSelected(prev => prev.filter(u => !removeSet.has(u)));
+    };
+
+    const handleFaceAddToFolder = async () => {
+        if (!activeSessionId || faceSelected.length === 0 || faceSaving) return;
+        setFaceSaving(true);
+        try {
+            const res = await axios.post(`/api/qr-session/${activeSessionId}/save-to-folder`, { photoUrls: faceSelected, mobile: syncUser.mobile }, { headers: { Authorization: `Bearer ${getValidToken()}` } });
+            if (res.data && res.data.success) {
+                const savedUrls = res.data.savedUrls || [];
+                if (savedUrls.length) {
+                    savedUrls.forEach(u => extraSavedUrlsRef.current.add(u));
+                    setFolders(prev => prev.map(f => f.folderName === res.data.folderName ? { ...f, files: [...(f.files || []), ...savedUrls] } : f));
+                }
+                removeFacePhotosFromView(faceSelected);
+                showToast(`Saved ${res.data.savedCount} photo(s) to "${res.data.folderName}" 📁`, 'success');
+            } else {
+                showToast(res.data?.message || 'Failed to save photos', 'error');
+            }
+        } catch (e) {
+            console.log('QR save-to-folder failed:', e.message);
+            showToast('Error saving photos to folder', 'error');
+        } finally {
+            setFaceSaving(false);
+        }
+    };
+
+    const handleFaceAddAndDownload = () => {
+        if (!activeSessionId || faceSelected.length === 0 || faceSaving) return;
+        const urls = [...faceSelected];
+        const firstUrl = urls[0];
+        const srcFolder = folders.find(f => (f.files || []).some(file => (typeof file === 'string' ? file : file?.url) === firstUrl));
+        const perCost = srcFolder ? (isVideo(firstUrl) ? (srcFolder.videoCost || 10) : (srcFolder.imageCost || 5)) : 5;
+        const unitCost = activeSubscription?.type === 'VIP' ? 0 : (activeSubscription?.type === 'PREMIUM' ? Math.ceil(perCost / 2) : perCost);
+        pendingQrSaveRef.current = { sessionId: activeSessionId, urls };
+        setPurchaseModal({ show: true, file: null, files: urls, cost: unitCost * urls.length, type: `${urls.length} Face Find Photos`, isBatch: true });
+    };
+
     // --- USER SYNCED DATA (REAL-TIME) ---
     const [syncUser, setSyncUser] = useState(user || {});
     // ✅ Added unlockedFiles array to wallet state
     const [wallet, setWallet] = useState(user?.wallet || { coins: 0, currentStreak: 0, history: [], claimedEvents: [], unlockedFiles: [] });
     const [editName, setEditName] = useState(user?.name || '');
+
+    // 🎯 CHECK URL FOR QR SESSION PARAMETER
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const qrSession = urlParams.get('qrSession');
+        
+        if (qrSession && user && syncUser.mobile) {
+            setActiveSessionId(qrSession);
+            setShowQRClaimModal(true);
+            // Clean URL without page reload
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }, [user, syncUser.mobile]);
     
     // --- FOLDER & MEDIA STATES ---
     const [folders, setFolders] = useState([]);
@@ -265,7 +534,94 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }
     }, [currentTab]);
 
+    // 🎟️ LIVE EVENTS NEAR YOU (Public QR events)
+    const [liveEvents, setLiveEvents] = useState([]);
+    const [liveEventUserCoords, setLiveEventUserCoords] = useState(null);
+
+    const haversineKm = (lat1, lon1, lat2, lon2) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const getLiveEventStatus = (ev) => {
+        const now = Date.now();
+        const start = ev.startTime ? new Date(ev.startTime).getTime() : null;
+        const end = ev.endTime ? new Date(ev.endTime).getTime() : null;
+        if (start && now < start) return 'SOON';
+        return 'LIVE';
+    };
+
+    const formatEventTime = (d) => d ? new Date(d).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+    useEffect(() => {
+        let cancelled = false;
+        axios.get('/api/qr-session/live-events').then(res => {
+            if (cancelled) return;
+            if (res.data && res.data.success && Array.isArray(res.data.events)) setLiveEvents(res.data.events);
+        }).catch(() => {});
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => { if (!cancelled) setLiveEventUserCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }); },
+                () => {},
+                { timeout: 8000, maximumAge: 600000 }
+            );
+        }
+        return () => { cancelled = true; };
+    }, []);
+
+    // 🔔 WEB PUSH NOTIFICATIONS (Event QR guests)
+    const [showPushPrompt, setShowPushPrompt] = useState(false);
+    const [pushSubscribing, setPushSubscribing] = useState(false);
+    const [showLiveEventsModal, setShowLiveEventsModal] = useState(false);
+
+    const urlBase64ToUint8Array = (base64String) => {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+    };
+
+    useEffect(() => {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration failed:', err));
+        }
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const hasQrParam = !!params.get('qrSession');
+            if (hasQrParam && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                setShowPushPrompt(true);
+            }
+        } catch (e) {}
+    }, []);
+
+    const handleAllowPushAlerts = async () => {
+        setPushSubscribing(true);
+        try {
+            if (!syncUser?.mobile) { setShowPushPrompt(false); return; }
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') { setShowPushPrompt(false); return; }
+            const registration = await navigator.serviceWorker.ready;
+            const keyRes = await axios.get('/api/push/vapid-public-key');
+            const publicKey = keyRes.data && keyRes.data.publicKey;
+            if (!publicKey) throw new Error('No VAPID public key');
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+            await axios.post('/api/push/subscribe', { mobile: syncUser.mobile, subscription: subscription.toJSON() });
+            setShowPushPrompt(false);
+        } catch (err) {
+            console.log('Push subscribe failed:', err);
+            setShowPushPrompt(false);
+        } finally {
+            setPushSubscribing(false);
+        }
+    };
+
     const DEFAULT_FOLDER = { folderName: 'Snevio Photography', files: [], subFolders: [], isDefault: true, uploadedBy: 'Snevio Official', uploaderRole: 'VIP Studio', imageCost: 5, videoCost: 10, unlockValidity: '24 Hours' };
+    const EXCLUSIVE_FOLDER = { folderName: 'Snevio Exclusive Events', files: [], subFolders: [], isDefault: false, uploadedBy: 'Snevio Official', uploaderRole: 'Super Admin', imageCost: 5, videoCost: 10, unlockValidity: '24 Hours' };
 
     // 🌐 NETWORK MONITOR (Auto-Logout Removed)
     useEffect(() => {
@@ -377,7 +733,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             let activeUser = user || JSON.parse(sessionStorage.getItem('user'));
             if (!activeUser || !activeUser.mobile) {
                 if (isInitialLoad) {
-                    setFolders([DEFAULT_FOLDER]);
+                    setFolders([DEFAULT_FOLDER, EXCLUSIVE_FOLDER]);
                     setLoading(false);
                 }
                 return; 
@@ -432,10 +788,10 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                         ? { ...DEFAULT_FOLDER, ...existingDefaultData, folderName: 'Snevio Photography' } 
                         : DEFAULT_FOLDER;
                     
-                    setFolders([finalDefaultFolder, ...customFolders]);
+                    setFolders([finalDefaultFolder, EXCLUSIVE_FOLDER, ...customFolders]);
                     sessionStorage.setItem('user', JSON.stringify({ ...activeUser, name: dbData.name })); 
                 } else if(isInitialLoad) {
-                    setFolders([DEFAULT_FOLDER]); 
+                    setFolders([DEFAULT_FOLDER, EXCLUSIVE_FOLDER]); 
                 }
 
                 // Only fetch heavy global settings on initial load
@@ -457,7 +813,7 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
             } catch (error) {
                 console.error("Fetch error:", error);
-                if(isInitialLoad) setFolders([DEFAULT_FOLDER]); 
+                if(isInitialLoad) setFolders([DEFAULT_FOLDER, EXCLUSIVE_FOLDER]); 
             } finally {
                 if (isInitialLoad) setLoading(false);
             }
@@ -523,6 +879,15 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
     // ⏳ 15 SECOND TIMER FOR INSTALL POPUP
     useEffect(() => {
+        const isAppInstalled =
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.navigator.standalone === true ||
+            localStorage.getItem('snevio_app_installed') === 'true';
+        const laterCount = Number(localStorage.getItem('snevio_install_later_count') || 0);
+
+        // Installed app ya 2 baar "Later" dabaya ho to banner kabhi na dikhao
+        if (isAppInstalled || laterCount >= 2) return;
+
         const timer = setTimeout(() => {
             // Check karo agar browser ne install allow kiya hai aur app pehle se installed nahi hai
             if (window.deferredPrompt) {
@@ -531,6 +896,16 @@ const UserDashboard = ({ user, userData, onLogout }) => {
         }, 15000); // 15000ms = 15 Seconds
 
         return () => clearTimeout(timer);
+    }, []);
+
+    // 📲 App install hone par banner ko turant hide karo
+    useEffect(() => {
+        const handleAppInstalled = () => {
+            localStorage.setItem('snevio_app_installed', 'true');
+            setShowInstallBanner(false);
+        };
+        window.addEventListener('appinstalled', handleAppInstalled);
+        return () => window.removeEventListener('appinstalled', handleAppInstalled);
     }, []);
 
     const fetchNotifications = async (userMobile) => {
@@ -882,6 +1257,21 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                 setPurchaseModal({ show: false, file: null, files: [], cost: 0, type: '', isBatch: false });
                 alert(`${targetType} Unlocked Successfully! 🎉`);
+                if (pendingQrSaveRef.current && pendingQrSaveRef.current.sessionId) {
+                    const pending = pendingQrSaveRef.current;
+                    pendingQrSaveRef.current = null;
+                    const unlockedUrls = pending.urls;
+                    try {
+                        const saveRes = await axios.post(`/api/qr-session/${pending.sessionId}/save-to-folder`, { photoUrls: unlockedUrls, mobile: syncUser.mobile }, { headers: { Authorization: `Bearer ${getValidToken()}` } });
+                        if (saveRes.data && saveRes.data.success) {
+                            const savedUrls = saveRes.data.savedUrls || [];
+                            savedUrls.forEach(u => extraSavedUrlsRef.current.add(u));
+                            setFolders(prev => prev.map(f => f.folderName === saveRes.data.folderName ? { ...f, files: [...(f.files || []), ...savedUrls] } : f));
+                            removeFacePhotosFromView(unlockedUrls);
+                            showToast(`Unlocked & saved ${saveRes.data.savedCount} photo(s) to "${saveRes.data.folderName}" ⚡`, 'success');
+                        }
+                    } catch (e) { console.log('QR folder save after unlock failed:', e.message); }
+                }
             } else {
                 alert(res.data.message || "Purchase failed.");
             }
@@ -3141,9 +3531,321 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                     <h1 style={{ color: '#fff', fontSize: '24px', margin: '0 0 8px 0', letterSpacing: '1px' }}>Your Digital Memories</h1>
                     <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>Select a folder to view your curated albums.</p>
                 </div>
-                
+
+                {/* 🎭 FACE SEARCH PREMIUM BANNER */}
+                <div style={{
+                    width: '100%',
+                    maxWidth: '600px',
+                    margin: '0 auto 30px auto',
+                    padding: '20px',
+                    background: 'linear-gradient(145deg, #1a1813, #0a0a0a)',
+                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 30px rgba(212, 175, 55, 0.15)',
+                    textAlign: 'center',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}>
+                        {/* Decorative glow effect */}
+                        <div style={{
+                            position: 'absolute',
+                            top: '-50px',
+                            right: '-50px',
+                            width: '150px',
+                            height: '150px',
+                            background: 'rgba(241, 196, 15, 0.1)',
+                            borderRadius: '50%',
+                            filter: 'blur(40px)',
+                            zIndex: 0
+                        }}></div>
+
+                        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%' }}>
+                            <h3 style={{
+                                color: '#fff',
+                                fontSize: '18px',
+                                margin: '0 0 8px 0',
+                                fontWeight: 'bold',
+                                letterSpacing: '0.5px'
+                            }}>
+                                Find yourself in the crowd
+                            </h3>
+                            <p style={{
+                                color: '#aaa',
+                                fontSize: '12px',
+                                margin: 0
+                            }}>
+                                Use AI face recognition to discover your photos instantly
+                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexWrap: 'wrap', width: '100%', marginTop: '18px' }}>
+                                <button
+                                    onClick={openFaceScanModal}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #f1c40f, #d4af37)',
+                                        color: '#000',
+                                        border: 'none',
+                                        padding: '0 30px',
+                                        height: '48px',
+                                        borderRadius: '25px',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(241, 196, 15, 0.4)',
+                                        transition: 'all 0.3s ease',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '1px',
+                                        whiteSpace: 'nowrap',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(241, 196, 15, 0.6)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(241, 196, 15, 0.4)';
+                                    }}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                                        <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                                        <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                                        <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="M12 16v2"></path>
+                                        <path d="M12 6v2"></path>
+                                        <path d="M16 12h2"></path>
+                                        <path d="M6 12h2"></path>
+                                    </svg>
+                                    Face Scan
+                                </button>
+                                <button
+                                    onClick={() => setShowQRScannerModal(true)}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #1a1a2e, #2a2a4e)',
+                                        color: '#FFD700',
+                                        border: '2px solid #FFD700',
+                                        padding: '0 24px',
+                                        height: '48px',
+                                        borderRadius: '25px',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(255, 215, 0, 0.3)',
+                                        transition: 'all 0.3s ease',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '1px',
+                                        whiteSpace: 'nowrap',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(255, 215, 0, 0.5)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.3)';
+                                    }}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect width="5" height="5" x="3" y="3" rx="1"></rect>
+                                        <rect width="5" height="5" x="16" y="3" rx="1"></rect>
+                                        <rect width="5" height="5" x="3" y="16" rx="1"></rect>
+                                        <rect width="5" height="5" x="16" y="16" rx="1"></rect>
+                                    </svg>
+                                    Scan QR
+                                </button>
+                                <button
+                                    onClick={() => setShowLiveEventsModal(true)}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #1a1a2e, #2a2a4e)',
+                                        color: '#FFD700',
+                                        border: '2px solid rgba(255, 215, 0, 0.6)',
+                                        padding: '0 24px',
+                                        height: '48px',
+                                        borderRadius: '25px',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(255, 215, 0, 0.3)',
+                                        transition: 'all 0.3s ease',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '1px',
+                                        whiteSpace: 'nowrap',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(255, 215, 0, 0.5)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.3)';
+                                    }}
+                                >
+                                    <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#ff3b30', boxShadow: '0 0 8px #ff3b30', animation: 'livePulse 1.5s ease-in-out infinite' }} />
+                                    <style>{`@keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }`}</style>
+                                    Live Events{liveEvents.length > 0 ? ` (${liveEvents.length})` : ''}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                {/* 🎭 MATCHED PHOTOS GALLERY - Displayed after successful face scan */}
+                {matchedPhotos.length > 0 && (
+                    <div style={{
+                        width: '100%',
+                        maxWidth: '1200px',
+                        margin: '0 auto 30px auto',
+                        padding: '0 20px'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '20px'
+                        }}>
+                            <h2 style={{
+                                color: '#fff',
+                                fontSize: '22px',
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px'
+                            }}>
+                                <span style={{ fontSize: '26px' }}>🎭</span> Your Matched Photos
+                            </h2>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={toggleSelectAllFacePhotos}
+                                    style={{
+                                        background: 'rgba(255, 215, 0, 0.15)',
+                                        color: '#FFD700',
+                                        border: '1px solid rgba(255, 215, 0, 0.4)',
+                                        padding: '8px 16px',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                >
+                                    {faceSelected.length === matchedPhotos.length && matchedPhotos.length > 0 ? 'Deselect All' : 'Select All'}
+                                </button>
+                                <button
+                                    onClick={() => { setMatchedPhotos([]); setFaceSelected([]); }}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    color: '#fff',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    padding: '8px 16px',
+                                    borderRadius: '20px',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(231, 76, 60, 0.2)';
+                                    e.currentTarget.style.borderColor = '#e74c3c';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                                }}
+                            >
+                                Clear Results
+                            </button>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                            gap: '20px'
+                        }}>
+                            {matchedPhotos.map((photo, index) => (
+                                <div
+                                    key={index}
+                                    style={{
+                                        background: 'linear-gradient(145deg, #1a1813, #0a0a0a)',
+                                        border: '1px solid rgba(212, 175, 55, 0.3)',
+                                        borderRadius: '16px',
+                                        overflow: 'hidden',
+                                        transition: 'all 0.3s ease',
+                                        cursor: 'pointer',
+                                        position: 'relative'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-5px)';
+                                        e.currentTarget.style.boxShadow = '0 10px 30px rgba(212, 175, 55, 0.2)';
+                                        e.currentTarget.style.borderColor = '#d4af37';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+                                    }}
+                                >
+                                    <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 2, background: 'rgba(0,0,0,0.55)', borderRadius: '8px', padding: '4px' }}>
+                                        <input type="checkbox" checked={faceSelected.includes(photo.url)} onChange={() => toggleFacePhoto(photo.url)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                                    </div>
+                                    <img
+                                        src={photo.url}
+                                        alt={`Matched photo ${index + 1}`}
+                                        style={{
+                                            width: '100%',
+                                            height: '200px',
+                                            objectFit: 'cover'
+                                        }}
+                                    />
+                                    <div style={{
+                                        padding: '15px'
+                                    }}>
+                                        <h4 style={{
+                                            color: '#fff',
+                                            fontSize: '14px',
+                                            margin: '0 0 8px 0',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            {photo.folderName}
+                                        </h4>
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <span style={{
+                                                color: '#aaa',
+                                                fontSize: '12px'
+                                            }}>
+                                                {photo.date}
+                                            </span>
+                                            <span style={{
+                                                background: 'linear-gradient(135deg, #2ecc71, #27ae60)',
+                                                color: '#fff',
+                                                padding: '4px 10px',
+                                                borderRadius: '12px',
+                                                fontSize: '11px',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                {photo.confidence}% Match
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {loading ? <div className="loading-state-vip">Fetching latest albums...</div> : (
-                        <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
+                    <div className="folders-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '15px', padding: '0 20px', marginTop: '20px' }}>
 
                             {/* 🥇 1st PRIORITY: SNEVIO & ADMIN FOLDERS (ALWAYS FIRST) */}
                             {folders.filter(f => f.isDefault || f.uploaderRole === 'Super Admin').map((folder, index) => {
@@ -3362,6 +4064,8 @@ const UserDashboard = ({ user, userData, onLogout }) => {
 
                         </div>
                     )}
+
+
                 </div>
             );
         };
@@ -4448,14 +5152,18 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             {showInstallBanner && (
                 <div style={{ position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)', width: '90%', maxWidth: '400px', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', padding: '15px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1000, boxShadow: '0 -5px 25px rgba(0,0,0,0.5)', border: '1px solid #3498db', animation: 'slideUp 0.5s ease-out' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '45px', height: '45px', background: '#f1c40f', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>📸</div>
+                        <img src="/favicon.png" alt="Snevio" style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover' }} />
                         <div>
                             <h4 style={{ margin: 0, color: '#fff', fontSize: '14px' }}>Install Snevio App</h4>
                             <p style={{ margin: 0, color: '#aaa', fontSize: '11px' }}>For faster access & offline viewing</p>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
-                        <button onClick={() => setShowInstallBanner(false)} style={{ background: 'transparent', border: 'none', color: '#777', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Later</button>
+                        <button onClick={() => {
+                            const nextCount = Number(localStorage.getItem('snevio_install_later_count') || 0) + 1;
+                            localStorage.setItem('snevio_install_later_count', String(nextCount));
+                            setShowInstallBanner(false);
+                        }} style={{ background: 'transparent', border: 'none', color: '#777', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Later</button>
                         <button onClick={async () => {
                             setShowInstallBanner(false);
                             const promptEvent = window.deferredPrompt;
@@ -4463,6 +5171,9 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                                 promptEvent.prompt();
                                 const { outcome } = await promptEvent.userChoice;
                                 console.log(`User Choice: ${outcome}`);
+                                if (outcome === 'accepted') {
+                                    localStorage.setItem('snevio_app_installed', 'true');
+                                }
                                 window.deferredPrompt = null;
                             }
                         }} style={{ background: '#3498db', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>Install</button>
@@ -4471,6 +5182,86 @@ const UserDashboard = ({ user, userData, onLogout }) => {
             )}
 
             {/* 🔥 NATIVE BOTTOM NAV: Flex Item at bottom */}
+            {/* 🔔 PUSH NOTIFICATION PROMPT (Event QR guests) */}
+            {showPushPrompt && (
+                <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, width: 'calc(100% - 32px)', maxWidth: '420px', background: 'rgba(20,20,25,0.92)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,215,0,0.35)', borderRadius: '16px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+                    <span style={{ fontSize: '22px' }}>🔔</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', lineHeight: 1.3 }}>Get notified on your phone as soon as event photos are uploaded</div>
+                    </div>
+                    <button onClick={handleAllowPushAlerts} disabled={pushSubscribing} style={{ padding: '8px 14px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', fontSize: '11px', cursor: pushSubscribing ? 'wait' : 'pointer', whiteSpace: 'nowrap', opacity: pushSubscribing ? 0.7 : 1 }}>
+                        {pushSubscribing ? 'Enabling...' : 'Allow Alerts'}
+                    </button>
+                    <button onClick={() => setShowPushPrompt(false)} style={{ background: 'none', border: 'none', color: '#888', fontSize: '16px', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                </div>
+            )}
+            {/* 🎭 FACE FIND FLOATING ACTION BAR */}
+            {faceSelected.length > 0 && activeSessionId && (
+                <div style={{ position: 'fixed', bottom: '90px', left: '50%', transform: 'translateX(-50%)', zIndex: 9998, display: 'flex', gap: '10px', background: 'rgba(20,20,25,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,215,0,0.35)', borderRadius: '16px', padding: '10px 14px', boxShadow: '0 12px 40px rgba(0,0,0,0.6)', width: 'calc(100% - 32px)', maxWidth: '520px', justifyContent: 'center', boxSizing: 'border-box' }}>
+                    <style>{`.face-action-btn { transition: all 0.25s ease; } .face-action-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.4); } .face-action-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }`}</style>
+                    <button className="face-action-btn" onClick={handleFaceAddToFolder} disabled={faceSaving} style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: faceSaving ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                        📁 Add to Folder ({faceSelected.length})
+                    </button>
+                    <button className="face-action-btn" onClick={handleFaceAddAndDownload} disabled={faceSaving} style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: faceSaving ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                        ⚡ Add & Download ({faceSelected.length})
+                    </button>
+                </div>
+            )}
+            {/* 🎟️ LIVE EVENTS MODAL */}
+            {showLiveEventsModal && (
+                <div onClick={() => setShowLiveEventsModal(false)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ background: 'linear-gradient(145deg, #14141c, #0b0b10)', border: '1px solid rgba(255, 215, 0, 0.3)', borderRadius: '22px', maxWidth: '520px', width: '92%', maxHeight: '80vh', padding: '24px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', boxSizing: 'border-box' }}>
+                        <style>{`.live-event-directions-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.4); }`}</style>
+                        <div style={{ padding: '0 0 14px 0', borderBottom: '1px solid rgba(255,215,0,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                            <div>
+                                <h3 style={{ color: '#FFD700', margin: 0, fontSize: '18px' }}>🔴 Live Events Near You</h3>
+                                <p style={{ color: '#aaa', fontSize: '11px', margin: '4px 0 0 0' }}>{liveEvents.length} public event{liveEvents.length === 1 ? '' : 's'} near you</p>
+                            </div>
+                            <button onClick={() => setShowLiveEventsModal(false)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,215,0,0.3)', color: '#FFD700', borderRadius: '50%', width: '30px', height: '30px', fontSize: '16px', cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>✕</button>
+                        </div>
+                        <div style={{ padding: '16px 0 0 0', overflowY: 'auto', flex: 1 }}>
+                            {liveEvents.length === 0 ? (
+                                <div style={{ textAlign: 'center', color: '#888', fontSize: '13px', padding: '32px 0' }}>No live public events right now. Check back soon!</div>
+                            ) : (
+                                liveEvents.map((ev) => {
+                                    const status = getLiveEventStatus(ev);
+                                    const hasCoords = ev.latitude != null && ev.longitude != null;
+                                    const dist = (liveEventUserCoords && hasCoords) ? haversineKm(liveEventUserCoords.lat, liveEventUserCoords.lon, Number(ev.latitude), Number(ev.longitude)) : null;
+                                    return (
+                                        <div key={ev.sessionId} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: '14px', padding: '14px', marginBottom: '12px', boxSizing: 'border-box', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '20px', background: status === 'LIVE' ? 'rgba(231,76,60,0.2)' : 'rgba(245,158,11,0.2)', color: status === 'LIVE' ? '#ff6b6b' : '#f5a623', border: `1px solid ${status === 'LIVE' ? 'rgba(231,76,60,0.5)' : 'rgba(245,158,11,0.5)'}`, whiteSpace: 'nowrap', display: 'inline-block', marginBottom: '6px' }}>
+                                                    {status === 'LIVE' ? '🔴 LIVE NOW' : '🟡 Starting Soon'}
+                                                </span>
+                                                <h4 style={{ color: '#fff', fontSize: '15px', margin: '0 0 4px 0', fontWeight: 'bold' }}>{ev.title}</h4>
+                                                {ev.venueName && <p style={{ color: '#ccc', fontSize: '12px', margin: '0 0 4px 0' }}>📍 {ev.venueName}</p>}
+                                                {(ev.startTime || ev.endTime) && (
+                                                    <p style={{ color: '#f5a623', fontSize: '11px', margin: '0 0 4px 0', fontWeight: 'bold' }}>
+                                                        {ev.startTime ? formatEventTime(ev.startTime) : ''}{ev.startTime && ev.endTime ? ' – ' : ''}{ev.endTime ? formatEventTime(ev.endTime) : ''}
+                                                    </p>
+                                                )}
+                                                {ev.studioName && <p style={{ color: '#888', fontSize: '11px', margin: 0 }}>by {ev.studioName}</p>}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                                                {dist != null && (
+                                                    <span style={{ background: 'rgba(126,200,227,0.12)', border: '1px solid rgba(126,200,227,0.4)', color: '#7ec8e3', borderRadius: '20px', padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                                                        📍 {dist.toFixed(1)} km away
+                                                    </span>
+                                                )}
+                                                {hasCoords && (
+                                                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${Number(ev.latitude)},${Number(ev.longitude)}`} target="_blank" rel="noopener noreferrer" className="live-event-directions-btn" style={{ display: 'inline-block', padding: '8px 14px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#fff', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', textDecoration: 'none', transition: 'all 0.25s ease', whiteSpace: 'nowrap' }}>
+                                                        Directions ↗
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             {!activeSelectionProject && (
             <nav className="bottom-nav-bar" style={{ 
                     flexShrink: 0, 
@@ -4510,6 +5301,522 @@ const UserDashboard = ({ user, userData, onLogout }) => {
                 }}>
                     {toast.message}
                 </div>
+            )}
+
+            {/* 🎭 FACE SCAN MODAL - LIVE CAMERA FEED */}
+            {showFaceScanModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    background: 'rgba(10, 10, 10, 0.95)',
+                    zIndex: 9999999,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backdropFilter: 'blur(10px)'
+                }}>
+                    <div style={{
+                        background: 'linear-gradient(145deg, #1a1813, #0a0a0a)',
+                        padding: '30px',
+                        borderRadius: '25px',
+                        width: '95%',
+                        maxWidth: '700px',
+                        boxShadow: '0 20px 60px rgba(212, 175, 55, 0.2)',
+                        border: '1px solid rgba(212, 175, 55, 0.3)',
+                        position: 'relative'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '25px'
+                        }}>
+                            <h2 style={{
+                                color: '#fff',
+                                margin: 0,
+                                fontSize: '24px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                fontWeight: 'bold',
+                                letterSpacing: '0.5px'
+                            }}>
+                                <span style={{ fontSize: '28px' }}>🎭</span> Face Scan
+                            </h2>
+                            <button
+                                onClick={() => setShowFaceScanModal(false)}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    fontSize: '18px',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(231, 76, 60, 0.2)';
+                                    e.currentTarget.style.borderColor = '#e74c3c';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                                }}
+                            >
+                                ✖
+                            </button>
+                        </div>
+
+                        {/* Camera Feed / Captured Image */}
+                        <div style={{
+                            width: '100%',
+                            height: '400px',
+                            background: '#000',
+                            borderRadius: '16px',
+                            border: '2px solid rgba(212, 175, 55, 0.3)',
+                            marginBottom: '25px',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}>
+                            {!capturedImage ? (
+                                <>
+                                    {/* Live Video Feed */}
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            transform: 'scaleX(-1)' // Mirror effect
+                                        }}
+                                    />
+
+                                    {/* Scanning Frame Overlay */}
+                                    {isCameraActive && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '200px',
+                                            height: '260px',
+                                            border: '2px solid rgba(241, 196, 15, 0.6)',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 0 20px rgba(241, 196, 15, 0.3)'
+                                        }}>
+                                            {/* Corner markers */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-4px',
+                                                left: '-4px',
+                                                width: '20px',
+                                                height: '20px',
+                                                borderTop: '3px solid #f1c40f',
+                                                borderLeft: '3px solid #f1c40f',
+                                                borderRadius: '4px 0 0 0'
+                                            }}></div>
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-4px',
+                                                right: '-4px',
+                                                width: '20px',
+                                                height: '20px',
+                                                borderTop: '3px solid #f1c40f',
+                                                borderRight: '3px solid #f1c40f',
+                                                borderRadius: '0 4px 0 0'
+                                            }}></div>
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '-4px',
+                                                left: '-4px',
+                                                width: '20px',
+                                                height: '20px',
+                                                borderBottom: '3px solid #f1c40f',
+                                                borderLeft: '3px solid #f1c40f',
+                                                borderRadius: '0 0 0 4px'
+                                            }}></div>
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '-4px',
+                                                right: '-4px',
+                                                width: '20px',
+                                                height: '20px',
+                                                borderBottom: '3px solid #f1c40f',
+                                                borderRight: '3px solid #f1c40f',
+                                                borderRadius: '0 0 4px 0'
+                                            }}></div>
+
+                                            {/* Animated scan line */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: '2px',
+                                                background: 'linear-gradient(90deg, transparent, #f1c40f, transparent)',
+                                                animation: 'scanLine 2s ease-in-out infinite',
+                                                boxShadow: '0 0 10px #f1c40f'
+                                            }}></div>
+                                        </div>
+                                    )}
+
+                                    {/* Loading indicator */}
+                                    {!isCameraActive && (
+                                        <div style={{ textAlign: 'center', zIndex: 1 }}>
+                                            <div style={{ fontSize: '40px', marginBottom: '10px' }}>📷</div>
+                                            <p style={{ color: '#aaa', fontSize: '14px', margin: 0 }}>Starting camera...</p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                /* Captured Image Display */
+                                <img
+                                    src={capturedImage}
+                                    alt="Captured selfie"
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                        transform: 'scaleX(-1)' // Mirror effect
+                                    }}
+                                />
+                            )}
+
+                            {/* Hidden canvas for capture */}
+                            <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+                            {/* 🔄 AI SCANNING LOADING OVERLAY */}
+                            {isScanning && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    background: 'rgba(0, 0, 0, 0.85)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    zIndex: 10,
+                                    backdropFilter: 'blur(5px)'
+                                }}>
+                                    {/* Animated spinner */}
+                                    <div style={{
+                                        width: '60px',
+                                        height: '60px',
+                                        border: '4px solid rgba(241, 196, 15, 0.2)',
+                                        borderTop: '4px solid #f1c40f',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: '20px'
+                                    }}></div>
+
+                                    <h3 style={{
+                                        color: '#f1c40f',
+                                        fontSize: '18px',
+                                        margin: '0 0 10px 0',
+                                        fontWeight: 'bold'
+                                    }}>
+                                        AI Scanning Face...
+                                    </h3>
+                                    <p style={{
+                                        color: '#aaa',
+                                        fontSize: '13px',
+                                        margin: 0,
+                                        textAlign: 'center'
+                                    }}>
+                                        Please wait while we find your photos
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Info Text */}
+                        <p style={{
+                            color: '#aaa',
+                            fontSize: '13px',
+                            textAlign: 'center',
+                            marginBottom: '20px',
+                            lineHeight: '1.6'
+                        }}>
+                            {!capturedImage
+                                ? 'Position your face clearly in the frame. Our AI will scan and match your face across all your photo albums to find your best moments.'
+                                : 'Photo captured successfully! Review your selfie and confirm to proceed with face recognition.'}
+                        </p>
+
+                        {/* Error Message Display */}
+                        {scanError && (
+                            <div style={{
+                                background: 'rgba(231, 76, 60, 0.1)',
+                                border: '1px solid #e74c3c',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginBottom: '20px',
+                                textAlign: 'center'
+                            }}>
+                                <p style={{
+                                    color: '#e74c3c',
+                                    fontSize: '12px',
+                                    margin: 0,
+                                    fontWeight: 'bold'
+                                }}>
+                                    ⚠️ {scanError}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div style={{
+                            display: 'flex',
+                            gap: '15px',
+                            justifyContent: 'center'
+                        }}>
+                            {!capturedImage ? (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            stopCamera();
+                                            setShowFaceScanModal(false);
+                                        }}
+                                        style={{
+                                            background: 'rgba(255, 255, 255, 0.1)',
+                                            color: '#fff',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                            padding: '12px 30px',
+                                            borderRadius: '25px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                        }}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={captureSelfie}
+                                        disabled={!isCameraActive}
+                                        style={{
+                                            background: isCameraActive
+                                                ? 'linear-gradient(135deg, #f1c40f, #d4af37)'
+                                                : 'rgba(241, 196, 15, 0.3)',
+                                            color: '#000',
+                                            border: 'none',
+                                            padding: '12px 30px',
+                                            borderRadius: '25px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            cursor: isCameraActive ? 'pointer' : 'not-allowed',
+                                            opacity: isCameraActive ? 1 : 0.5,
+                                            boxShadow: isCameraActive
+                                                ? '0 4px 15px rgba(241, 196, 15, 0.4)'
+                                                : 'none',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (isCameraActive) {
+                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                e.currentTarget.style.boxShadow = '0 6px 20px rgba(241, 196, 15, 0.6)';
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (isCameraActive) {
+                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(241, 196, 15, 0.4)';
+                                            }
+                                        }}
+                                    >
+                                        📸 Capture Selfie
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={retakePhoto}
+                                        style={{
+                                            background: 'rgba(255, 255, 255, 0.1)',
+                                            color: '#fff',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                            padding: '12px 30px',
+                                            borderRadius: '25px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                        }}
+                                    >
+                                        🔄 Retake
+                                    </button>
+                                    {!scanError ? (
+                                        <button
+                                            onClick={submitFaceScan}
+                                            disabled={isScanning}
+                                            style={{
+                                                background: isScanning
+                                                    ? 'linear-gradient(135deg, #f39c12, #e67e22)'
+                                                    : 'linear-gradient(135deg, #2ecc71, #27ae60)',
+                                                color: '#fff',
+                                                border: 'none',
+                                                padding: '12px 30px',
+                                                borderRadius: '25px',
+                                                fontSize: '14px',
+                                                fontWeight: 'bold',
+                                                cursor: isScanning ? 'not-allowed' : 'pointer',
+                                                opacity: isScanning ? 0.8 : 1,
+                                                boxShadow: isScanning
+                                                    ? '0 4px 15px rgba(243, 156, 18, 0.4)'
+                                                    : '0 4px 15px rgba(46, 204, 113, 0.4)',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isScanning) {
+                                                    e.currentTarget.style.transform = 'translateY(-2px)';
+                                                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(46, 204, 113, 0.6)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isScanning) {
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(46, 204, 113, 0.4)';
+                                                }
+                                            }}
+                                        >
+                                            {isScanning ? '🔄 AI Scanning Face...' : '✅ Use This Photo'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setScanError(null);
+                                                retakePhoto();
+                                            }}
+                                            style={{
+                                                background: 'linear-gradient(135deg, #3498db, #2980b9)',
+                                                color: '#fff',
+                                                border: 'none',
+                                                padding: '12px 30px',
+                                                borderRadius: '25px',
+                                                fontSize: '14px',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 15px rgba(52, 152, 219, 0.4)',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                e.currentTarget.style.boxShadow = '0 6px 20px rgba(52, 152, 219, 0.6)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(52, 152, 219, 0.4)';
+                                            }}
+                                        >
+                                            🔄 Try Again
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Add CSS animation for scan line */}
+                    <style>{`
+                        @keyframes scanLine {
+                            0% { top: 0; opacity: 0; }
+                            10% { opacity: 1; }
+                            90% { opacity: 1; }
+                            100% { top: 100%; opacity: 0; }
+                        }
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `}</style>
+                </div>
+            )}
+
+            {/* 🎯 QR SESSION MODALS */}
+            {showQRClaimModal && activeSessionId && (
+                <QRClaimModal
+                    sessionId={activeSessionId}
+                    onClose={() => {
+                        setShowQRClaimModal(false);
+                        setActiveSessionId(null);
+                    }}
+                    onSuccess={(data) => {
+                        setShowQRClaimModal(false);
+                        setActiveSessionId(null);
+                        showToast(`Registered to session: ${data.sessionTitle}`, 'success');
+                    }}
+                />
+            )}
+
+            {showQRScannerModal && (
+                <QRScannerModal
+                    onClose={() => setShowQRScannerModal(false)}
+                    onScan={(sessionId) => {
+                        setActiveSessionId(sessionId);
+                        setShowQRScannerModal(false);
+                        setShowQRClaimModal(true);
+                    }}
+                />
+            )}
+
+            {showQRSessionManager && (
+                <QRSessionManager
+                    onClose={() => setShowQRSessionManager(false)}
+                    studioMobile={syncUser.mobile}
+                />
+            )}
+
+            {/* 🎯 QR SESSION MANUAL ENTRY BUTTON (For Studios/Admins) */}
+            {(syncUser.role === 'STUDIO' || syncUser.role === 'ADMIN' || syncUser.role === 'OWNER') && (
+                <button
+                    onClick={() => setShowQRSessionManager(true)}
+                    style={{
+                        position: 'fixed',
+                        bottom: '100px',
+                        right: '20px',
+                        background: '#64b5f6',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '50px',
+                        padding: '15px 25px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                        zIndex: 9999
+                    }}
+                >
+                    🎯 QR Sessions
+                </button>
             )}
         </div>
     );

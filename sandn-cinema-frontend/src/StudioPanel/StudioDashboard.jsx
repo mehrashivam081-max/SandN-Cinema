@@ -8,9 +8,32 @@ import './StudioDashboard.css'; 
 import useBackButton from '../hooks/useBackButton';
 import SyncPlayer from '../components/SyncPlayer';
 import io from 'socket.io-client'; // 👈 NAYA: Socket.io Client Import
+import { QRCodeSVG } from 'qrcode.react';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
+
+// 🎯 EVENT QR & AI FACE — shared inline styles (dark + gold SNEVIO VIP theme)
+const qrInputStyle = { width: '100%', padding: '10px 12px', background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: '10px', color: '#111827', fontSize: '13px', boxSizing: 'border-box' };
+const qrGoldButtonStyle = { width: '100%', padding: '12px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#ffffff', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' };
+const qrSmallButtonStyle = (bg) => ({ flex: 1, padding: '8px 10px', background: 'transparent', color: bg, border: `1px solid ${bg}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' });
+
+// 🎯 Default expiry: 15 days from today (YYYY-MM-DD)
+const getDefaultQrExpiry = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+const qrTableThStyle = { padding: '12px 14px', textAlign: 'left', color: '#111827', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap', background: '#f9fafb' };
+const qrTableTdStyle = { padding: '12px 14px', color: '#374151', fontSize: '13px', borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' };
+const qrActionButtonStyle = (color) => ({ padding: '6px 12px', background: '#ffffff', color, border: `1px solid ${color}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', whiteSpace: 'nowrap' });
+const qrFocusHandlers = { onFocus: (e) => { e.target.style.borderColor = '#F59E0B'; e.target.style.boxShadow = '0 0 0 3px rgba(245,158,11,0.15)'; }, onBlur: (e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; } };
+const qrBadge = (bg, color, border, text) => (
+    <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold', background: bg, color, border: `1px solid ${border}`, whiteSpace: 'nowrap' }}>{text}</span>
+);
 
 // ✅ SUPER TOKEN GRABBER: Ye 'token' aur 'authToken' dono ko check karega, kabhi Khali (null) nahi bhejega!
 const getValidToken = () => {
@@ -24,6 +47,30 @@ const StudioDashboard = ({ user, onLogout }) => {
 
     // ✅ NEW: DROPDOWN MENU STATE FOR SIDEBAR
     const [openDropdown, setOpenDropdown] = useState(null);
+
+    // 🎯 EVENT QR & AI FACE STATES
+    const [qrEventForm, setQrEventForm] = useState({ title: '', expiresAt: getDefaultQrExpiry(), maxDownloads: 10, venueName: '', mapsUrl: '', latitude: '', longitude: '', startTime: '', endTime: '', isPublic: false, locationPinned: false });
+    const [isLocating, setIsLocating] = useState(false);
+    const [locationError, setLocationError] = useState('');
+    const [qrSessions, setQrSessions] = useState([]);
+    const [qrLoading, setQrLoading] = useState(false);
+    const [qrNotifyMsg, setQrNotifyMsg] = useState({});
+    const [qrUploadModal, setQrUploadModal] = useState(null);
+    const [qrUploadFiles, setQrUploadFiles] = useState([]);
+    const [qrUploadAutoNotify, setQrUploadAutoNotify] = useState(true);
+    const [qrUploadRunning, setQrUploadRunning] = useState(false);
+    const [qrUploadStats, setQrUploadStats] = useState({ percent: 0, speed: 0, eta: 0, done: 0, total: 0 });
+    const [qrUploadModalStatus, setQrUploadModalStatus] = useState('');
+    const [qrUploadDoneInfo, setQrUploadDoneInfo] = useState(null);
+    const qrUploadEntriesRef = useRef([]);
+    const qrUploadLiveRef = useRef({ runIds: new Set(), totalBytes: 0, startTime: 0 });
+    const qrUploadAbortRef = useRef(null);
+    const qrUploadTickRef = useRef(null);
+    const qrUploadModalInputRef = useRef(null);
+    const qrSvgRefs = useRef({});
+    const [qrReadySession, setQrReadySession] = useState(null);
+    const [qrFilter, setQrFilter] = useState('ALL');
+    const [qrLinkCopied, setQrLinkCopied] = useState(false);
 
     // ✅ NEW: LONG MEDIA (CINEMATIC) UPLOAD STATES
     const [longMediaForm, setLongMediaForm] = useState({ title: '', description: '', category: 'Wedding Highlight', customPrice: '', ytLink: '', freeHours: '0', monthlyPrice: '', yearlyPrice: '' });
@@ -307,6 +354,7 @@ const StudioDashboard = ({ user, onLogout }) => {
         if (activeTab === 'DASHBOARD') fetchClients();
         if (activeTab === 'PAYOUTS') fetchMyPayouts(); // 💳 Naya Payouts Fetch
         if (activeTab === 'SELECTION_PROJECTS') fetchStudioSelections(); // 🔥 ADD THIS LINE!
+        if (activeTab === 'EVENT_QR') fetchQrSessions();
     }, [activeTab]);
 
     // ✅ 1. SMART NETWORK MONITOR (Infinite Wait - No Auto Logout)
@@ -442,7 +490,405 @@ const StudioDashboard = ({ user, onLogout }) => {
         setFetchingSelections(false);
     };
 
-    const handleDeleteClient = async (targetMobile) => {
+    const qrAuthHeaders = () => ({ 'Authorization': `Bearer ${getValidToken()}` });
+
+    const fetchQrSessions = async () => {
+        try {
+            const res = await axios.post('/api/qr-session/list', {}, { headers: qrAuthHeaders() });
+            if (res.data.success) setQrSessions(res.data.sessions || []);
+        } catch (e) {
+            console.error("Failed to fetch QR sessions", e);
+        }
+    };
+
+    const createQrSession = async (e) => {
+        e.preventDefault();
+        setQrLoading(true);
+        try {
+            const res = await axios.post('/api/qr-session/create', {
+                title: qrEventForm.title,
+                expiresAt: new Date(`${qrEventForm.expiresAt}T23:59:59`).toISOString(),
+                maxDownloads: Number(qrEventForm.maxDownloads) || 10,
+                venueName: qrEventForm.venueName || '',
+                latitude: qrEventForm.latitude !== '' ? Number(qrEventForm.latitude) : null,
+                longitude: qrEventForm.longitude !== '' ? Number(qrEventForm.longitude) : null,
+                startTime: qrEventForm.startTime ? new Date(qrEventForm.startTime).toISOString() : null,
+                endTime: qrEventForm.endTime ? new Date(qrEventForm.endTime).toISOString() : null,
+                isPublic: qrEventForm.isPublic === true
+            }, { headers: qrAuthHeaders() });
+            if (res.data.success) {
+                setQrEventForm({ title: '', expiresAt: getDefaultQrExpiry(), maxDownloads: 10, venueName: '', mapsUrl: '', latitude: '', longitude: '', startTime: '', endTime: '', isPublic: false, locationPinned: false });
+                setQrReadySession(res.data.session || null);
+                fetchQrSessions();
+            } else {
+                alert(res.data.message || 'Failed to create QR session');
+            }
+        } catch (err) {
+            alert('Error creating QR session');
+        }
+        setQrLoading(false);
+    };
+
+    const pinQrLocation = () => {
+        if (!navigator.geolocation) { setLocationError('Geolocation is not supported by your browser.'); return; }
+        setIsLocating(true);
+        setLocationError('');
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setQrEventForm(prev => ({ ...prev, latitude: pos.coords.latitude.toFixed(6), longitude: pos.coords.longitude.toFixed(6), locationPinned: true }));
+                setIsLocating(false);
+            },
+            (err) => {
+                setIsLocating(false);
+                setLocationError('Could not detect location. Please try again or paste a Google Maps link.');
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        );
+    };
+
+    // 🎯 EVENT QR UPLOAD MANAGER — tracked single-file cloud upload (XHR progress + abort)
+    const uploadQrFileTracked = (file, sessionId, onProgress, signal) => {
+        return new Promise((resolve, reject) => {
+            axios.post(`${API_BASE}/generate-upload-signature`, {
+                fileName: file.name,
+                fileType: file.type,
+                fileSizeGB: file.size / (1024 * 1024 * 1024),
+                targetFolder: `event-qr/${sessionId}`
+            }, { headers: qrAuthHeaders(), signal })
+            .then((sigRes) => {
+                if (sigRes.data.directUpload) {
+                    if (sigRes.data.provider === 'CLOUDINARY') {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        fd.append('api_key', sigRes.data.apiKey);
+                        fd.append('timestamp', sigRes.data.timestamp);
+                        fd.append('signature', sigRes.data.signature);
+                        fd.append('folder', sigRes.data.folder);
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sigRes.data.cloudName}/auto/upload`);
+                        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded); };
+                        xhr.onload = () => {
+                            if (xhr.status === 200 || xhr.status === 201) {
+                                try { resolve(JSON.parse(xhr.responseText).secure_url); }
+                                catch (e) { reject(new Error('Bad Cloudinary response')); }
+                            } else reject(new Error(`Cloudinary Error: ${xhr.status}`));
+                        };
+                        xhr.onerror = () => reject(new Error('Network error'));
+                        xhr.onabort = () => reject(new Error('Aborted'));
+                        signal.addEventListener('abort', () => xhr.abort());
+                        xhr.send(fd);
+                    } else {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', sigRes.data.signedUrl);
+                        xhr.setRequestHeader('Content-Type', file.type);
+                        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded); };
+                        xhr.onload = () => { if (xhr.status === 200) resolve(sigRes.data.publicUrl); else reject(new Error('Storage upload failed')); };
+                        xhr.onerror = () => reject(new Error('Network error'));
+                        xhr.onabort = () => reject(new Error('Aborted'));
+                        signal.addEventListener('abort', () => xhr.abort());
+                        xhr.send(file);
+                    }
+                } else {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('skipPreview', 'true');
+                    axios.post(`${API_BASE}/proxy-upload`, fd, {
+                        headers: qrAuthHeaders(),
+                        signal,
+                        onUploadProgress: (e) => { if (e.lengthComputable) onProgress(e.loaded); }
+                    }).then((proxyRes) => resolve(proxyRes.data.url)).catch(reject);
+                }
+            })
+            .catch(reject);
+        });
+    };
+
+    const formatQrBytes = (bytes) => {
+        if (!bytes || bytes <= 0) return '0 KB';
+        if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+        if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        return `${Math.ceil(bytes / 1024)} KB`;
+    };
+
+    const formatQrSpeed = (bps) => {
+        if (!bps || bps <= 0) return '0 KB/s';
+        if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+        return `${Math.round(bps / 1024)} KB/s`;
+    };
+
+    const formatQrEta = (sec) => {
+        if (!isFinite(sec) || sec <= 0) return '';
+        if (sec < 60) return `~${Math.ceil(sec)}s left`;
+        if (sec < 3600) return `~${Math.floor(sec / 60)}m ${Math.ceil(sec % 60)}s left`;
+        return `~${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m left`;
+    };
+
+    const syncQrUploadFiles = () => setQrUploadFiles(qrUploadEntriesRef.current.map(e => ({ ...e })));
+
+    const addQrUploadFiles = (fileList) => {
+        const images = Array.from(fileList || []).filter(f => f.type && f.type.startsWith('image/'));
+        if (images.length === 0) return;
+        const now = Date.now();
+        const newEntries = images.map((f, i) => ({
+            id: `${now}-${i}-${Math.random().toString(36).slice(2)}`,
+            file: f, name: f.name, size: f.size,
+            status: 'queued', progressBytes: 0
+        }));
+        qrUploadEntriesRef.current = [...qrUploadEntriesRef.current, ...newEntries];
+        syncQrUploadFiles();
+    };
+
+    const removeQrUploadFile = (id) => {
+        qrUploadEntriesRef.current = qrUploadEntriesRef.current.filter(e => e.id !== id);
+        syncQrUploadFiles();
+    };
+
+    const openQrUploadModal = (session) => {
+        qrUploadEntriesRef.current = [];
+        qrUploadAbortRef.current = null;
+        setQrUploadFiles([]);
+        setQrUploadStats({ percent: 0, speed: 0, eta: 0, done: 0, total: 0 });
+        setQrUploadModalStatus('');
+        setQrUploadDoneInfo(null);
+        setQrUploadAutoNotify(true);
+        setQrUploadModal({ sessionId: session.sessionId, title: session.title });
+    };
+
+    const cancelQrUpload = () => {
+        if (qrUploadAbortRef.current) qrUploadAbortRef.current.abort();
+    };
+
+    const startQrUpload = async (onlyFailed = false) => {
+        if (!qrUploadModal || qrUploadRunning) return;
+        const entries = qrUploadEntriesRef.current;
+        const targets = onlyFailed
+            ? entries.filter(e => e.status === 'failed')
+            : entries.filter(e => e.status === 'queued' || e.status === 'failed');
+        if (targets.length === 0) return;
+
+        targets.forEach(e => { e.status = 'queued'; e.progressBytes = 0; e.error = ''; });
+        const runIds = new Set(targets.map(e => e.id));
+        qrUploadLiveRef.current = {
+            runIds,
+            totalBytes: targets.reduce((s, e) => s + e.size, 0),
+            startTime: Date.now()
+        };
+        qrUploadAbortRef.current = new AbortController();
+        setQrUploadModalStatus('');
+        setQrUploadRunning(true);
+        setQrUploadDoneInfo(null);
+        syncQrUploadFiles();
+
+        qrUploadTickRef.current = setInterval(() => {
+            const live = qrUploadLiveRef.current;
+            let uploaded = 0, finished = 0;
+            qrUploadEntriesRef.current.forEach(e => {
+                if (!live.runIds.has(e.id)) return;
+                if (e.status === 'done') { uploaded += e.size; finished++; }
+                else if (e.status === 'failed') finished++;
+                else if (e.status === 'uploading') uploaded += (e.progressBytes || 0);
+            });
+            const elapsed = (Date.now() - live.startTime) / 1000;
+            const speed = elapsed > 0 ? uploaded / elapsed : 0;
+            const remaining = Math.max(0, live.totalBytes - uploaded);
+            setQrUploadStats({
+                percent: live.totalBytes > 0 ? Math.min(100, Math.round((uploaded / live.totalBytes) * 100)) : 0,
+                speed,
+                eta: speed > 0 ? remaining / speed : 0,
+                done: finished,
+                total: live.runIds.size
+            });
+        }, 300);
+
+        const uploadEntry = async (entry) => {
+            entry.status = 'uploading';
+            entry.progressBytes = 0;
+            syncQrUploadFiles();
+            try {
+                const url = await uploadQrFileTracked(entry.file, qrUploadModal.sessionId, (loaded) => {
+                    entry.progressBytes = loaded;
+                }, qrUploadAbortRef.current.signal);
+                entry.status = 'done';
+                entry.url = url;
+                entry.progressBytes = entry.size;
+            } catch (err) {
+                const aborted = err.message === 'Aborted' || (qrUploadAbortRef.current && qrUploadAbortRef.current.signal.aborted);
+                if (aborted) {
+                    entry.status = 'queued';
+                    entry.progressBytes = 0;
+                } else {
+                    entry.status = 'failed';
+                    entry.error = err.response?.data?.message || err.message || 'Upload failed';
+                }
+            }
+        };
+
+        const queue = qrUploadEntriesRef.current.filter(e => runIds.has(e.id) && e.status !== 'done');
+        for (let i = 0; i < queue.length; i += 3) {
+            await Promise.all(queue.slice(i, i + 3).map(uploadEntry));
+            if (qrUploadAbortRef.current.signal.aborted) break;
+        }
+
+        clearInterval(qrUploadTickRef.current);
+        qrUploadTickRef.current = null;
+        setQrUploadRunning(false);
+        syncQrUploadFiles();
+
+        const sessionId = qrUploadModal.sessionId;
+        const urls = qrUploadEntriesRef.current.filter(e => e.status === 'done' && e.url).map(e => e.url);
+        if (urls.length > 0) {
+            try {
+                await axios.post(`/api/qr-session/${sessionId}/upload`, { photoUrls: urls }, { headers: qrAuthHeaders() });
+            } catch (err) {
+                setQrUploadModalStatus(`Cloud upload done but saving failed: ${err.response?.data?.message || err.message}`);
+                await fetchQrSessions();
+                return;
+            }
+        }
+        let guestsNotified = false;
+        if (qrUploadAutoNotify && urls.length > 0) {
+            try {
+                const res = await axios.post(`/api/qr-session/${sessionId}/notify-users`, {}, { headers: qrAuthHeaders() });
+                guestsNotified = !!(res.data && res.data.success);
+                setQrUploadModalStatus(res.data.success ? `Uploaded & Guests Notified ✅ (${res.data.notifiedCount ?? 0} guests)` : `Uploaded ✅ — Notify: ${res.data.message || 'failed'}`);
+            } catch (err) {
+                setQrUploadModalStatus(`Uploaded ✅ — Notify error: ${err.response?.data?.message || err.message}`);
+            }
+        } else if (urls.length > 0) {
+            setQrUploadModalStatus(`Uploaded ✅ (${urls.length} photo(s) saved)`);
+        } else {
+            setQrUploadModalStatus('Upload cancelled — no new photos saved.');
+        }
+        if (urls.length > 0) setQrUploadDoneInfo({ count: urls.length, notified: guestsNotified });
+        await fetchQrSessions();
+    };
+    const notifyQrGuests = async (sessionId) => {
+        setQrNotifyMsg(prev => ({ ...prev, [sessionId]: 'Sending...' }));
+        try {
+            const res = await axios.post(`/api/qr-session/${sessionId}/notify-users`, {}, { headers: qrAuthHeaders() });
+            if (res.data.success) {
+                setQrNotifyMsg(prev => ({ ...prev, [sessionId]: `${res.data.notifiedCount ?? 0} guests notified` }));
+            } else {
+                setQrNotifyMsg(prev => ({ ...prev, [sessionId]: res.data.message || 'Failed' }));
+            }
+        } catch (err) {
+            setQrNotifyMsg(prev => ({ ...prev, [sessionId]: 'Error sending notifications' }));
+        }
+    };
+
+    const copyQrLink = (sessionId) => {
+        const link = `${window.location.origin}/?qrSession=${sessionId}`;
+        navigator.clipboard.writeText(link).then(() => {
+            setQrLinkCopied(true);
+            setTimeout(() => setQrLinkCopied(false), 2000);
+        });
+    };
+
+    const downloadQrImage = (sessionId) => {
+        const container = qrSvgRefs.current[sessionId];
+        const svgElement = container && container.querySelector('svg');
+        if (!svgElement) return;
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            const link = document.createElement('a');
+            link.download = `qr-${sessionId}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+    };
+
+    const downloadQrEventCard = (session) => {
+        const container = qrSvgRefs.current[session.sessionId];
+        const svgElement = container && container.querySelector('svg');
+        if (!svgElement) return;
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const qrImg = new Image();
+        qrImg.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1080;
+            canvas.height = 1350;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#1a1813');
+            grad.addColorStop(1, '#0a0a0a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = 'rgba(255,215,0,0.55)';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(30, 30, canvas.width - 60, canvas.height - 60);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 72px Arial';
+            ctx.fillText('SNEVIO', canvas.width / 2, 170);
+            ctx.fillStyle = '#9a9a9a';
+            ctx.font = '34px Arial';
+            ctx.fillText('AI EVENT PHOTOS', canvas.width / 2, 230);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 42px Arial';
+            const words = String(session.title || '').split(' ');
+            const lines = [];
+            let line = '';
+            for (const w of words) {
+                const test = line ? line + ' ' + w : w;
+                if (ctx.measureText(test).width > canvas.width - 160 && line) { lines.push(line); line = w; } else { line = test; }
+            }
+            if (line) lines.push(line);
+            lines.slice(0, 2).forEach((l, i) => ctx.fillText(l, canvas.width / 2, 330 + i * 56));
+
+            const qrSize = 520;
+            const qrX = (canvas.width - qrSize) / 2;
+            const qrY = 470;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(qrX - 28, qrY - 28, qrSize + 56, qrSize + 56);
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 38px Arial';
+            ctx.fillText('Scan QR to get your AI Event Photos', canvas.width / 2, canvas.height - 190);
+
+            const link = document.createElement('a');
+            link.download = `event-card-${session.sessionId}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+        qrImg.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+    };
+
+    const deleteQrSession = async (sessionId) => {
+        if (!window.confirm('Delete this QR session? This cannot be undone.')) return;
+        try {
+            const res = await axios.delete(`/api/qr-session/${sessionId}`, { headers: qrAuthHeaders() });
+            if (res.data.success) {
+                await fetchQrSessions();
+            } else {
+                alert(res.data.message || 'Failed to delete session');
+            }
+        } catch (err) {
+            alert('Error deleting session');
+        }
+    };
+
+    const qrFilteredSessions = qrSessions.filter((session) => {
+        const photos = (session.uploadedPhotos || []).length;
+        const expired = session.isActive === false || new Date() > new Date(session.expiresAt);
+        if (qrFilter === 'PENDING') return photos === 0;
+        if (qrFilter === 'UPLOADED') return photos > 0;
+        if (qrFilter === 'EXPIRED') return expired;
+        return true;
+    });
+
+    const handleDeleteClient = async (targetMobile) => {
         if (!window.confirm(`Are you sure you want to delete client ${targetMobile}? This will remove their account and all uploaded data.`)) return;
 
         try {
@@ -1747,6 +2193,7 @@ const StudioDashboard = ({ user, onLogout }) => {
                                 <li className={activeTab === 'LEADS' ? 'active' : ''} onClick={() => { setActiveTab('LEADS'); setOpenDropdown(null); }}>📅 Booking Leads</li>
                                 <li className={activeTab === 'UPLOAD' ? 'active' : ''} onClick={() => { setActiveTab('UPLOAD'); setOpenDropdown(null); }}>📤 Upload Client Data</li>
                                 <li className={activeTab === 'SELECTION_PROJECTS' ? 'active' : ''} onClick={() => { setActiveTab('SELECTION_PROJECTS'); fetchStudioSelections(); setOpenDropdown(null); }} style={{color: '#f1c40f', fontWeight: 'bold'}}>✨ Smart Album Selections</li>
+<li className={activeTab === 'EVENT_QR' ? 'active' : ''} onClick={() => { setActiveTab('EVENT_QR'); fetchQrSessions(); setOpenDropdown(null); }} style={{color: '#FFD700', fontWeight: 'bold'}}>📸 Event QR & AI Face</li>
                                 
                                 {studioProfile.isFeedApproved && (
                                     <li className={activeTab === 'FEED' ? 'active' : ''} onClick={() => { setActiveTab('FEED'); setOpenDropdown(null); }}>🌟 Feed Management</li>
@@ -2951,7 +3398,336 @@ const StudioDashboard = ({ user, onLogout }) => {
                 
 
                 {/* 🔴 TAB 4: REVENUE (LIVE MONETIZATION UPDATE) */}
-                {activeTab === 'REVENUE' && (
+                {/* 🎯 TAB: EVENT QR & AI FACE */}
+                {activeTab === 'EVENT_QR' && (
+                    <div style={{ padding: '20px', width: '100%', maxWidth: '1100px', margin: '0 auto', boxSizing: 'border-box' }}>
+                        <div style={{ marginBottom: '25px' }}>
+                            <h2 style={{ color: '#111827', margin: '0 0 5px 0' }}>📸 Event QR & AI Face</h2>
+                            <p style={{ color: '#6b7280', fontSize: '13px', margin: 0 }}>Create QR sessions, upload event photos, and notify registered guests.</p>
+                        </div>
+
+                        {/* 1. CREATE EVENT QR FORM */}
+                        <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', padding: '24px', marginBottom: '25px', width: '100%', boxSizing: 'border-box' }}>
+                            <h3 style={{ color: '#111827', margin: '0 0 15px 0', fontSize: '16px' }}>Create Event QR</h3>
+                            <form onSubmit={createQrSession}>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Event Title</label>
+                                    <input type="text" required value={qrEventForm.title} onChange={(e) => setQrEventForm({ ...qrEventForm, title: e.target.value })} placeholder="e.g. Sharma Wedding Reception" style={qrInputStyle} {...qrFocusHandlers} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Expiry Date</label>
+                                    <input type="date" required value={qrEventForm.expiresAt} onChange={(e) => setQrEventForm({ ...qrEventForm, expiresAt: e.target.value })} style={qrInputStyle} {...qrFocusHandlers} />
+                                </div>
+                                <div style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Max Downloads per Guest</label>
+                                    <input type="number" min="1" value={qrEventForm.maxDownloads} onChange={(e) => setQrEventForm({ ...qrEventForm, maxDownloads: e.target.value })} style={qrInputStyle} {...qrFocusHandlers} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Event Visibility</label>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button type="button" onClick={() => setQrEventForm({ ...qrEventForm, isPublic: false })} style={{ flex: 1, padding: '9px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', background: qrEventForm.isPublic ? '#f3f4f6' : 'linear-gradient(135deg, #F59E0B, #D97706)', color: qrEventForm.isPublic ? '#374151' : '#ffffff', border: `1px solid ${qrEventForm.isPublic ? '#e5e7eb' : '#D97706'}` }}>🔒 Private (QR Only)</button>
+                                        <button type="button" onClick={() => setQrEventForm({ ...qrEventForm, isPublic: true })} style={{ flex: 1, padding: '9px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', background: qrEventForm.isPublic ? 'linear-gradient(135deg, #F59E0B, #D97706)' : '#f3f4f6', color: qrEventForm.isPublic ? '#ffffff' : '#374151', border: `1px solid ${qrEventForm.isPublic ? '#D97706' : '#e5e7eb'}` }}>🌍 Public (Live Discovery)</button>
+                                    </div>
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Venue Name / Address</label>
+                                    <input type="text" value={qrEventForm.venueName} onChange={(e) => setQrEventForm({ ...qrEventForm, venueName: e.target.value })} placeholder="e.g. Brilliant Convention Centre, Indore" style={qrInputStyle} {...qrFocusHandlers} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Google Maps URL (optional — auto-fills GPS)</label>
+                                    <input type="text" value={qrEventForm.mapsUrl} onChange={(e) => {
+                                        const url = e.target.value;
+                                        const m = url.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/) || url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+                                        setQrEventForm(prev => ({ ...prev, mapsUrl: url, latitude: m ? m[1] : prev.latitude, longitude: m ? m[2] : prev.longitude }));
+                                    }} placeholder="Paste Google Maps link here" style={qrInputStyle} {...qrFocusHandlers} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Exact Location (GPS) — optional</label>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <style>{`@keyframes qrSpin { to { transform: rotate(360deg); } }`}</style>
+                                        <button type="button" onClick={pinQrLocation} disabled={isLocating} style={{ padding: '8px 14px', background: '#ffffff', color: '#15803d', border: '1px solid #15803d', borderRadius: '10px', fontWeight: 'bold', fontSize: '12px', cursor: isLocating ? 'wait' : 'pointer', opacity: isLocating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {isLocating && <span style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid rgba(21,128,61,0.3)', borderTopColor: '#15803d', borderRadius: '50%', animation: 'qrSpin 0.8s linear infinite' }} />}
+                                            {isLocating ? 'Detecting location...' : '📍 Use Current Location'}
+                                        </button>
+                                        {qrEventForm.locationPinned && qrBadge('rgba(21,128,61,0.1)', '#15803d', 'rgba(21,128,61,0.35)', 'Location Pinned ✓')}
+                                    </div>
+                                    {locationError && <div style={{ color: '#b91c1c', fontSize: '11px', marginBottom: '8px' }}>{locationError}</div>}
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <input type="text" value={qrEventForm.latitude} onChange={(e) => setQrEventForm({ ...qrEventForm, latitude: e.target.value, locationPinned: false })} placeholder="Latitude" style={{ ...qrInputStyle, flex: 1 }} {...qrFocusHandlers} />
+                                        <input type="text" value={qrEventForm.longitude} onChange={(e) => setQrEventForm({ ...qrEventForm, longitude: e.target.value, locationPinned: false })} placeholder="Longitude" style={{ ...qrInputStyle, flex: 1 }} {...qrFocusHandlers} />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>Start Date & Time</label>
+                                        <input type="datetime-local" value={qrEventForm.startTime} onChange={(e) => setQrEventForm({ ...qrEventForm, startTime: e.target.value })} style={qrInputStyle} {...qrFocusHandlers} />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '140px' }}>
+                                        <label style={{ display: 'block', color: '#4b5563', fontSize: '12px', marginBottom: '5px' }}>End Date & Time</label>
+                                        <input type="datetime-local" value={qrEventForm.endTime} onChange={(e) => setQrEventForm({ ...qrEventForm, endTime: e.target.value })} style={qrInputStyle} {...qrFocusHandlers} />
+                                    </div>
+                                </div>
+                                <button type="submit" disabled={qrLoading} style={{ ...qrGoldButtonStyle, opacity: qrLoading ? 0.6 : 1 }}>{qrLoading ? 'Creating...' : 'Create QR Session'}</button>
+                            </form>
+                        </div>
+
+                        {/* 2. EVENT QR HISTORY TABLE */}
+                        <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.06)', padding: '24px', width: '100%', boxSizing: 'border-box' }}>
+                        <h3 style={{ color: '#111827', fontSize: '16px', margin: '0 0 15px 0' }}>Event QR History</h3>
+
+                        {/* Filter pills */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '15px' }}>
+                            {['ALL', 'PENDING', 'UPLOADED', 'EXPIRED'].map((f) => (
+                                <button key={f} onClick={() => setQrFilter(f)} style={{ padding: '7px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', background: qrFilter === f ? 'linear-gradient(135deg, #F59E0B, #D97706)' : '#f3f4f6', color: qrFilter === f ? '#ffffff' : '#374151', border: `1px solid ${qrFilter === f ? '#D97706' : '#e5e7eb'}`, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    {f === 'ALL' ? 'All' : f === 'PENDING' ? 'Pending Upload' : f === 'UPLOADED' ? 'Uploaded' : 'Expired'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {qrFilteredSessions.length === 0 ? (
+                            <p style={{ color: '#6b7280', fontSize: '13px' }}>No QR sessions found.</p>
+                        ) : (
+                            <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflowX: 'auto', minHeight: '220px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f9fafb' }}>
+                                            <th style={qrTableThStyle}>Event Name & Created</th>
+                                            <th style={qrTableThStyle}>Upload Status</th>
+                                            <th style={qrTableThStyle}>Guests Scanned</th>
+                                            <th style={qrTableThStyle}>Expiry Status</th>
+                                            <th style={qrTableThStyle}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {qrFilteredSessions.map((session) => {
+                                            const expired = session.isActive === false || new Date() > new Date(session.expiresAt);
+                                            const photosUploaded = (session.uploadedPhotos || []).length;
+                                            const guests = (session.registeredUsers || []).length;
+                                            const notified = (session.registeredUsers || []).some(u => u.lastNotifiedAt || (u.reminderCount || 0) > 0);
+                                            
+                                            return (
+                                                <tr key={session.sessionId} style={{ background: '#ffffff' }}>
+                                                    <td style={qrTableTdStyle}>
+                                                        <div style={{ color: '#111827', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>{session.title} {session.isPublic ? qrBadge('rgba(245,158,11,0.12)', '#B45309', 'rgba(245,158,11,0.4)', '🌍 Public') : qrBadge('rgba(107,114,128,0.1)', '#4b5563', 'rgba(107,114,128,0.35)', '🔒 Private')}</div>
+                                                        <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>Created {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : '-'}</div>
+                                                    </td>
+                                                    <td style={qrTableTdStyle}>
+                                                        <div>
+                                                            {photosUploaded > 0
+                                                                ? qrBadge('rgba(21,128,61,0.08)', '#15803d', 'rgba(21,128,61,0.35)', `Uploaded (${photosUploaded} Photos)`)
+                                                                : qrBadge('rgba(245,158,11,0.1)', '#b45309', 'rgba(245,158,11,0.4)', 'Pending Upload')}
+                                                        </div>
+                                                        {notified && <div style={{ marginTop: '6px' }}>{qrBadge('rgba(29,78,216,0.08)', '#1d4ed8', 'rgba(29,78,216,0.35)', '🔔 Notified')}</div>}
+                                                        
+                                                    </td>
+                                                    <td style={qrTableTdStyle}>{guests}</td>
+                                                    <td style={qrTableTdStyle}>
+                                                        <div>{qrBadge(expired ? 'rgba(220,38,38,0.08)' : 'rgba(21,128,61,0.08)', expired ? '#b91c1c' : '#15803d', expired ? 'rgba(220,38,38,0.35)' : 'rgba(21,128,61,0.35)', expired ? 'Expired' : 'Active')}</div>
+                                                        <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '3px' }}>Exp: {session.expiresAt ? new Date(session.expiresAt).toLocaleDateString() : '-'}</div>
+                                                    </td>
+                                                    <td style={qrTableTdStyle}>
+                                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                                            <button onClick={() => setQrReadySession(session)} style={qrActionButtonStyle('#B45309')}>View QR</button>
+                                                            <button onClick={() => openQrUploadModal(session)} style={qrActionButtonStyle('#15803d')}>Upload Photos</button>
+                                                            <button onClick={() => notifyQrGuests(session.sessionId)} disabled={photosUploaded === 0} style={{ ...qrActionButtonStyle('#1d4ed8'), opacity: photosUploaded === 0 ? 0.4 : 1, cursor: photosUploaded === 0 ? 'not-allowed' : 'pointer' }}>Notify</button>
+                                                            <button onClick={() => deleteQrSession(session.sessionId)} style={qrActionButtonStyle('#DC2626')}>Delete</button>
+                                                        </div>
+                                                        
+                                                        {qrNotifyMsg[session.sessionId] && <div style={{ color: '#6b7280', fontSize: '11px', marginTop: '6px' }}>{qrNotifyMsg[session.sessionId]}</div>}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        </div>
+
+                        {/* 🎯 UPLOAD MANAGER MODAL */}
+                        {qrUploadModal && (
+                            <div
+                                onClick={() => { if (!qrUploadRunning) setQrUploadModal(null); }}
+                                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', width: '94%', maxWidth: '640px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                                >
+                                    <style>{`.qr-modal-btn { transition: all 0.25s ease; } .qr-modal-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.35); border-color: #FFD700 !important; filter: brightness(1.12); } .qr-modal-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }`}</style>
+                                    <div style={{ padding: '18px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                        <div>
+                                            <h3 style={{ margin: 0, color: '#111827', fontSize: '17px' }}>📤 Upload Event Photos</h3>
+                                            <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '380px' }}>{qrUploadModal.title}</p>
+                                        </div>
+                                        {!qrUploadRunning && (
+                                            <button onClick={() => setQrUploadModal(null)} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>✕</button>
+                                        )}
+                                    </div>
+
+                                    <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+                                        {qrUploadDoneInfo && !qrUploadRunning ? (
+                                            <div style={{ textAlign: 'center', padding: '16px 0 8px 0' }}>
+                                                <div style={{ fontSize: '56px', marginBottom: '10px', filter: 'drop-shadow(0 6px 16px rgba(46,204,113,0.4))' }}>✅</div>
+                                                <h3 style={{ color: '#111827', margin: '0 0 8px 0', fontSize: '20px' }}>Upload Successful!</h3>
+                                                <p style={{ color: '#4b5563', fontSize: '13px', margin: '0 0 10px 0' }}>{qrUploadDoneInfo.count} Photos uploaded successfully to {qrUploadModal.title}</p>
+                                                {qrUploadDoneInfo.notified && (
+                                                    <div style={{ display: 'inline-block', background: 'rgba(21,128,61,0.1)', color: '#15803d', border: '1px solid rgba(21,128,61,0.35)', borderRadius: '20px', padding: '5px 14px', fontSize: '12px', fontWeight: 'bold', marginBottom: '14px' }}>🔔 Registered Guests Notified</div>
+                                                )}
+                                                {qrUploadFiles.some(f => f.status === 'failed') && (
+                                                    <div style={{ marginBottom: '14px' }}>
+                                                        <button className="qr-modal-btn" onClick={() => startQrUpload(true)} style={{ padding: '10px 18px', background: '#ffffff', color: '#B45309', border: '1px solid #B45309', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+                                                            Retry Failed ({qrUploadFiles.filter(f => f.status === 'failed').length})
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <button className="qr-modal-btn" onClick={() => { setQrUploadModal(null); fetchQrSessions(); }} style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #2ecc71, #27ae60)', color: '#ffffff', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' }}>Done</button>
+                                            </div>
+                                        ) : (
+                                            <>
+
+                                        {!qrUploadRunning && (
+                                            <div
+                                                onDragOver={(e) => e.preventDefault()}
+                                                onDrop={(e) => { e.preventDefault(); addQrUploadFiles(e.dataTransfer.files); }}
+                                                style={{ border: '2px dashed #d1d5db', borderRadius: '12px', padding: '26px 16px', textAlign: 'center', background: '#f9fafb', marginBottom: '16px' }}
+                                            >
+                                                <div style={{ fontSize: '30px', marginBottom: '6px' }}>🖼️</div>
+                                                <p style={{ margin: '0 0 12px', color: '#374151', fontSize: '13px', fontWeight: 'bold' }}>Drag & drop photos here</p>
+                                                <button className="qr-modal-btn" onClick={() => qrUploadModalInputRef.current && qrUploadModalInputRef.current.click()} style={{ ...qrActionButtonStyle('#B45309'), padding: '8px 18px' }}>Select Photos</button>
+                                                <input
+                                                    ref={qrUploadModalInputRef}
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/*"
+                                                    style={{ display: 'none' }}
+                                                    onChange={(e) => { addQrUploadFiles(e.target.files); e.target.value = ''; }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {qrUploadFiles.length > 0 && (
+                                            <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                                                <div style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 14px' }}>
+                                                    <div style={{ color: '#111827', fontWeight: 'bold', fontSize: '18px' }}>{qrUploadFiles.length}</div>
+                                                    <div style={{ color: '#6b7280', fontSize: '11px' }}>Total Files</div>
+                                                </div>
+                                                <div style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '10px 14px' }}>
+                                                    <div style={{ color: '#111827', fontWeight: 'bold', fontSize: '18px' }}>{formatQrBytes(qrUploadFiles.reduce((s, f) => s + f.size, 0))}</div>
+                                                    <div style={{ color: '#6b7280', fontSize: '11px' }}>Total Size</div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {qrUploadFiles.length > 0 && (
+                                            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '10px', marginBottom: '16px' }}>
+                                                {qrUploadFiles.map((f) => (
+                                                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 12px', borderBottom: '1px solid #f3f4f6' }}>
+                                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                                            <div style={{ color: '#111827', fontSize: '13px', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.name}>{f.name}</div>
+                                                            <div style={{ color: '#9ca3af', fontSize: '11px' }}>{formatQrBytes(f.size)}{f.error ? ` — ${f.error}` : ''}</div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                                            {f.status === 'done'
+                                                                ? qrBadge('rgba(21,128,61,0.1)', '#15803d', 'rgba(21,128,61,0.35)', 'Done ✓')
+                                                                : f.status === 'failed'
+                                                                    ? qrBadge('rgba(220,38,38,0.1)', '#b91c1c', 'rgba(220,38,38,0.35)', 'Failed ✕')
+                                                                    : f.status === 'uploading'
+                                                                        ? qrBadge('rgba(29,78,216,0.1)', '#1d4ed8', 'rgba(29,78,216,0.35)', `Uploading ${f.size ? Math.round(((f.progressBytes || 0) / f.size) * 100) : 0}%`)
+                                                                        : qrBadge('rgba(107,114,128,0.1)', '#4b5563', 'rgba(107,114,128,0.35)', 'Queued')}
+                                                            {!qrUploadRunning && (f.status === 'queued' || f.status === 'failed') && (
+                                                                <button onClick={() => removeQrUploadFile(f.id)} title="Remove" style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '14px', padding: 0 }}>✕</button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                        )}
+
+                        {qrUploadRunning && (
+                            <div style={{ marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#374151', fontSize: '12px', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                                    <span style={{ fontWeight: 'bold' }}>{qrUploadStats.percent}% — {qrUploadStats.done} / {qrUploadStats.total} Photos uploaded</span>
+                                    <span>{formatQrSpeed(qrUploadStats.speed)}{qrUploadStats.eta > 0 ? ` • ${formatQrEta(qrUploadStats.eta)}` : ''}</span>
+                                </div>
+                                <div style={{ height: '10px', background: '#e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${qrUploadStats.percent}%`, background: 'linear-gradient(135deg, #F59E0B, #D97706)', transition: 'width 0.3s ease' }} />
+                                </div>
+                            </div>
+                        )}
+
+                        <label
+                            style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', cursor: qrUploadRunning ? 'default' : 'pointer', userSelect: 'none', opacity: qrUploadRunning ? 0.6 : 1 }}
+                            onClick={() => { if (!qrUploadRunning) setQrUploadAutoNotify(!qrUploadAutoNotify); }}
+                        >
+                            <span style={{ position: 'relative', width: '44px', height: '24px', background: qrUploadAutoNotify ? 'linear-gradient(135deg, #F59E0B, #D97706)' : '#d1d5db', borderRadius: '12px', transition: 'background 0.2s', flexShrink: 0 }}>
+                                <span style={{ position: 'absolute', top: '3px', left: qrUploadAutoNotify ? '23px' : '3px', width: '18px', height: '18px', background: '#ffffff', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            </span>
+                            <span style={{ color: '#374151', fontSize: '13px', fontWeight: 'bold' }}>🔔 Auto-Notify Registered Guests after upload completes</span>
+                        </label>
+
+                        {qrUploadModalStatus && (
+                            <div style={{ color: '#15803d', fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>{qrUploadModalStatus}</div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {qrUploadRunning ? (
+                                <button className="qr-modal-btn" onClick={cancelQrUpload} style={{ ...qrGoldButtonStyle, background: 'linear-gradient(135deg, #dc2626, #b91c1c)' }}>Cancel Upload</button>
+                            ) : (
+                                <>
+                                    {qrUploadFiles.some(f => f.status === 'failed') && (
+                                        <button
+                                            className="qr-modal-btn"
+                                            onClick={() => startQrUpload(true)}
+                                            style={{ padding: '10px 16px', background: '#ffffff', color: '#B45309', border: '1px solid #B45309', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+                                        >
+                                            Retry Failed ({qrUploadFiles.filter(f => f.status === 'failed').length})
+                                        </button>
+                                    )}
+                                    <button
+                                        className="qr-modal-btn"
+                                        onClick={() => startQrUpload(false)}
+                                        disabled={!qrUploadFiles.some(f => f.status === 'queued' || f.status === 'failed')}
+                                        style={{ ...qrGoldButtonStyle, opacity: qrUploadFiles.some(f => f.status === 'queued' || f.status === 'failed') ? 1 : 0.5 }}
+                                    >
+                                        {qrUploadFiles.length === 0 ? 'Select Photos to Upload' : qrUploadFiles.some(f => f.status === 'queued' || f.status === 'failed') ? 'Start Upload' : 'All Uploaded'}
+                                    </button>
+                                </>
+                            )}
+                        </div>                                            </>
+                                        )}
+                                    
+                    </div>
+                </div>
+            </div>
+        )}
+
+                        {/* 🎯 QR READY MODAL */}
+                        {qrReadySession && (
+                            <div onClick={() => setQrReadySession(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                                <div onClick={(e) => e.stopPropagation()} style={{ background: 'linear-gradient(145deg, #14141c, #0b0b10)', border: '1px solid rgba(255, 215, 0, 0.3)', borderRadius: '22px', padding: '28px', maxWidth: '460px', width: '92%', maxHeight: '90vh', overflowY: 'auto', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                                    <style>{`.qr-modal-btn { transition: all 0.25s ease; } .qr-modal-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.35); border-color: #FFD700 !important; filter: brightness(1.12); } .qr-modal-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }`}</style>
+                                    <h3 style={{ color: '#FFD700', margin: '0 0 5px 0', fontSize: '20px' }}>🎉 Event QR Ready!</h3>
+                                    <p style={{ color: '#aaa', fontSize: '12px', margin: '0 0 15px 0', wordBreak: 'break-word' }}>{qrReadySession.title}</p>
+                                    <div ref={(el) => { if (el) qrSvgRefs.current[qrReadySession.sessionId] = el; }} style={{ background: '#ffffff', padding: '14px', borderRadius: '16px', boxShadow: '0 8px 24px rgba(255,215,0,0.18)', display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
+                                        <QRCodeSVG value={`${window.location.origin}/?qrSession=${qrReadySession.sessionId}`} size={200} />
+                                    </div>
+                                    <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: '30px', padding: '8px 14px', color: '#ffd700', fontSize: '11px', marginBottom: '18px', wordBreak: 'break-all' }}>
+                                        {window.location.origin}/?qrSession={qrReadySession.sessionId}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <button className="qr-modal-btn" onClick={() => downloadQrImage(qrReadySession.sessionId)} style={{ padding: '12px 8px', background: 'rgba(46,204,113,0.12)', color: '#2ecc71', border: '1px solid rgba(46,204,113,0.4)', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>⬇ QR PNG</button>
+                                        <button className="qr-modal-btn" onClick={() => downloadQrEventCard(qrReadySession)} style={{ padding: '12px 8px', background: 'rgba(255,215,0,0.12)', color: '#FFD700', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>🖼 Event Card</button>
+                                    </div>
+                                    <button className="qr-modal-btn" onClick={() => copyQrLink(qrReadySession.sessionId)} style={{ width: '100%', padding: '12px', marginTop: '10px', background: 'rgba(100,181,246,0.12)', color: '#64b5f6', border: '1px solid rgba(100,181,246,0.4)', borderRadius: '12px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>{qrLinkCopied ? 'Copied! ✓' : '🔗 Copy Share Link'}</button>
+                                    <button className="qr-modal-btn" onClick={() => setQrReadySession(null)} style={{ width: '100%', padding: '14px', marginTop: '10px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: '#ffffff', border: 'none', borderRadius: '12px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' }}>Upload Photos Later (Done)</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'REVENUE' && (
                     <div className="view-section">
                         <div className="section-header"><h2 style={{color: '#2c3e50', fontWeight: 'bold'}}>💰 Business Revenue & Wallet</h2></div>
                         <div className="dashboard-stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>

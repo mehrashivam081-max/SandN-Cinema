@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios'; 
-import './MobileView.css';
-
-import magnetVideo from '../../assets/magnet-clip.mp4'; 
+import './MobileView.css'; 
 
 import ProfilePage from '../../components/ProfilePage';
 import ServicesPage from '../../components/ServicesPage';
